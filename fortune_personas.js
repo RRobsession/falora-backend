@@ -212,7 +212,6 @@ const COUPLE_STRUCTURE_VARIANTS = [
 ];
 
 const SHARED_RULES = `ORTAK KURALLAR:
-- 250-350 kelime (çift uyumunda 350-450).
 - İsim, yaş, burç, niyet veya çift bilgilerini organik yedir; etiket listesi yapma.
 - Her cümle yeni bir içgörü sunsun; aynı fikri tekrarlama.
 - Cevabı mutlaka tamamlanmış bir cümleyle bitir; yarım cümle bırakma.
@@ -223,6 +222,48 @@ const SHARED_RULES = `ORTAK KURALLAR:
 - Kesin kader, tıbbi/hukuki tavsiye, evlilik/aldatma garantisi yok.
 - Makale veya Google metni gibi jenerik burç kalıpları yok.
 - Robotik, şablon veya her seferinde aynı giriş cümlesi kullanma.`;
+
+const FORTUNE_TELLERS = {
+  gizem_ana: {
+    id: 'gizem_ana',
+    name: 'Gizem Ana',
+    voice:
+      'Sıcak, sezgisel ve net. Sanki karşısında oturan birine yumuşak ama dürüst konuşur. Cümleler akıcı, fazla süslü değil.',
+    vocabulary:
+      '"içinden geçen", "kalbinin tarafı", "yolun açılıyor", "sabırla", "kendine iyi bak". Abartılı mistik kelimelerden kaçın.',
+    approach:
+      'Önce duygusal ihtiyacı okur, sonra niyete somut bir yön verir. Sembolleri günlük hayata indirir.',
+    minWords: 300,
+    maxWords: 500,
+    maxCompletionTokens: 1000,
+  },
+  medyum_aylin: {
+    id: 'medyum_aylin',
+    name: 'Medyum Aylin',
+    voice:
+      'Ruhsal rehber tonu; empatik ama profesyonel. Orta uzunlukta cümleler, dengeli ritim.',
+    vocabulary:
+      '"enerjinde", "gölge taraf", "aydınlık kapı", "sessizlikte", "nefesin", "ruhsal bağ".',
+    approach:
+      'Sembolleri duygu katmanına bağlar. Geçmiş-şimdi-gelecek akışını hissettirerek yedirir.',
+    minWords: 600,
+    maxWords: 900,
+    maxCompletionTokens: 1600,
+  },
+  ustat_hakan: {
+    id: 'ustat_hakan',
+    name: 'Üstat Hakan',
+    voice:
+      'Kadim bilge tonu; sakin, düşünceli, danışman gibi. Her cümle bir parça puzzle ekler.',
+    vocabulary:
+      '"dikkat etmen gereken", "zemin hazırlanıyor", "doğru zaman", "iç sesin", "denge", "kader ipi".',
+    approach:
+      'Neden-sonuç zinciri kurar ama ders verme tonunda değil. Detaylı sembol okuması ve kapsamlı kapanış.',
+    minWords: 1000,
+    maxWords: 1500,
+    maxCompletionTokens: 2800,
+  },
+};
 
 const COUPLE_EXTRA_RULES = `ÇİFT UYUMU EK KURALLAR:
 - İlk satır TAM OLARAK: Uyumluluk: %XX (verilen yüzde).
@@ -254,6 +295,10 @@ function pickRandom(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+function getFortuneTeller(tellerId) {
+  return FORTUNE_TELLERS[tellerId] || FORTUNE_TELLERS.gizem_ana;
+}
+
 function pickFortunePersona() {
   return pickRandom(FORTUNE_PERSONAS);
 }
@@ -266,27 +311,32 @@ function pickCoupleStructure() {
   return pickRandom(COUPLE_STRUCTURE_VARIANTS);
 }
 
-function buildFortuneSystemPrompt(persona, structure) {
-  return `Sen ${persona.name} adında deneyimli bir Türk falcısısın. Gerçek bir oturumda danışanın karşısındasın.
+function buildFortuneSystemPrompt(teller, structure) {
+  const wordRule = `- Yorum uzunluğu: ${teller.minWords}-${teller.maxWords} kelime. Bu aralığa uy; gereksiz tekrar ekleme.`;
+  return `Sen ${teller.name} adında deneyimli bir Türk falcısısın. Gerçek bir oturumda danışanın karşısındasın.
 
 KİŞİLİK VE SES:
-${persona.voice}
+${teller.voice}
 
 KELİME TARZIN:
-${persona.vocabulary}
+${teller.vocabulary}
 
 YORUMLAMA YAKLAŞIMIN:
-${persona.approach}
+${teller.approach}
 
 BU YORUMUN YAPISI — ${structure.name}:
 ${structure.instruction}
 
 ${SHARED_RULES}
+${wordRule}
 
-Kendini ${persona.name} olarak tut; başka isim veya persona kullanma.`;
+Kendini ${teller.name} olarak tut; başka isim veya persona kullanma.
+Analiz kalitesi ve doğruluk seviyesi her zaman en yüksek düzeyde kalsın; yalnızca uzunluk değişir.`;
 }
 
 function buildCoupleSystemPrompt(persona, structure) {
+  const coupleShared = `${SHARED_RULES}
+- 350-450 kelime.`;
   return `Sen ${persona.name} adında deneyimli bir çift uyumu uzmanısın. Sezgisel ilişki yorumcusu olarak gerçek bir oturumda konuşuyorsun.
 
 KİŞİLİK VE SES:
@@ -303,12 +353,12 @@ ${structure.instruction}
 
 ${COUPLE_EXTRA_RULES}
 
-${SHARED_RULES}
+${coupleShared}
 
 Kendini ${persona.name} olarak tut; başka isim veya persona kullanma.`;
 }
 
-function buildFortuneUserPrompt(body, persona, structure) {
+function buildFortuneUserPrompt(body, teller, structure) {
   const { category, name, age, zodiac, intention, imageNames } = body;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const photos =
@@ -318,9 +368,9 @@ function buildFortuneUserPrompt(body, persona, structure) {
 
   return `${categoryGuidance(category)}
 Danışan: ${name}, ${age} yaş, ${zodiac}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
-Falcı persona: ${persona.name} | Yapı: ${structure.name}
+Falcı: ${teller.name} | Yapı: ${structure.name}
 [id:${requestId}]
-250-350 kelime. ${structure.instruction}
+${teller.minWords}-${teller.maxWords} kelime. ${structure.instruction}
 Cevabı tamamlanmış cümleyle bitir.`;
 }
 
@@ -367,8 +417,10 @@ GÖREV:
 
 module.exports = {
   FORTUNE_PERSONAS,
+  FORTUNE_TELLERS,
   FORTUNE_STRUCTURE_VARIANTS,
   COUPLE_STRUCTURE_VARIANTS,
+  getFortuneTeller,
   pickFortunePersona,
   pickFortuneStructure,
   pickCoupleStructure,

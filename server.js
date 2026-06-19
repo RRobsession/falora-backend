@@ -154,6 +154,7 @@ const ZODIAC_ELEMENTS = {
 };
 
 const {
+  getFortuneTeller,
   pickFortunePersona,
   pickFortuneStructure,
   pickCoupleStructure,
@@ -370,11 +371,17 @@ async function generateCouple(openai, systemPrompt, userPrompt, images) {
   return result;
 }
 
-async function generate(openai, kind, systemPrompt, userPrompt) {
+async function generate(
+  openai,
+  kind,
+  systemPrompt,
+  userPrompt,
+  maxCompletionTokens = FORTUNE_MAX_COMPLETION_TOKENS,
+) {
   const completion = await openai.chat.completions.create({
     model: MODEL,
     temperature: TEMPERATURE,
-    max_completion_tokens: FORTUNE_MAX_COMPLETION_TOKENS,
+    max_completion_tokens: maxCompletionTokens,
     frequency_penalty: FREQUENCY_PENALTY,
     presence_penalty: PRESENCE_PENALTY,
     messages: [
@@ -400,6 +407,12 @@ const {
   notifyFortuneReady,
   scheduleFortuneNotify,
 } = require('./fcm');
+const {
+  requireAuth,
+  requireVerifiedEmail,
+  requireMatchingUserId,
+} = require('./auth_middleware');
+const { safeLog, safeError, logFortuneRequest, logCoupleRequest } = require('./safe_log');
 const app = express();
 
 const corsOptions = {
@@ -422,7 +435,7 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.post('/send-notification', async (req, res) => {
+app.post('/send-notification', requireAuth, async (req, res) => {
   const { token, title, body } = req.body ?? {};
   if (!token || !title || !body) {
     return res.status(400).json({ error: 'token, title ve body gerekli' });
@@ -440,7 +453,11 @@ app.post('/send-notification', async (req, res) => {
   }
 });
 
-app.post('/notify-ready', async (req, res) => {
+app.post(
+  '/notify-ready',
+  requireAuth,
+  requireMatchingUserId,
+  async (req, res) => {
   const { userId, type } = req.body ?? {};
   if (!userId || !type) {
     return res.status(400).json({ error: 'userId ve type gerekli' });
@@ -456,9 +473,14 @@ app.post('/notify-ready', async (req, res) => {
     }
     return res.status(500).json({ error: 'Hazır bildirimi gönderilemedi' });
   }
-});
+},
+);
 
-app.post('/schedule-notify', async (req, res) => {
+app.post(
+  '/schedule-notify',
+  requireAuth,
+  requireMatchingUserId,
+  async (req, res) => {
   const { userId, type, notifyAt, readingId } = req.body ?? {};
   if (!userId || !type || !notifyAt) {
     return res.status(400).json({ error: 'userId, type ve notifyAt gerekli' });
@@ -474,35 +496,48 @@ app.post('/schedule-notify', async (req, res) => {
     }
     return res.status(500).json({ error: 'Bildirim planlanamadı' });
   }
-});
+},
+);
 
-app.post('/generate-fortune', async (req, res) => {
-  const { category, name, age, zodiac, intention } = req.body ?? {};
+app.post(
+  '/generate-fortune',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+  const { category, name, age, zodiac, intention, tellerId } = req.body ?? {};
   if (!category || !name || !age || !zodiac || !intention) {
     return res.status(400).json({ error: 'Eksik alanlar' });
   }
 
   try {
-    const persona = pickFortunePersona();
+    const teller = getFortuneTeller(tellerId || 'gizem_ana');
     const structure = pickFortuneStructure();
-    console.log(
-      `[fortune] persona=${persona.id} (${persona.name}) | structure=${structure.id}`,
+    logFortuneRequest(
+      teller.id,
+      structure.id,
+      `${teller.minWords}-${teller.maxWords}`,
     );
 
     const result = await generate(
       openai,
       'fortune',
-      buildFortuneSystemPrompt(persona, structure),
-      buildFortuneUserPrompt(req.body, persona, structure),
+      buildFortuneSystemPrompt(teller, structure),
+      buildFortuneUserPrompt(req.body, teller, structure),
+      teller.maxCompletionTokens,
     );
     return res.json({ result });
   } catch (err) {
     console.error('generate-fortune error:', err.message);
     return res.status(500).json({ error: 'AI yanıtı üretilemedi' });
   }
-});
+},
+);
 
-app.post('/generate-couple', async (req, res) => {
+app.post(
+  '/generate-couple',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
   const {
     womanName,
     womanAge,
@@ -534,17 +569,10 @@ app.post('/generate-couple', async (req, res) => {
   if (womanImage) womanImage.label = womanImageName || womanName;
   if (manImage) manImage.label = manImageName || manName;
 
-  console.log('COUPLE REQUEST received:', {
-    woman: womanName,
-    man: manName,
-    womanImageRaw: womanImageBase64 ? `${womanImageBase64.length} chars` : 'MISSING',
-    manImageRaw: manImageBase64 ? `${manImageBase64.length} chars` : 'MISSING',
-    womanParsed: !!womanImage,
-    manParsed: !!manImage,
-  });
+  logCoupleRequest(!!womanImage, !!manImage);
 
   if (!womanImage || !manImage) {
-    console.error('generate-couple: fotoğraflar eksik veya parse edilemedi');
+    safeError('generate-couple: fotoğraflar eksik veya parse edilemedi');
     return res.status(400).json({
       error: 'Kadın ve erkek fotoğrafları gerekli ve geçerli olmalı',
     });
@@ -555,8 +583,8 @@ app.post('/generate-couple', async (req, res) => {
   const timestamp = new Date().toISOString();
   const compatibilityPercent = calculateCompatibilityPercent(req.body, hasPhotos);
 
-  console.log('COUPLE COMPATIBILITY PERCENT:', compatibilityPercent);
-  console.log('COUPLE requestId:', requestId);
+  safeLog('COUPLE COMPATIBILITY PERCENT:', compatibilityPercent);
+  safeLog('COUPLE requestId:', requestId);
 
   try {
     const persona = pickFortunePersona();

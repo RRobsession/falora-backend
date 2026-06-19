@@ -7,7 +7,7 @@ const DEFAULT_SERVICE_ACCOUNT_PATH = path.join(
   BACKEND_DIR,
   'firebase-service-account.json',
 );
-const FCM_ANDROID_CHANNEL_ID = 'falora_ready';
+const { safeLog, safeError } = require('./safe_log');
 const MAX_TIMEOUT_MS = 2147483647;
 
 let messaging = null;
@@ -23,6 +23,10 @@ const READY_MESSAGES = {
   couple: {
     title: 'Çift uyumu raporun hazır!',
     body: 'Uyum raporun hazır, şimdi inceleyebilirsin.',
+  },
+  manual: {
+    title: 'Özel fal yorumun hazır.',
+    body: 'Özel fal yorumun hazır, şimdi görüntüleyebilirsin.',
   },
 };
 
@@ -106,28 +110,23 @@ function isFcmReady() {
 
 async function getUserFcmToken(userId) {
   if (!isFcmReady()) {
-    console.log('FCM TOKEN NOT FOUND | userId=', userId, '| reason=not_configured');
+    safeLog('FCM TOKEN NOT FOUND | reason=not_configured');
     return null;
   }
 
   const doc = await firestore.collection('users').doc(userId).get();
   if (!doc.exists) {
-    console.log('FCM TOKEN NOT FOUND | userId=', userId, '| reason=user_missing');
+    safeLog('FCM TOKEN NOT FOUND | reason=user_missing');
     return null;
   }
 
   const token = doc.data()?.fcmToken;
   if (typeof token === 'string' && token.trim()) {
-    console.log(
-      'FCM TOKEN FOUND | userId=',
-      userId,
-      '| token=',
-      `${token.trim().slice(0, 12)}...`,
-    );
+    safeLog('FCM TOKEN FOUND');
     return token.trim();
   }
 
-  console.log('FCM TOKEN NOT FOUND | userId=', userId, '| reason=empty_field');
+  safeLog('FCM TOKEN NOT FOUND | reason=empty_field');
   return null;
 }
 
@@ -137,7 +136,7 @@ async function clearUserFcmToken(userId) {
     await firestore.collection('users').doc(userId).update({
       fcmToken: admin.firestore.FieldValue.delete(),
     });
-    console.log('FCM: geçersiz token silindi | userId=', userId);
+    safeLog('FCM: geçersiz token silindi');
   } catch (err) {
     console.warn('FCM: token silinemedi | userId=', userId, '|', err.message);
   }
@@ -149,14 +148,7 @@ async function sendNotification({ token, title, body, data = {}, userId }) {
     return null;
   }
 
-  console.log(
-    'FCM SEND START | userId=',
-    userId || '-',
-    '| title=',
-    title,
-    '| token=',
-    `${token.slice(0, 12)}...`,
-  );
+  safeLog('FCM SEND START | title=', title);
 
   const message = {
     token,
@@ -186,7 +178,7 @@ async function sendNotification({ token, title, body, data = {}, userId }) {
 
   try {
     const messageId = await messaging.send(message);
-    console.log('FCM SEND SUCCESS | messageId=', messageId, '| title=', title);
+    safeLog('FCM SEND SUCCESS | messageId=', messageId);
     return messageId;
   } catch (err) {
     console.error(
