@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+firebase-service-account.json
+*-service-account*.json
+!firebase-service-account.json.example
+
+# Logs & OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

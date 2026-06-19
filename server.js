@@ -1,0 +1,612 @@
+const fs = require('fs');
+const path = require('path');
+
+const ENV_PATH = path.resolve(__dirname, '.env');
+const ENV_EXAMPLE_PATH = path.resolve(__dirname, '.env.example');
+
+function decodeEnvFile(buffer) {
+  if (buffer.length === 0) return '';
+
+  if (buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.toString('utf16le');
+  }
+
+  const utf8 = buffer.toString('utf8');
+  if (utf8.includes('=')) {
+    return utf8;
+  }
+
+  const utf16 = buffer.toString('utf16le');
+  if (utf16.includes('=')) {
+    console.warn('UYARI: .env UTF-16 olarak okundu. UTF-8 kaydetmeniz önerilir.');
+    return utf16;
+  }
+
+  return utf8;
+}
+
+function applyEnvLines(text) {
+  const parsed = {};
+
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+
+    const key = trimmed.slice(0, eq).trim().replace(/^\uFEFF/, '');
+    const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+
+    if (!key) continue;
+    parsed[key] = value;
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+
+  return parsed;
+}
+
+function loadEnv() {
+  console.log('process.cwd():', process.cwd());
+  console.log('dotenv path:', ENV_PATH);
+
+  if (!fs.existsSync(ENV_PATH)) {
+    if (fs.existsSync(ENV_EXAMPLE_PATH)) {
+      console.error(
+        'HATA: .env dosyası yok. backend/.env.example dosyasını .env olarak kopyalayıp OPENAI_API_KEY ekleyin.',
+      );
+    } else {
+      console.error('HATA: .env dosyası bulunamadı:', ENV_PATH);
+    }
+    return {};
+  }
+
+  const size = fs.statSync(ENV_PATH).size;
+  if (size === 0) {
+    console.error(
+      'HATA: .env dosyası var ama boş (0 byte). OPENAI_API_KEY satırını yazıp dosyayı kaydedin.',
+    );
+    return {};
+  }
+
+  const dotenvResult = require('dotenv').config({ path: ENV_PATH });
+  let parsed = dotenvResult.parsed ?? {};
+
+  if (dotenvResult.error) {
+    console.error('dotenv yükleme hatası:', dotenvResult.error.message);
+  }
+
+  if (!parsed.OPENAI_API_KEY) {
+    const manualParsed = applyEnvLines(decodeEnvFile(fs.readFileSync(ENV_PATH)));
+    parsed = { ...parsed, ...manualParsed };
+  }
+
+  const loadedKeys = Object.keys(parsed);
+  console.log(
+    'dotenv yüklendi, anahtarlar:',
+    loadedKeys.length > 0 ? loadedKeys.join(', ') : '(dosya boş veya okunamadı)',
+  );
+
+  return parsed;
+}
+
+loadEnv();
+
+if (!process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+  process.env.FIREBASE_SERVICE_ACCOUNT_PATH = path.join(
+    __dirname,
+    'firebase-service-account.json',
+  );
+}
+
+function readApiKey() {
+  let key = process.env.OPENAI_API_KEY;
+  if (!key) return undefined;
+  key = key.trim();
+  if (key.charCodeAt(0) === 0xfeff) {
+    key = key.slice(1).trim();
+  }
+  if (!key || key === 'sk-your-key-here') return undefined;
+  return key;
+}
+
+const apiKey = readApiKey();
+console.log('OPENAI_API_KEY bulundu mu:', !!apiKey);
+
+if (!apiKey) {
+  throw new Error('OPENAI_API_KEY bulunamadı');
+}
+
+const cors = require('cors');
+const express = require('express');
+const OpenAI = require('openai');
+
+const PORT = Number(process.env.PORT) || 3000;
+const MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const VISION_MODEL = process.env.VISION_MODEL || 'gpt-4o-mini';
+const FORTUNE_MAX_COMPLETION_TOKENS =
+  Number(process.env.FORTUNE_MAX_COMPLETION_TOKENS) || 650;
+const COUPLE_MAX_COMPLETION_TOKENS =
+  Number(process.env.COUPLE_MAX_COMPLETION_TOKENS) || 800;
+const TEMPERATURE = Number(process.env.TEMPERATURE) || 0.9;
+const FREQUENCY_PENALTY = Number(process.env.FREQUENCY_PENALTY) || 0.55;
+const PRESENCE_PENALTY = Number(process.env.PRESENCE_PENALTY) || 0.3;
+const COUPLE_TEMPERATURE = Number(process.env.COUPLE_TEMPERATURE) || 0.9;
+const COUPLE_FREQUENCY_PENALTY =
+  Number(process.env.COUPLE_FREQUENCY_PENALTY) || 0.6;
+const COUPLE_PRESENCE_PENALTY = Number(process.env.COUPLE_PRESENCE_PENALTY) || 0.5;
+
+const ZODIAC_ELEMENTS = {
+  Koç: 'ateş',
+  Aslan: 'ateş',
+  Yay: 'ateş',
+  Boğa: 'toprak',
+  Başak: 'toprak',
+  Oğlak: 'toprak',
+  İkizler: 'hava',
+  Terazi: 'hava',
+  Kova: 'hava',
+  Yengeç: 'su',
+  Akrep: 'su',
+  Balık: 'su',
+};
+
+const {
+  pickFortunePersona,
+  pickFortuneStructure,
+  pickCoupleStructure,
+  buildFortuneSystemPrompt,
+  buildCoupleSystemPrompt,
+  buildFortuneUserPrompt,
+  buildCoupleUserPrompt,
+} = require('./fortune_personas');
+
+function newRequestId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createClient() {
+  return new OpenAI({ apiKey });
+}
+
+function nameEnergyHash(text) {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) {
+    h = ((h << 5) + h + text.charCodeAt(i)) & 0x7fffffff;
+  }
+  return h;
+}
+
+function zodiacElement(sign) {
+  return ZODIAC_ELEMENTS[sign] || null;
+}
+
+function elementCompatibilityScore(el1, el2) {
+  if (!el1 || !el2) return 2;
+  if (el1 === el2) return 9;
+
+  const complementary = {
+    'ateş-hava': 13,
+    'hava-ateş': 13,
+    'toprak-su': 13,
+    'su-toprak': 13,
+    'ateş-toprak': 5,
+    'toprak-ateş': 5,
+    'hava-su': 5,
+    'su-hava': 5,
+    'ateş-su': -3,
+    'su-ateş': -3,
+    'toprak-hava': -3,
+    'hava-toprak': -3,
+  };
+
+  return complementary[`${el1}-${el2}`] ?? 4;
+}
+
+function calculateCompatibilityPercent(body, hasPhotos) {
+  const womanAge = Number(body.womanAge);
+  const manAge = Number(body.manAge);
+  const ageGap = Math.abs(womanAge - manAge);
+
+  let score = 68;
+
+  if (ageGap <= 2) score += 8;
+  else if (ageGap <= 5) score += 5;
+  else if (ageGap <= 9) score += 1;
+  else if (ageGap <= 14) score -= 3;
+  else score -= 7;
+
+  score += elementCompatibilityScore(
+    zodiacElement(body.womanZodiac),
+    zodiacElement(body.manZodiac),
+  );
+
+  if (body.womanZodiac === body.manZodiac) score += 2;
+
+  const nameSeed = nameEnergyHash(
+    `${body.womanName.trim().toLowerCase()}|${body.manName.trim().toLowerCase()}`,
+  );
+  score += (nameSeed % 11) - 5;
+
+  const avgAge = (womanAge + manAge) / 2;
+  if (avgAge >= 27 && avgAge <= 43) score += 3;
+  else if (avgAge < 22) score -= 2;
+
+  if (hasPhotos) score += 4;
+
+  if (body.womanImageBase64 && body.manImageBase64) {
+    const imgSeed =
+      (body.womanImageBase64.length + body.manImageBase64.length) % 9;
+    score += imgSeed - 4;
+  }
+
+  const dynamicSeed = nameEnergyHash(
+    `${body.womanZodiac}|${body.manZodiac}|${womanAge}|${manAge}`,
+  );
+  score += (dynamicSeed % 7) - 3;
+
+  score = Math.max(55, Math.min(94, Math.round(score)));
+
+  if (score <= 56 || score >= 93) {
+    score = Math.max(58, Math.min(91, score));
+  }
+
+  return score;
+}
+
+function ensureCompatibilityHeader(result, percent) {
+  const header = `Uyumluluk: %${percent}`;
+  const trimmed = result.trim();
+  if (trimmed.startsWith('Uyumluluk:')) {
+    return trimmed.replace(/^Uyumluluk:\s*%?\d+/, header);
+  }
+  return `${header}\n\n${trimmed}`;
+}
+
+function parseImageField(base64, mime) {
+  if (!base64 || typeof base64 !== 'string' || base64.length < 32) {
+    return null;
+  }
+  const clean = base64.replace(/^data:image\/\w+;base64,/, '').trim();
+  if (!clean) return null;
+  return {
+    base64: clean,
+    mime: mime && mime.startsWith('image/') ? mime : 'image/jpeg',
+  };
+}
+
+function buildCoupleImageContent(userPrompt, womanImage, manImage) {
+  const content = [{ type: 'text', text: userPrompt }];
+
+  if (womanImage) {
+    content.push({
+      type: 'text',
+      text: `Kadın fotoğrafı (${womanImage.label}):`,
+    });
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${womanImage.mime};base64,${womanImage.base64}`,
+        detail: 'low',
+      },
+    });
+  }
+
+  if (manImage) {
+    content.push({
+      type: 'text',
+      text: `Erkek fotoğrafı (${manImage.label}):`,
+    });
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${manImage.mime};base64,${manImage.base64}`,
+        detail: 'low',
+      },
+    });
+  }
+
+  return content;
+}
+
+function logTokenUsage(kind, usage) {
+  if (!usage) {
+    console.log(`[${kind}] token usage: unavailable`);
+    return;
+  }
+  console.log(
+    `[${kind}] tokens prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
+  );
+}
+
+async function generateCouple(openai, systemPrompt, userPrompt, images) {
+  const imageCount = (images.woman ? 1 : 0) + (images.man ? 1 : 0);
+  console.log('VISION IMAGE COUNT:', imageCount);
+
+  if (imageCount === 0) {
+    throw new Error('Vision analizi için fotoğraf gerekli');
+  }
+
+  const userMessage = {
+    role: 'user',
+    content: buildCoupleImageContent(userPrompt, images.woman, images.man),
+  };
+
+  console.log('VISION ANALYSIS START');
+  console.log(`VISION MODEL: ${VISION_MODEL}`);
+  if (images.woman) {
+    console.log(
+      `VISION woman image: ${images.woman.label} | mime=${images.woman.mime} | base64=${images.woman.base64.length} chars`,
+    );
+  }
+  if (images.man) {
+    console.log(
+      `VISION man image: ${images.man.label} | mime=${images.man.mime} | base64=${images.man.base64.length} chars`,
+    );
+  }
+
+  const completion = await openai.chat.completions.create({
+    model: VISION_MODEL,
+    temperature: COUPLE_TEMPERATURE,
+    max_completion_tokens: COUPLE_MAX_COMPLETION_TOKENS,
+    frequency_penalty: COUPLE_FREQUENCY_PENALTY,
+    presence_penalty: COUPLE_PRESENCE_PENALTY,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      userMessage,
+    ],
+  });
+
+  logTokenUsage('couple', completion.usage);
+
+  const result = completion.choices?.[0]?.message?.content?.trim();
+  if (!result) {
+    throw new Error('Boş AI cevabı');
+  }
+
+  console.log('VISION ANALYSIS SUCCESS');
+  return result;
+}
+
+async function generate(openai, kind, systemPrompt, userPrompt) {
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    temperature: TEMPERATURE,
+    max_completion_tokens: FORTUNE_MAX_COMPLETION_TOKENS,
+    frequency_penalty: FREQUENCY_PENALTY,
+    presence_penalty: PRESENCE_PENALTY,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+  });
+
+  logTokenUsage(kind, completion.usage);
+
+  const result = completion.choices?.[0]?.message?.content?.trim();
+  if (!result) {
+    throw new Error('Boş AI cevabı');
+  }
+  return result;
+}
+
+const openai = createClient();
+const {
+  initFirebaseAdmin,
+  isFcmReady,
+  sendNotification,
+  notifyFortuneReady,
+  scheduleFortuneNotify,
+} = require('./fcm');
+const app = express();
+
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(express.json({ limit: '20mb' }));
+
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    openAiConfigured: true,
+    fcmConfigured: isFcmReady(),
+    model: MODEL,
+    visionModel: VISION_MODEL,
+  });
+});
+
+app.post('/send-notification', async (req, res) => {
+  const { token, title, body } = req.body ?? {};
+  if (!token || !title || !body) {
+    return res.status(400).json({ error: 'token, title ve body gerekli' });
+  }
+
+  try {
+    const messageId = await sendNotification({ token, title, body });
+    if (messageId == null) {
+      return res.json({ success: false, reason: 'fcm_not_configured' });
+    }
+    return res.json({ success: true, messageId });
+  } catch (err) {
+    console.error('FCM SEND ERROR:', err.message);
+    return res.status(500).json({ error: 'Bildirim gönderilemedi' });
+  }
+});
+
+app.post('/notify-ready', async (req, res) => {
+  const { userId, type } = req.body ?? {};
+  if (!userId || !type) {
+    return res.status(400).json({ error: 'userId ve type gerekli' });
+  }
+
+  try {
+    const result = await notifyFortuneReady(userId, type);
+    return res.json(result);
+  } catch (err) {
+    console.error('FCM NOTIFY READY ERROR:', err.message);
+    if (err.code === 'invalid_type') {
+      return res.status(400).json({ error: err.message });
+    }
+    return res.status(500).json({ error: 'Hazır bildirimi gönderilemedi' });
+  }
+});
+
+app.post('/schedule-notify', async (req, res) => {
+  const { userId, type, notifyAt, readingId } = req.body ?? {};
+  if (!userId || !type || !notifyAt) {
+    return res.status(400).json({ error: 'userId, type ve notifyAt gerekli' });
+  }
+
+  try {
+    const result = scheduleFortuneNotify(userId, type, notifyAt, readingId);
+    return res.json(result);
+  } catch (err) {
+    console.error('FCM SCHEDULE ERROR:', err.message);
+    if (err.code === 'invalid_type' || err.code === 'invalid_notify_at') {
+      return res.status(400).json({ error: err.message });
+    }
+    return res.status(500).json({ error: 'Bildirim planlanamadı' });
+  }
+});
+
+app.post('/generate-fortune', async (req, res) => {
+  const { category, name, age, zodiac, intention } = req.body ?? {};
+  if (!category || !name || !age || !zodiac || !intention) {
+    return res.status(400).json({ error: 'Eksik alanlar' });
+  }
+
+  try {
+    const persona = pickFortunePersona();
+    const structure = pickFortuneStructure();
+    console.log(
+      `[fortune] persona=${persona.id} (${persona.name}) | structure=${structure.id}`,
+    );
+
+    const result = await generate(
+      openai,
+      'fortune',
+      buildFortuneSystemPrompt(persona, structure),
+      buildFortuneUserPrompt(req.body, persona, structure),
+    );
+    return res.json({ result });
+  } catch (err) {
+    console.error('generate-fortune error:', err.message);
+    return res.status(500).json({ error: 'AI yanıtı üretilemedi' });
+  }
+});
+
+app.post('/generate-couple', async (req, res) => {
+  const {
+    womanName,
+    womanAge,
+    womanZodiac,
+    manName,
+    manAge,
+    manZodiac,
+    womanImageBase64,
+    manImageBase64,
+    womanImageMime,
+    manImageMime,
+    womanImageName,
+    manImageName,
+  } = req.body ?? {};
+
+  if (
+    !womanName ||
+    !womanAge ||
+    !womanZodiac ||
+    !manName ||
+    !manAge ||
+    !manZodiac
+  ) {
+    return res.status(400).json({ error: 'Eksik alanlar' });
+  }
+
+  const womanImage = parseImageField(womanImageBase64, womanImageMime);
+  const manImage = parseImageField(manImageBase64, manImageMime);
+  if (womanImage) womanImage.label = womanImageName || womanName;
+  if (manImage) manImage.label = manImageName || manName;
+
+  console.log('COUPLE REQUEST received:', {
+    woman: womanName,
+    man: manName,
+    womanImageRaw: womanImageBase64 ? `${womanImageBase64.length} chars` : 'MISSING',
+    manImageRaw: manImageBase64 ? `${manImageBase64.length} chars` : 'MISSING',
+    womanParsed: !!womanImage,
+    manParsed: !!manImage,
+  });
+
+  if (!womanImage || !manImage) {
+    console.error('generate-couple: fotoğraflar eksik veya parse edilemedi');
+    return res.status(400).json({
+      error: 'Kadın ve erkek fotoğrafları gerekli ve geçerli olmalı',
+    });
+  }
+
+  const hasPhotos = true;
+  const requestId = newRequestId();
+  const timestamp = new Date().toISOString();
+  const compatibilityPercent = calculateCompatibilityPercent(req.body, hasPhotos);
+
+  console.log('COUPLE COMPATIBILITY PERCENT:', compatibilityPercent);
+  console.log('COUPLE requestId:', requestId);
+
+  try {
+    const persona = pickFortunePersona();
+    const structure = pickCoupleStructure();
+    console.log(
+      `[couple] persona=${persona.id} (${persona.name}) | structure=${structure.id}`,
+    );
+
+    const raw = await generateCouple(
+      openai,
+      buildCoupleSystemPrompt(persona, structure),
+      buildCoupleUserPrompt(
+        req.body,
+        hasPhotos,
+        compatibilityPercent,
+        requestId,
+        timestamp,
+        persona,
+        structure,
+      ),
+      { woman: womanImage, man: manImage },
+    );
+    const result = ensureCompatibilityHeader(raw, compatibilityPercent);
+    return res.json({ result });
+  } catch (err) {
+    console.error('generate-couple error:', err.message);
+    return res.status(500).json({ error: 'AI yanıtı üretilemedi' });
+  }
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  const fcmReady = initFirebaseAdmin();
+  console.log(`Falora AI backend http://0.0.0.0:${PORT}`);
+  console.log(`Yerel erişim: http://127.0.0.1:${PORT}`);
+  console.log(`LAN erişim: http://192.168.1.101:${PORT}`);
+  console.log(
+    `Model: ${MODEL} | Vision: ${VISION_MODEL} | fal max_completion_tokens: ${FORTUNE_MAX_COMPLETION_TOKENS} | çift max_completion_tokens: ${COUPLE_MAX_COMPLETION_TOKENS}`,
+  );
+  console.log(
+    `temperature: ${TEMPERATURE} | frequency_penalty: ${FREQUENCY_PENALTY} | presence_penalty: ${PRESENCE_PENALTY}`,
+  );
+  console.log(
+    `couple: temperature=${COUPLE_TEMPERATURE} frequency_penalty=${COUPLE_FREQUENCY_PENALTY} presence_penalty=${COUPLE_PRESENCE_PENALTY}`,
+  );
+  console.log('OpenAI yapılandırması hazır.');
+  if (fcmReady) {
+    console.log('FCM push bildirimleri aktif.');
+  } else {
+    console.log(
+      'FCM push bildirimleri kapalı — backend/firebase-service-account.json ekleyin.',
+    );
+  }
+});
