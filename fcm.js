@@ -8,6 +8,8 @@ const DEFAULT_SERVICE_ACCOUNT_PATH = path.join(
   'firebase-service-account.json',
 );
 const { safeLog, safeError } = require('./safe_log');
+const FCM_ANDROID_CHANNEL_ID =
+  process.env.FCM_ANDROID_CHANNEL_ID || 'falora_notifications';
 const MAX_TIMEOUT_MS = 2147483647;
 
 let messaging = null;
@@ -205,7 +207,7 @@ async function sendNotification({ token, title, body, data = {}, userId }) {
 async function notifyFortuneReady(userId, type) {
   const template = READY_MESSAGES[type];
   if (!template) {
-    const err = new Error('type fortune veya couple olmalı');
+    const err = new Error('type fortune, couple veya manual olmalı');
     err.code = 'invalid_type';
     throw err;
   }
@@ -243,7 +245,7 @@ async function notifyFortuneReady(userId, type) {
 function scheduleFortuneNotify(userId, type, notifyAtIso, readingId) {
   const template = READY_MESSAGES[type];
   if (!template) {
-    const err = new Error('type fortune veya couple olmalı');
+    const err = new Error('type fortune, couple veya manual olmalı');
     err.code = 'invalid_type';
     throw err;
   }
