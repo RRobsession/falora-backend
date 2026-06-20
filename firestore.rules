@@ -1,0 +1,297 @@
+rules_version = '2';
+
+
+
+service cloud.firestore {
+
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+
+      return request.auth != null;
+
+    }
+
+
+
+    function isOwner(userId) {
+
+      return isSignedIn() && request.auth.uid == userId;
+
+    }
+
+
+
+    function isEmailVerified() {
+
+      return isSignedIn() && request.auth.token.email_verified == true;
+
+    }
+
+
+
+    function isAdmin() {
+
+      return isSignedIn()
+
+        && request.auth.uid in ['DhBcumWgN0RLAHK8aSYb3S9jXEv1'];
+
+    }
+
+
+
+    function protectedUserFieldsUnchanged() {
+
+      return request.resource.data.uid == resource.data.uid
+
+        && request.resource.data.email == resource.data.email
+
+        && request.resource.data.createdAt == resource.data.createdAt
+
+        && (!('referralCode' in resource.data)
+
+          || request.resource.data.referralCode == resource.data.referralCode)
+
+        && (!('referredBy' in resource.data)
+
+          || request.resource.data.referredBy == resource.data.referredBy);
+
+    }
+
+
+
+    function validTokenEconomyUpdate() {
+
+      let oldTokens = resource.data.tokens;
+
+      let newTokens = request.resource.data.tokens;
+
+      let oldAds = resource.data.get('rewardedAdsToday', 0);
+
+      let newAds = request.resource.data.get('rewardedAdsToday', 0);
+
+      return newTokens == oldTokens
+
+        || (newTokens < oldTokens && newTokens >= 0)
+
+        || (newTokens == oldTokens + 50 && newAds == oldAds + 1 && newAds <= 1);
+
+    }
+
+
+
+    function validReferralSelfRewardUpdate() {
+
+      let oldClaimed = resource.data.get('referralRewardClaimed', false);
+
+      let newClaimed = request.resource.data.get('referralRewardClaimed', false);
+
+      let referredBy = resource.data.get('referredBy', '');
+
+      return !oldClaimed
+
+        && newClaimed == true
+
+        && referredBy is string
+
+        && referredBy.size() > 0
+
+        && request.resource.data.tokens == resource.data.tokens + 25;
+
+    }
+
+
+
+    function validInviterReferralClaimUpdate() {
+
+      let oldTokens = resource.data.tokens;
+
+      let newTokens = request.resource.data.tokens;
+
+      let delta = newTokens - oldTokens;
+
+      return delta == 50;
+
+    }
+
+
+
+    function validReferralCodeSetUpdate() {
+
+      return !('referralCode' in resource.data)
+
+        && request.resource.data.referralCode is string
+
+        && request.resource.data.referralCode.size() >= 6
+
+        && request.resource.data.tokens == resource.data.tokens;
+
+    }
+
+
+
+    match /referral_codes/{code} {
+
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+
+        && request.resource.data.uid == request.auth.uid
+
+        && request.resource.data.code == code;
+
+    }
+
+
+
+    match /users/{userId} {
+
+      allow read: if isOwner(userId);
+
+
+
+      allow create: if isOwner(userId)
+
+        && request.resource.data.uid == userId
+
+        && request.resource.data.email == request.auth.token.email
+
+        && request.resource.data.tokens == 50
+
+        && (!('referredBy' in request.resource.data)
+
+          || (request.resource.data.referredBy is string
+
+              && request.resource.data.referredBy != userId
+
+              && request.resource.data.referredBy.size() > 0));
+
+
+
+      allow update: if isOwner(userId)
+
+        && protectedUserFieldsUnchanged()
+
+        && (validTokenEconomyUpdate()
+
+          || validReferralSelfRewardUpdate()
+
+          || validInviterReferralClaimUpdate()
+
+          || validReferralCodeSetUpdate());
+
+
+
+      allow delete: if isOwner(userId);
+
+
+
+      match /referral_credits/{creditId} {
+
+        allow read: if isOwner(userId);
+
+        allow create: if isSignedIn()
+
+          && creditId == request.auth.uid
+
+          && request.resource.data.fromUid == request.auth.uid
+
+          && request.resource.data.amount == 50
+
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.referredBy == userId;
+
+        allow update, delete: if isOwner(userId);
+
+      }
+
+    }
+
+
+
+    match /fortune_requests/{requestId} {
+
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+
+
+      allow create: if isEmailVerified()
+
+        && request.resource.data.userId == request.auth.uid
+
+        && request.resource.data.status == 'pending';
+
+
+
+      allow update: if isSignedIn()
+
+        && resource.data.userId == request.auth.uid
+
+        && request.resource.data.userId == resource.data.userId;
+
+
+
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+    }
+
+
+
+    match /couple_compatibility_requests/{requestId} {
+
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+
+
+      allow create: if isEmailVerified()
+
+        && request.resource.data.userId == request.auth.uid
+
+        && request.resource.data.status == 'pending';
+
+
+
+      allow update: if isSignedIn()
+
+        && resource.data.userId == request.auth.uid
+
+        && request.resource.data.userId == resource.data.userId;
+
+
+
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+    }
+
+
+
+    match /manual_fortune_requests/{requestId} {
+
+      allow read: if isAdmin()
+
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+
+
+      allow create: if isEmailVerified()
+
+        && request.resource.data.userId == request.auth.uid
+
+        && request.resource.data.status == 'pending';
+
+
+
+      allow update: if isAdmin();
+
+
+
+      allow delete: if isAdmin()
+
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+    }
+
+  }
+
+}
+
+

@@ -1,0 +1,26 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "falora35",
+          "appId": "1:688744850733:android:a5dc972019d50950665fa4",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "falora35",
+          "configurations": {
+            "android": "1:688744850733:android:a5dc972019d50950665fa4",
+            "ios": "1:688744850733:ios:3c966b25f7db3391665fa4",
+            "web": "1:688744850733:web:c78e84eef0b6f50f665fa4"
+          }
+        }
+      }
+    }
+  }
+}

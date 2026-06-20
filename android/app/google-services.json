@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "688744850733",
+    "project_id": "falora35",
+    "storage_bucket": "falora35.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:688744850733:android:a5dc972019d50950665fa4",
+        "android_client_info": {
+          "package_name": "com.rrlime.falora"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0kR44bmHL5AAPP6y0DWaK31HJVOdHsvQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
