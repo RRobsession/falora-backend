@@ -698,10 +698,10 @@ app.listen(PORT, '0.0.0.0', () => {
       : 'Google Play servis hesabı env eksik. Billing doğrulaması canlıda çalışmaz.',
   );
   if (fcmReady) {
-    console.log('FCM push bildirimleri aktif.');
+    console.log('Firebase Admin aktif (auth + FCM + Firestore).');
   } else {
-    console.log(
-      'FCM push bildirimleri kapalı — backend/firebase-service-account.json ekleyin.',
+    console.error(
+      'Firebase Admin kapalı — Railway Variables içine FIREBASE_SERVICE_ACCOUNT_JSON ekleyin.',
     );
   }
 });

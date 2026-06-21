@@ -1,13 +1,16 @@
-const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
+const {
+  loadServiceAccount,
+  describeServiceAccountEnv,
+} = require('./service_account_config');
 
 const BACKEND_DIR = __dirname;
 const DEFAULT_SERVICE_ACCOUNT_PATH = path.join(
   BACKEND_DIR,
   'firebase-service-account.json',
 );
-const { safeLog, safeError } = require('./safe_log');
+const { safeLog } = require('./safe_log');
 const FCM_ANDROID_CHANNEL_ID =
   process.env.FCM_ANDROID_CHANNEL_ID || 'falora_notifications';
 const MAX_TIMEOUT_MS = 2147483647;
@@ -32,43 +35,29 @@ const READY_MESSAGES = {
   },
 };
 
-function resolveServiceAccountPath(configuredPath) {
-  if (!configuredPath) {
-    return DEFAULT_SERVICE_ACCOUNT_PATH;
-  }
-  if (path.isAbsolute(configuredPath)) {
-    return configuredPath;
-  }
-  const fromBackend = path.resolve(BACKEND_DIR, configuredPath);
-  if (fs.existsSync(fromBackend)) {
-    return fromBackend;
-  }
-  return path.resolve(process.cwd(), configuredPath);
+function resolveServiceAccount() {
+  const loaded = loadServiceAccount({
+    label: 'Firebase Admin',
+    jsonEnv: 'FIREBASE_SERVICE_ACCOUNT_JSON',
+    pathEnv: 'FIREBASE_SERVICE_ACCOUNT_PATH',
+    defaultPath: DEFAULT_SERVICE_ACCOUNT_PATH,
+  });
+  return loaded?.credentials ?? null;
 }
 
-function resolveServiceAccount() {
-  const jsonInline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (jsonInline) {
-    return JSON.parse(jsonInline);
-  }
-
-  const configuredPath =
-    process.env.FIREBASE_SERVICE_ACCOUNT_PATH || DEFAULT_SERVICE_ACCOUNT_PATH;
-  const resolved = resolveServiceAccountPath(configuredPath);
-
-  if (fs.existsSync(resolved)) {
-    return JSON.parse(fs.readFileSync(resolved, 'utf8'));
-  }
-
-  console.warn('FCM: service account dosyası bulunamadı:', resolved);
-  console.warn(
-    'FCM: Firebase Console > Project Settings > Service accounts > Generate new private key',
+function logFirebaseAdminConfigStatus() {
+  const status = describeServiceAccountEnv(
+    'FIREBASE_SERVICE_ACCOUNT_JSON',
+    'FIREBASE_SERVICE_ACCOUNT_PATH',
   );
-  console.warn(
-    'FCM: İndirilen JSON dosyasını backend/firebase-service-account.json olarak kaydedin.',
-  );
-
-  return null;
+  console.error('Firebase Admin yapılandırılmadı.', {
+    hasJsonEnv: status.hasJsonEnv,
+    hasPathEnv: status.hasPathEnv,
+    pathFileExists: status.pathExists,
+    hint: status.hasJsonEnv
+      ? 'FIREBASE_SERVICE_ACCOUNT_JSON parse edilemedi; JSON ve private_key \\n formatını kontrol edin.'
+      : 'Railway Variables içine FIREBASE_SERVICE_ACCOUNT_JSON ekleyin (tek satır JSON).',
+  });
 }
 
 function initFirebaseAdmin() {
@@ -80,9 +69,7 @@ function initFirebaseAdmin() {
   try {
     const serviceAccount = resolveServiceAccount();
     if (!serviceAccount) {
-      console.warn(
-        'FCM: Firebase Admin yapılandırılmadı. FIREBASE_SERVICE_ACCOUNT_PATH veya FIREBASE_SERVICE_ACCOUNT_JSON ekleyin.',
-      );
+      logFirebaseAdminConfigStatus();
       return false;
     }
 
@@ -95,12 +82,13 @@ function initFirebaseAdmin() {
     messaging = admin.messaging();
     firestore = admin.firestore();
     console.log(
-      'FCM: Firebase Admin SDK hazır | projectId=',
+      'Firebase Admin SDK hazır | projectId=',
       serviceAccount.project_id,
     );
     return true;
   } catch (err) {
-    console.error('FCM: Firebase Admin başlatılamadı:', err.message);
+    console.error('Firebase Admin başlatılamadı:', err.message);
+    logFirebaseAdminConfigStatus();
     return false;
   }
 }
@@ -152,7 +140,9 @@ async function clearUserFcmToken(userId) {
 
 async function sendNotification({ token, title, body, data = {}, userId }) {
   if (!isFcmReady()) {
-    console.log('FCM SEND ERROR | reason=not_configured');
+    console.error(
+      'FCM SEND ERROR | reason=firebase_admin_not_configured | FIREBASE_SERVICE_ACCOUNT_JSON gerekli',
+    );
     return null;
   }
 

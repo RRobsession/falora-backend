@@ -1,8 +1,8 @@
-const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 const { google } = require('googleapis');
 const { getFirestore, initFirebaseAdmin } = require('./fcm');
+const { loadServiceAccount } = require('./service_account_config');
 
 const PLAY_PURCHASES_COLLECTION = 'play_purchases';
 const MANUAL_REQUESTS_COLLECTION = 'manual_fortune_requests';
@@ -114,39 +114,22 @@ function normalizeImageInfo(imageInfo) {
     .filter((item) => item.name && item.mime && item.base64);
 }
 
-function parseServiceAccountEnv(name) {
-  if (!process.env[name]) return null;
-  return JSON.parse(process.env[name]);
-}
-
 function resolveGooglePlayServiceAccount() {
-  const inline = parseServiceAccountEnv('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON');
-  if (inline) return inline;
+  const playLoaded = loadServiceAccount({
+    label: 'Google Play',
+    jsonEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
+    pathEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_PATH',
+    defaultPath: null,
+  });
+  if (playLoaded) return playLoaded.credentials;
 
-  const explicitPath = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_PATH;
-  if (explicitPath) {
-    const resolved = path.isAbsolute(explicitPath)
-      ? explicitPath
-      : path.resolve(__dirname, explicitPath);
-    if (fs.existsSync(resolved)) {
-      return JSON.parse(fs.readFileSync(resolved, 'utf8'));
-    }
-  }
-
-  const firebaseInline = parseServiceAccountEnv('FIREBASE_SERVICE_ACCOUNT_JSON');
-  if (firebaseInline) return firebaseInline;
-
-  const firebasePath =
-    process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
-    path.resolve(__dirname, 'firebase-service-account.json');
-  const resolvedFirebasePath = path.isAbsolute(firebasePath)
-    ? firebasePath
-    : path.resolve(__dirname, firebasePath);
-  if (fs.existsSync(resolvedFirebasePath)) {
-    return JSON.parse(fs.readFileSync(resolvedFirebasePath, 'utf8'));
-  }
-
-  return null;
+  const firebaseLoaded = loadServiceAccount({
+    label: 'Google Play (Firebase fallback)',
+    jsonEnv: 'FIREBASE_SERVICE_ACCOUNT_JSON',
+    pathEnv: 'FIREBASE_SERVICE_ACCOUNT_PATH',
+    defaultPath: path.join(__dirname, 'firebase-service-account.json'),
+  });
+  return firebaseLoaded?.credentials ?? null;
 }
 
 function getAndroidPublisher() {

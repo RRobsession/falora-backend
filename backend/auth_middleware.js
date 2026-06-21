@@ -12,7 +12,13 @@ async function requireAuth(req, res, next) {
   }
 
   if (!initFirebaseAdmin()) {
-    return res.status(503).json({ error: 'Kimlik doğrulama servisi yapılandırılmadı' });
+    console.error(
+      'AUTH ERROR | Firebase Admin yapılandırılmadı — istek reddedildi. Railway Variables: FIREBASE_SERVICE_ACCOUNT_JSON',
+    );
+    return res.status(503).json({
+      error:
+        'Kimlik doğrulama servisi yapılandırılmadı. FIREBASE_SERVICE_ACCOUNT_JSON eksik veya geçersiz.',
+    });
   }
 
   try {
