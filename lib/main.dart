@@ -13,7 +13,6 @@ import 'package:falora/ai_service.dart';
 import 'package:falora/app/auth_gate.dart';
 import 'package:falora/category_icon.dart';
 import 'package:falora/config/manual_fortune_config.dart';
-import 'package:falora/config/play_product_catalog.dart';
 import 'package:falora/firebase_messaging_background.dart';
 import 'package:falora/firebase_options.dart';
 import 'package:falora/image_upload_card.dart';
@@ -24,7 +23,6 @@ import 'package:falora/models/manual_fortune_request.dart';
 import 'package:falora/models/manual_fortune_reader.dart';
 import 'package:falora/screens/fortune_teller_selection_screen.dart';
 import 'package:falora/screens/manual_fortune_form_screen.dart';
-import 'package:falora/services/billing_backend_service.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
 import 'package:falora/openai_backend_service.dart';
 import 'package:falora/picked_image.dart';
@@ -214,6 +212,42 @@ class _FaloraShellState extends State<FaloraShell> {
     return false;
   }
 
+  Future<bool> _checkManualFortuneTokenBalance() async {
+    const tokenCost = manualFortuneTokenCost;
+    if (_liveUser.tokens >= tokenCost) {
+      debugPrint('MANUAL TOKEN CHECK OK');
+      return true;
+    }
+    if (!mounted) return false;
+
+    final goShop = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yetersiz Jeton'),
+        content: const Text(
+          'Bu özel yorum için 1500 jeton gerekiyor.\n'
+          'Jeton bakiyeniz yetersiz.\n'
+          'Jeton mağazasından paket satın alabilirsiniz.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Jeton Yükle'),
+          ),
+        ],
+      ),
+    );
+
+    if (goShop == true && mounted) {
+      _openShop();
+    }
+    return false;
+  }
+
   void _showSubmitError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -369,10 +403,9 @@ class _FaloraShellState extends State<FaloraShell> {
     ManualFortuneReader reader,
   ) {
     final offer = manualOfferFor(cat);
-    final productId = manualProductId(reader.id, cat);
     logManualReaderConfig(cat);
     debugPrint('MANUAL READER SELECTED: ${reader.id} (${reader.name})');
-    debugPrint('MANUAL PRICE SELECTED: ${offer.priceLabel} productId=$productId');
+    debugPrint('MANUAL TOKEN COST: ${offer.priceLabel}');
     Navigator.of(context).push(
       faloraPageRoute<void>(
         ManualFortuneFormPage(
@@ -799,43 +832,44 @@ class _FaloraShellState extends State<FaloraShell> {
     required List<String> questions,
     List<PickedImage>? images,
   }) async {
-    final productId = manualProductId(reader.id, category);
+    const tokenCost = manualFortuneTokenCost;
     await FortuneSubmitLogger.logSubmitStart(
       fortuneType: category.label,
       selectedReader: '${reader.id} (${reader.name})',
       isManualReader: true,
-      endpoint: '$apiBaseUrl/billing/manual-fortune/complete',
+      endpoint: 'firestore:manual_fortune_requests',
       requestBody: {
-        'flow': 'manual_billing',
-        'productId': productId,
-        'billingUsed': true,
+        'flow': 'token_payment',
+        'tokenCost': tokenCost,
       },
     );
+
+    if (!await _checkManualFortuneTokenBalance()) return;
 
     final storage = ManualFortuneStorageService.instance;
     final requestId = storage.newRequestId();
     final now = DateTime.now();
+    var tokensDeducted = false;
 
     try {
-      final purchase = await PlayBillingService.instance.buyConsumable(productId);
+      await _deductSubmitTokens(logPrefix: 'MANUAL', amount: tokenCost);
+      tokensDeducted = true;
 
-      await BillingBackendService.instance.completeManualPurchase(
-        purchase: purchase,
+      await storage.createRequest(
+        id: requestId,
         userId: _userId,
         userEmail: _liveUser.email,
-        requestId: requestId,
-        category: category.name,
+        category: category,
         readerId: reader.id,
         readerName: reader.name,
-        priceTRY: offer.priceTRY,
-        questionLimit: offer.questionLimit,
-        requiresIntention: offer.requiresIntention,
+        offer: offer,
+        tokenCost: tokenCost,
         name: name,
         age: age,
         zodiac: zodiac,
         intention: intention,
         questions: questions,
-        imageInfo: ManualFortuneStorageService.encodeImagesForPayload(images),
+        images: images,
       );
 
       final summary =
@@ -857,20 +891,21 @@ class _FaloraShellState extends State<FaloraShell> {
       _navigateAfterFortuneSubmit(
         logPrefix: 'MANUAL',
         tabIndex: 1,
-        successMessage: 'Satın alma doğrulandı. Özel fal talebin alındı.',
+        successMessage:
+            'Özel fal talebin alındı. $tokenCost jeton hesabından düşüldü.',
         openReading: reading,
       );
-    } on PlayBillingException catch (e) {
-      FortuneSubmitLogger.logError(e);
-      _showSubmitError(e.message);
-    } on BillingBackendException catch (e) {
-      FortuneSubmitLogger.logError(e);
-      _showSubmitError(e.message);
     } on ManualFortuneException catch (e) {
       FortuneSubmitLogger.logError(e);
+      if (tokensDeducted) {
+        await TokenService.instance.addTokens(_userId, tokenCost);
+      }
       _showSubmitError(e.message);
     } catch (e, stackTrace) {
       FortuneSubmitLogger.logError(e, stackTrace);
+      if (tokensDeducted) {
+        await TokenService.instance.addTokens(_userId, tokenCost);
+      }
       _showSubmitError('Talep oluşturulamadı. Lütfen tekrar deneyin.');
     }
   }

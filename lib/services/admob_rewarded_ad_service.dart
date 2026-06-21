@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:falora/models/app_user.dart';
+import 'package:falora/services/ads/ad_service_bootstrap.dart';
 import 'package:falora/services/ads/admob_config.dart';
+import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:flutter/foundation.dart';
@@ -12,12 +15,13 @@ class AdMobRewardedAdService implements RewardedAdService {
   RewardedAd? _rewardedAd;
   bool _loading = false;
   String? _lastErrorMessage;
+  int _loadAttempt = 0;
 
   @override
   String? get lastErrorMessage => _lastErrorMessage;
 
   void _logDailyRewardStatus(AppUser user) {
-    debugPrint(
+    AdMobLogger.log(
       'DAILY_REWARD_STATUS: remaining=${remainingDailyAds(user)} '
       'rewardedAdsToday=${user.rewardedAdsToday} '
       'lastRewardAt=${user.lastRewardAt?.toIso8601String() ?? 'null'}',
@@ -27,10 +31,11 @@ class AdMobRewardedAdService implements RewardedAdService {
   void preload() {
     if (_loading || _rewardedAd != null) return;
     _loading = true;
+    _loadAttempt++;
 
     final unitId = rewardedAdUnitId(defaultTargetPlatform);
-    debugPrint('REWARDED LOAD START');
-    debugPrint('REWARDED AD UNIT ID: $unitId (${adUnitModeLabel(defaultTargetPlatform)})');
+    AdMobLogger.log('REWARDED LOAD START');
+    AdMobLogger.log('REWARDED AD UNIT ID: $unitId');
 
     RewardedAd.load(
       adUnitId: unitId,
@@ -40,17 +45,27 @@ class AdMobRewardedAdService implements RewardedAdService {
           _rewardedAd = ad;
           _loading = false;
           _lastErrorMessage = null;
-          debugPrint('REWARDED LOAD SUCCESS');
+          AdMobLogger.log('REWARDED LOAD SUCCESS');
         },
         onAdFailedToLoad: (error) {
           _rewardedAd = null;
           _loading = false;
           _lastErrorMessage =
               'Reklam yüklenemedi (${error.code}): ${error.message}';
-          debugPrint('REWARDED LOAD FAILED: ${error.code} ${error.message}');
+          AdMobLogger.rewardedLoadFailed(error);
+          _scheduleRetry();
         },
       ),
     );
+  }
+
+  void _scheduleRetry() {
+    if (_loadAttempt >= 4) return;
+    Future<void>.delayed(const Duration(seconds: 5), () {
+      if (_rewardedAd == null && !_loading) {
+        preload();
+      }
+    });
   }
 
   @override
@@ -73,27 +88,35 @@ class AdMobRewardedAdService implements RewardedAdService {
     required String userId,
     required AppUser user,
   }) async {
+    await AdServiceBootstrap.ensureInitialized();
     _logDailyRewardStatus(user);
+
+    if (!AdServiceBootstrap.initSucceeded) {
+      _lastErrorMessage =
+          'AdMob başlatılamadı. Uygulamayı kapatıp tekrar açın.';
+      AdMobLogger.log('REWARDED CLAIM ERROR: AdMob init not successful');
+      return RewardedAdResult.failed;
+    }
 
     if (remainingDailyAds(user) <= 0) {
       _lastErrorMessage = 'Bugünkü ücretsiz jeton hakkını kullandın.';
-      debugPrint('REWARDED CLAIM ERROR: daily limit reached');
+      AdMobLogger.log('REWARDED CLAIM ERROR: daily limit reached');
       return RewardedAdResult.limitReached;
     }
 
     var ad = _rewardedAd;
     if (ad == null) {
       preload();
-      ad = await _waitForAd(const Duration(seconds: 10));
+      ad = await _waitForAd(const Duration(seconds: 15));
     }
     if (ad == null) {
       _lastErrorMessage ??=
           'Reklam şu an yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.';
-      debugPrint('REWARDED LOAD FAILED: no ad available after wait');
+      AdMobLogger.log('REWARDED LOAD FAILED: no ad available after wait');
       return RewardedAdResult.failed;
     }
 
-    var earned = false;
+    final rewardEarned = Completer<bool>();
     var showFailed = false;
     final dismissed = Completer<void>();
 
@@ -111,47 +134,61 @@ class AdMobRewardedAdService implements RewardedAdService {
         showFailed = true;
         _lastErrorMessage =
             'Reklam gösterilemedi (${error.code}): ${error.message}';
-        debugPrint('REWARDED LOAD FAILED: show error ${error.code} ${error.message}');
+        AdMobLogger.rewardedShowFailed(error);
         if (!dismissed.isCompleted) dismissed.complete();
       },
     );
 
     try {
-      debugPrint('REWARDED SHOW START');
+      AdMobLogger.log('REWARDED SHOW START');
       await ad.show(
         onUserEarnedReward: (ad, reward) {
-          debugPrint('REWARDED EARNED: ${reward.amount} ${reward.type}');
-          earned = true;
+          AdMobLogger.log('REWARDED EARNED');
+          AdMobLogger.log(
+            'REWARDED EARNED DETAIL: amount=${reward.amount} type=${reward.type}',
+          );
+          if (!rewardEarned.isCompleted) {
+            rewardEarned.complete(true);
+          }
         },
       );
       await dismissed.future;
     } catch (e, stackTrace) {
       _lastErrorMessage = 'Reklam gösterilirken hata oluştu: $e';
-      debugPrint('REWARDED LOAD FAILED: show exception $e');
-      debugPrint(stackTrace.toString());
+      AdMobLogger.log('REWARDED SHOW FAILED exception: $e');
+      AdMobLogger.log(stackTrace.toString());
       return RewardedAdResult.failed;
     }
 
     if (showFailed) return RewardedAdResult.failed;
+
+    final earned = await rewardEarned.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => false,
+    );
     if (!earned) {
       _lastErrorMessage = 'Reklam tam izlenmedi, jeton verilmedi.';
+      AdMobLogger.log('REWARDED CLAIM ERROR: reward callback not received');
       return RewardedAdResult.cancelled;
     }
 
     try {
-      debugPrint('REWARDED CLAIM START');
+      AdMobLogger.log('REWARDED CLAIM START');
       await TokenService.instance.claimRewardedAd(userId);
-      debugPrint('REWARDED CLAIM SUCCESS');
+      AdMobLogger.log('REWARDED CLAIM SUCCESS');
       _lastErrorMessage = null;
       return RewardedAdResult.rewarded;
     } on TokenException catch (e) {
       _lastErrorMessage = e.message;
-      debugPrint('REWARDED CLAIM ERROR: ${e.message}');
+      AdMobLogger.claimError(e.message);
       return RewardedAdResult.limitReached;
+    } on FirebaseException catch (e) {
+      _lastErrorMessage = 'Jeton yazılamadı (${e.code}): ${e.message}';
+      AdMobLogger.claimError('Firebase ${e.code}: ${e.message}');
+      return RewardedAdResult.failed;
     } catch (e, stackTrace) {
       _lastErrorMessage = 'Jeton eklenemedi: $e';
-      debugPrint('REWARDED CLAIM ERROR: $e');
-      debugPrint(stackTrace.toString());
+      AdMobLogger.claimError(e, stackTrace);
       return RewardedAdResult.failed;
     }
   }

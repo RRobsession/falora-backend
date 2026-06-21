@@ -81,7 +81,7 @@ class PlayBillingService {
     final response = await _iap.queryProductDetails(productIds);
     if (response.error != null) {
       debugPrint('PLAY BILLING query error: ${response.error!.message}');
-      throw PlayBillingException(manualBillingProductsNotReadyMessage);
+      throw PlayBillingException(tokenBillingProductsNotReadyMessage);
     }
 
     return response.productDetails;
@@ -100,7 +100,7 @@ class PlayBillingService {
       debugPrint(
         'PLAY BILLING: product not found in Play Console productId=$productId',
       );
-      throw PlayBillingException(manualBillingProductsNotReadyMessage);
+      throw PlayBillingException(tokenBillingProductsNotReadyMessage);
     }
 
     if (_purchaseCompleters.containsKey(productId)) {

@@ -861,7 +861,27 @@ class _RequestSummaryHeader extends StatelessWidget {
 
         ),
 
-        if (request.priceTRY > 0) ...[
+        if (request.tokenCost > 0) ...[
+
+          const SizedBox(height: 4),
+
+          Text(
+
+            '${request.tokenCost} Jeton · ${request.questionLimit} soru',
+
+            style: const TextStyle(
+
+              color: faloraGold,
+
+              fontSize: 12,
+
+              fontWeight: FontWeight.w600,
+
+            ),
+
+          ),
+
+        ] else if (request.priceTRY > 0) ...[
 
           const SizedBox(height: 4),
 

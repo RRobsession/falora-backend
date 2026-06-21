@@ -24,6 +24,8 @@ class ManualFortuneRequest {
 
     required this.priceTRY,
 
+    required this.tokenCost,
+
     required this.productId,
 
     required this.questionLimit,
@@ -77,6 +79,8 @@ class ManualFortuneRequest {
   final String readerName;
 
   final int priceTRY;
+
+  final int tokenCost;
 
   final String productId;
 
@@ -245,6 +249,8 @@ class ManualFortuneRequest {
       readerName: data['readerName'] as String? ?? '',
 
       priceTRY: (data['priceTRY'] as num?)?.toInt() ?? 0,
+
+      tokenCost: (data['tokenCost'] as num?)?.toInt() ?? 0,
 
       productId: (data['productId'] as String?) ??
 

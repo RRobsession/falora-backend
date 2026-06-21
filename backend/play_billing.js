@@ -5,113 +5,21 @@ const { getFirestore, initFirebaseAdmin } = require('./fcm');
 const { loadServiceAccount } = require('./service_account_config');
 
 const PLAY_PURCHASES_COLLECTION = 'play_purchases';
-const MANUAL_REQUESTS_COLLECTION = 'manual_fortune_requests';
 const USERS_COLLECTION = 'users';
 
 const PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.rrlime.falora';
 
 const TOKEN_PRODUCTS = {
   tokens_50: { tokens: 50 },
+  tokens_100: { tokens: 100 },
   tokens_150: { tokens: 150 },
-  tokens_300: { tokens: 300 },
-  tokens_750: { tokens: 750 },
   tokens_1500: { tokens: 1500 },
-};
-
-const MANUAL_PRODUCTS = {
-  serdar_tarot_4q_350: {
-    category: 'tarot',
-    readerId: 'serdar',
-    priceTRY: 350,
-    questionLimit: 4,
-    requiresIntention: false,
-  },
-  hatice_tarot_4q_350: {
-    category: 'tarot',
-    readerId: 'hatice',
-    priceTRY: 350,
-    questionLimit: 4,
-    requiresIntention: false,
-  },
-  serdar_kahve_2q_500: {
-    category: 'kahve',
-    readerId: 'serdar',
-    priceTRY: 500,
-    questionLimit: 2,
-    requiresIntention: true,
-  },
-  hatice_kahve_2q_500: {
-    category: 'kahve',
-    readerId: 'hatice',
-    priceTRY: 500,
-    questionLimit: 2,
-    requiresIntention: true,
-  },
-  serdar_bakla_2q_500: {
-    category: 'bakla',
-    readerId: 'serdar',
-    priceTRY: 500,
-    questionLimit: 2,
-    requiresIntention: true,
-  },
-  hatice_bakla_2q_500: {
-    category: 'bakla',
-    readerId: 'hatice',
-    priceTRY: 500,
-    questionLimit: 2,
-    requiresIntention: true,
-  },
-  serdar_su_2q_500: {
-    category: 'su',
-    readerId: 'serdar',
-    priceTRY: 500,
-    questionLimit: 2,
-    requiresIntention: true,
-  },
-  hatice_su_2q_500: {
-    category: 'su',
-    readerId: 'hatice',
-    priceTRY: 500,
-    questionLimit: 2,
-    requiresIntention: true,
-  },
-  serdar_iskambil_2q_250: {
-    category: 'iskambil',
-    readerId: 'serdar',
-    priceTRY: 250,
-    questionLimit: 2,
-    requiresIntention: false,
-  },
-  hatice_iskambil_2q_250: {
-    category: 'iskambil',
-    readerId: 'hatice',
-    priceTRY: 250,
-    questionLimit: 2,
-    requiresIntention: false,
-  },
 };
 
 let androidPublisher = null;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-function normalizeQuestions(questions) {
-  if (!Array.isArray(questions)) return [];
-  return questions.map((item) => String(item || '').trim()).filter(Boolean);
-}
-
-function normalizeImageInfo(imageInfo) {
-  if (!Array.isArray(imageInfo)) return [];
-  return imageInfo
-    .filter((item) => item && typeof item === 'object')
-    .map((item) => ({
-      name: String(item.name || '').trim(),
-      mime: String(item.mime || '').trim(),
-      base64: String(item.base64 || '').trim(),
-    }))
-    .filter((item) => item.name && item.mime && item.base64);
 }
 
 function resolveGooglePlayServiceAccount() {
@@ -193,70 +101,6 @@ async function verifyProductPurchase(productId, purchaseToken) {
   }
 }
 
-function validateManualPayload(body) {
-  const definition = MANUAL_PRODUCTS[body.productId];
-  if (!definition) {
-    const error = new Error('Tanımsız manuel ürün.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (!isNonEmptyString(body.requestId)) {
-    const error = new Error('requestId gerekli.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (!isNonEmptyString(body.purchaseToken)) {
-    const error = new Error('purchaseToken gerekli.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (body.category !== definition.category || body.readerId !== definition.readerId) {
-    const error = new Error('Ürün ile fal türü eşleşmiyor.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (Number(body.priceTRY) !== definition.priceTRY) {
-    const error = new Error('Fiyat doğrulaması başarısız.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (Number(body.questionLimit) !== definition.questionLimit) {
-    const error = new Error('Soru limiti doğrulaması başarısız.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (Boolean(body.requiresIntention) !== definition.requiresIntention) {
-    const error = new Error('Niyet zorunluluğu eşleşmiyor.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const questions = normalizeQuestions(body.questions);
-  if (questions.length !== definition.questionLimit) {
-    const error = new Error(`Bu ürün için ${definition.questionLimit} soru gerekli.`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (definition.requiresIntention && !isNonEmptyString(body.intention)) {
-    const error = new Error('Bu fal türü için niyet alanı zorunlu.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return {
-    definition,
-    questions,
-    imageInfo: normalizeImageInfo(body.imageInfo),
-  };
-}
-
 function validateTokenPayload(body) {
   const definition = TOKEN_PRODUCTS[body.productId];
   if (!definition) {
@@ -333,74 +177,6 @@ function buildPurchaseLedger({
   };
 }
 
-async function completeManualFortunePurchase(auth, body) {
-  const firestore = getFirestoreOrThrow();
-  const { definition, questions, imageInfo } = validateManualPayload(body);
-  const purchaseData = await verifyProductPurchase(body.productId, body.purchaseToken);
-  assertVerifiedPurchase(body.productId, body.purchaseToken, purchaseData);
-
-  const ledgerRef = firestore.collection(PLAY_PURCHASES_COLLECTION).doc(body.purchaseToken);
-  const requestRef = firestore.collection(MANUAL_REQUESTS_COLLECTION).doc(body.requestId);
-
-  return firestore.runTransaction(async (tx) => {
-    const existingLedger = await tx.get(ledgerRef);
-    if (existingLedger.exists) {
-      const existingData = existingLedger.data() || {};
-      if (existingData.uid !== auth.uid) {
-        const error = new Error('Bu purchaseToken başka bir hesapta kullanılmış.');
-        error.statusCode = 409;
-        throw error;
-      }
-      return {
-        requestId: existingData.linkedRequestId || body.requestId,
-        alreadyProcessed: true,
-      };
-    }
-
-    tx.set(ledgerRef, buildPurchaseLedger({
-      uid: auth.uid,
-      productId: body.productId,
-      purchaseToken: body.purchaseToken,
-      purchaseId: body.purchaseId,
-      source: body.source,
-      transactionDate: body.transactionDate,
-      purchaseData,
-      kind: 'manual_fortune',
-      linkedRequestId: body.requestId,
-    }));
-
-    tx.set(requestRef, {
-      userId: auth.uid,
-      userEmail: isNonEmptyString(auth.email)
-        ? auth.email.trim()
-        : String(body.userEmail || '').trim(),
-      fortuneType: definition.category,
-      readerId: body.readerId,
-      readerName: String(body.readerName || '').trim(),
-      priceTRY: definition.priceTRY,
-      productId: body.productId,
-      questionLimit: definition.questionLimit,
-      requiresIntention: definition.requiresIntention,
-      status: 'pending',
-      name: String(body.name || '').trim(),
-      age: Number(body.age) || 0,
-      zodiac: String(body.zodiac || '').trim(),
-      intention: String(body.intention || '').trim(),
-      questions,
-      imageInfo,
-      purchaseToken: body.purchaseToken,
-      paymentStatus: body.source === 'restored' ? 'restored' : 'verified',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return {
-      requestId: body.requestId,
-      alreadyProcessed: false,
-    };
-  });
-}
-
 async function completeTokenPurchase(auth, body) {
   const firestore = getFirestoreOrThrow();
   const definition = validateTokenPayload(body);
@@ -474,7 +250,6 @@ async function restorePurchasesForUser(uid) {
 }
 
 module.exports = {
-  completeManualFortunePurchase,
   completeTokenPurchase,
   restorePurchasesForUser,
   PLAY_PURCHASES_COLLECTION,

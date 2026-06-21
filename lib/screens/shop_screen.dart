@@ -1,3 +1,4 @@
+import 'package:falora/config/manual_fortune_config.dart';
 import 'package:falora/config/play_product_catalog.dart';
 import 'package:falora/services/billing_backend_service.dart';
 import 'package:falora/services/play_billing_service.dart';
@@ -177,7 +178,9 @@ class _ShopScreenState extends State<ShopScreen> {
                         PremiumTokenBalanceCard(tokens: tokens, compact: true),
                         const SizedBox(height: 14),
                         Text(
-                          'Fallar falcıya göre 50–150 jeton; çift uyumu $coupleTokenCost jeton harcar.',
+                          '50, 100, 150 ve 1500 jeton paketleri mevcut. '
+                          'Özel yorumlar (Serdar/Hatice) $manualFortuneTokenCost jeton; '
+                          'AI fallar falcıya göre 50–150 jeton; çift uyumu $coupleTokenCost jeton harcar.',
                           style: TextStyle(
                             color: faloraTextSecondary.withValues(alpha: 0.92),
                             fontSize: 13,

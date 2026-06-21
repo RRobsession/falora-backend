@@ -16,16 +16,6 @@ class BillingBackendException implements Exception {
   String toString() => message;
 }
 
-class ManualPurchaseVerificationResult {
-  const ManualPurchaseVerificationResult({
-    required this.requestId,
-    required this.alreadyProcessed,
-  });
-
-  final String requestId;
-  final bool alreadyProcessed;
-}
-
 class TokenPurchaseVerificationResult {
   const TokenPurchaseVerificationResult({
     required this.tokensGranted,
@@ -50,56 +40,6 @@ class BillingBackendService {
   BillingBackendService._();
 
   static final BillingBackendService instance = BillingBackendService._();
-
-  Future<ManualPurchaseVerificationResult> completeManualPurchase({
-    required PlayPurchaseResult purchase,
-    required String userId,
-    required String userEmail,
-    required String requestId,
-    required String category,
-    required String readerId,
-    required String readerName,
-    required int priceTRY,
-    required int questionLimit,
-    required bool requiresIntention,
-    required String name,
-    required int age,
-    required String zodiac,
-    required String intention,
-    required List<String> questions,
-    required List<Map<String, String>> imageInfo,
-  }) async {
-    final data = await _post(
-      '/billing/manual-fortune/complete',
-      {
-        'userId': userId,
-        'userEmail': userEmail,
-        'requestId': requestId,
-        'productId': purchase.productId,
-        'purchaseToken': purchase.purchaseToken,
-        'purchaseId': purchase.purchaseId,
-        'source': purchase.source.name,
-        'transactionDate': purchase.transactionDate,
-        'category': category,
-        'readerId': readerId,
-        'readerName': readerName,
-        'priceTRY': priceTRY,
-        'questionLimit': questionLimit,
-        'requiresIntention': requiresIntention,
-        'name': name,
-        'age': age,
-        'zodiac': zodiac,
-        'intention': intention,
-        'questions': questions,
-        'imageInfo': imageInfo,
-      },
-    );
-
-    return ManualPurchaseVerificationResult(
-      requestId: data['requestId'] as String? ?? requestId,
-      alreadyProcessed: data['alreadyProcessed'] == true,
-    );
-  }
 
   Future<TokenPurchaseVerificationResult> completeTokenPurchase({
     required PlayPurchaseResult purchase,
@@ -142,7 +82,7 @@ class BillingBackendService {
       selectedReader: payload['readerId']?.toString() ??
           payload['productId']?.toString() ??
           'unknown',
-      isManualReader: path.contains('manual-fortune'),
+      isManualReader: false,
       endpoint: uri.toString(),
       requestBody: _sanitizePayload(payload),
     );
@@ -196,14 +136,14 @@ class BillingBackendService {
   String _mapBillingError(int statusCode, dynamic rawError) {
     final error = rawError?.toString() ?? '';
     if (statusCode == 404) {
-      return manualBillingProductsNotReadyMessage;
+      return tokenBillingProductsNotReadyMessage;
     }
     if (statusCode == 503 &&
         error.toLowerCase().contains('google play servis')) {
-      return manualBillingProductsNotReadyMessage;
+      return tokenBillingProductsNotReadyMessage;
     }
     if (error.toLowerCase().contains('google play doğrulaması')) {
-      return manualBillingProductsNotReadyMessage;
+      return tokenBillingProductsNotReadyMessage;
     }
     if (error.isNotEmpty) return error;
     return 'Satın alma doğrulaması tamamlanamadı. Lütfen tekrar deneyin.';

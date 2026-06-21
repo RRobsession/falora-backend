@@ -272,7 +272,17 @@ service cloud.firestore {
 
 
 
-      allow create: if false;
+      allow create: if isEmailVerified()
+
+        && request.resource.data.userId == request.auth.uid
+
+        && request.resource.data.status == 'pending'
+
+        && request.resource.data.paymentStatus == 'tokens'
+
+        && request.resource.data.tokenCost == 1500
+
+        && request.resource.data.readerId in ['serdar', 'hatice'];
 
 
 

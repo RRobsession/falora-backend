@@ -2,23 +2,23 @@ import 'package:falora/models/fortune_models.dart';
 import 'package:flutter/foundation.dart';
 
 const manualReaderBadgeLabel = 'Özel Yorumcu';
+const manualFortuneTokenCost = 1500;
 
 /// Fal türüne göre manuel yorum teklifi.
 class ManualFortuneOffer {
   const ManualFortuneOffer({
-    required this.priceTRY,
+    required this.tokenCost,
     required this.questionLimit,
     required this.requiresIntention,
   });
 
-  final int priceTRY;
+  final int tokenCost;
   final int questionLimit;
   final bool requiresIntention;
 
-  String get priceLabel => '$priceTRY TL';
+  String get priceLabel => '$tokenCost Jeton';
 
-  String get questionLabel =>
-      '$questionLimit soru hakkı · Jeton harcanmaz';
+  String get questionLabel => '$questionLimit soru hakkı';
 
   String get intentionLabel =>
       requiresIntention ? 'Niyet gerekli' : 'Niyet eklenebilir';
@@ -28,7 +28,7 @@ ManualFortuneOffer manualOfferFor(FortuneCategory category) {
   switch (category) {
     case FortuneCategory.tarot:
       return const ManualFortuneOffer(
-        priceTRY: 350,
+        tokenCost: manualFortuneTokenCost,
         questionLimit: 4,
         requiresIntention: false,
       );
@@ -36,13 +36,13 @@ ManualFortuneOffer manualOfferFor(FortuneCategory category) {
     case FortuneCategory.bakla:
     case FortuneCategory.su:
       return const ManualFortuneOffer(
-        priceTRY: 500,
+        tokenCost: manualFortuneTokenCost,
         questionLimit: 2,
         requiresIntention: true,
       );
     case FortuneCategory.iskambil:
       return const ManualFortuneOffer(
-        priceTRY: 250,
+        tokenCost: manualFortuneTokenCost,
         questionLimit: 2,
         requiresIntention: false,
       );
@@ -55,7 +55,7 @@ void logManualReaderConfig(FortuneCategory category) {
   final offer = manualOfferFor(category);
   debugPrint('MANUAL READER CONFIG LOADED category=${category.name}');
   debugPrint(
-    'MANUAL PRICE SELECTED: ${offer.priceLabel} | questions=${offer.questionLimit}',
+    'MANUAL TOKEN COST: ${offer.priceLabel} | questions=${offer.questionLimit}',
   );
   debugPrint('MANUAL QUESTION_LIMIT: ${offer.questionLimit}');
 }

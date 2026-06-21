@@ -316,7 +316,7 @@ class _ManualFortuneReaderCard extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: Text(
-                'Satın Al · ${offer.priceLabel}',
+                'Devam Et · ${offer.priceLabel}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,

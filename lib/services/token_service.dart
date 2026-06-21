@@ -313,60 +313,49 @@ class TokenService {
 
 
   Future<void> claimRewardedAd(String uid) async {
+    try {
+      await _db.runTransaction((tx) async {
+        final ref = _userRef(uid);
+        final snap = await tx.get(ref);
+        if (!snap.exists) throw TokenException('Kullanıcı bulunamadı');
 
-    await _db.runTransaction((tx) async {
+        final data = snap.data()!;
+        var adsToday = (data['rewardedAdsToday'] as num?)?.toInt() ?? 0;
+        final tokens = (data['tokens'] as num?)?.toInt() ?? 0;
+        final lastRaw = data['lastRewardAt'];
+        DateTime? lastReward;
+        if (lastRaw is Timestamp) lastReward = lastRaw.toDate();
 
-      final ref = _userRef(uid);
+        if (lastReward != null &&
+            DateTime.now().difference(lastReward) >= rewardResetDuration) {
+          adsToday = 0;
+        }
 
-      final snap = await tx.get(ref);
+        if (adsToday >= maxRewardedAdsPerDay) {
+          throw TokenException('Bugünkü ücretsiz jeton hakkını kullandın.');
+        }
 
-      if (!snap.exists) throw TokenException('Kullanıcı bulunamadı');
+        final newTokens = tokens + rewardAdTokenGrant;
+        tx.update(ref, {
+          'tokens': newTokens,
+          'rewardedAdsToday': adsToday + 1,
+          'lastRewardAt': Timestamp.fromDate(DateTime.now()),
+        });
 
-
-
-      final data = snap.data()!;
-
-      var adsToday = (data['rewardedAdsToday'] as num?)?.toInt() ?? 0;
-
-      final tokens = (data['tokens'] as num?)?.toInt() ?? 0;
-
-      final lastRaw = data['lastRewardAt'];
-
-      DateTime? lastReward;
-
-      if (lastRaw is Timestamp) lastReward = lastRaw.toDate();
-
-
-
-      if (lastReward != null &&
-
-          DateTime.now().difference(lastReward) >= rewardResetDuration) {
-
-        adsToday = 0;
-
-      }
-
-
-
-      if (adsToday >= maxRewardedAdsPerDay) {
-        throw TokenException('Bugünkü ücretsiz jeton hakkını kullandın.');
-      }
-
-      final newTokens = tokens + rewardAdTokenGrant;
-      tx.update(ref, {
-        'tokens': newTokens,
-        'rewardedAdsToday': adsToday + 1,
-        'lastRewardAt': Timestamp.fromDate(DateTime.now()),
+        debugPrint(
+          'REWARDED CLAIM SUCCESS: tokens $tokens -> $newTokens (+$rewardAdTokenGrant)',
+        );
       });
 
-      debugPrint(
-        'REWARDED CLAIM SUCCESS: tokens $tokens -> $newTokens (+$rewardAdTokenGrant)',
-      );
-
-    });
-
-    _applyOptimisticTokens(uid, rewardAdTokenGrant);
-
+      _applyOptimisticTokens(uid, rewardAdTokenGrant);
+    } on FirebaseException catch (e) {
+      debugPrint('REWARDED CLAIM ERROR: Firebase ${e.code} ${e.message}');
+      rethrow;
+    } catch (e, stackTrace) {
+      debugPrint('REWARDED CLAIM ERROR: $e');
+      debugPrint(stackTrace.toString());
+      rethrow;
+    }
   }
 
 

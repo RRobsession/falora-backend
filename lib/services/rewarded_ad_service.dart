@@ -1,4 +1,5 @@
 import 'package:falora/models/app_user.dart';
+import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/widgets/mock_ad_overlay.dart';
 import 'package:flutter/material.dart';
@@ -58,7 +59,7 @@ class MockRewardedAdService implements RewardedAdService {
       return RewardedAdResult.limitReached;
     }
 
-    debugPrint('AD SHOW START (mock — web/desktop)');
+    AdMobLogger.log('REWARDED SHOW START (mock — web/desktop)');
     final completed = await MockAdOverlay.show(
       context,
       title: 'Ödüllü Reklam',
@@ -67,21 +68,22 @@ class MockRewardedAdService implements RewardedAdService {
     );
 
     if (!completed) {
-      debugPrint('AD LOAD FAILED: mock ad cancelled before completion');
+      AdMobLogger.log('REWARDED LOAD FAILED: mock ad cancelled');
       return RewardedAdResult.cancelled;
     }
 
-    debugPrint('AD REWARD EARNED (mock — watch completed)');
+    AdMobLogger.log('REWARDED EARNED (mock)');
 
     try {
+      AdMobLogger.log('REWARDED CLAIM START');
       await TokenService.instance.claimRewardedAd(userId);
-      debugPrint('AD REWARD GRANTED');
+      AdMobLogger.log('REWARDED CLAIM SUCCESS');
       return RewardedAdResult.rewarded;
-    } on TokenException {
+    } on TokenException catch (e) {
+      AdMobLogger.claimError(e.message);
       return RewardedAdResult.limitReached;
     } catch (e, stackTrace) {
-      debugPrint('AD LOAD FAILED: mock claim error $e');
-      debugPrint(stackTrace.toString());
+      AdMobLogger.claimError(e, stackTrace);
       return RewardedAdResult.failed;
     }
   }

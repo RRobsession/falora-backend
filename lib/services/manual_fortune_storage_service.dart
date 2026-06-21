@@ -170,7 +170,7 @@ class ManualFortuneStorageService {
 
     required ManualFortuneOffer offer,
 
-    required String productId,
+    required int tokenCost,
 
     required String name,
 
@@ -183,10 +183,6 @@ class ManualFortuneStorageService {
     required List<String> questions,
 
     List<PickedImage>? images,
-
-    String purchaseToken = '',
-
-    String paymentStatus = 'skipped',
 
   }) async {
 
@@ -212,9 +208,9 @@ class ManualFortuneStorageService {
 
         'readerName': readerName,
 
-        'priceTRY': offer.priceTRY,
+        'tokenCost': tokenCost,
 
-        'productId': productId,
+        'priceTRY': 0,
 
         'questionLimit': offer.questionLimit,
 
@@ -232,11 +228,9 @@ class ManualFortuneStorageService {
 
         'questions': questions,
 
-        if (purchaseToken.isNotEmpty) 'purchaseToken': purchaseToken,
-
-        if (paymentStatus.isNotEmpty) 'paymentStatus': paymentStatus,
-
         if (imageInfo.isNotEmpty) 'imageInfo': imageInfo,
+
+        'paymentStatus': 'tokens',
 
         'createdAt': FieldValue.serverTimestamp(),
 
@@ -244,7 +238,7 @@ class ManualFortuneStorageService {
 
       debugPrint('MANUAL REQUEST CREATE SUCCESS id=$id');
 
-      debugPrint('MANUAL REQUEST CREATED id=$id productId=$productId');
+      debugPrint('MANUAL REQUEST CREATED id=$id tokenCost=$tokenCost');
 
     } catch (e, stack) {
 

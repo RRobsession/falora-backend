@@ -20,22 +20,11 @@ Alternatif olarak JSON içeriğini tek satır `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
 
 ## 3. Play Console products
 
-Managed product kimlikleri:
+Managed product kimlikleri (yalnızca jeton paketleri):
 
-- `serdar_tarot_4q_350`
-- `hatice_tarot_4q_350`
-- `serdar_kahve_2q_500`
-- `hatice_kahve_2q_500`
-- `serdar_bakla_2q_500`
-- `hatice_bakla_2q_500`
-- `serdar_su_2q_500`
-- `hatice_su_2q_500`
-- `serdar_iskambil_2q_250`
-- `hatice_iskambil_2q_250`
 - `tokens_50`
+- `tokens_100`
 - `tokens_150`
-- `tokens_300`
-- `tokens_750`
 - `tokens_1500`
 
 ## 4. Test purchase
@@ -50,7 +39,5 @@ Managed product kimlikleri:
 - Backend açılış logunda `Google Play servis hesabı env tanımlı.` görünmeli.
 - `flutter analyze` temiz geçmeli veya yalnızca önceden var olan uyarılar kalmalı.
 - Jeton satın alımında `play_purchases/{purchaseToken}` dokümanı oluşmalı.
-- Manuel fal satın alımında aynı transaction içinde:
-  - `play_purchases/{purchaseToken}` oluşmalı
-  - `manual_fortune_requests/{requestId}` oluşmalı
-- Aynı `purchaseToken` ile ikinci istek yeni kredi/talep oluşturmamalı.
+- Manuel fal (Serdar/Hatice) jeton ile gönderildiğinde `manual_fortune_requests/{requestId}` oluşmalı.
+- Aynı `purchaseToken` ile ikinci istek yeni kredi oluşturmamalı.

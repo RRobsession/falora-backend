@@ -1,4 +1,5 @@
 import 'package:falora/services/ads/admob_config.dart';
+import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/admob_interstitial_ad_service.dart';
 import 'package:falora/services/admob_rewarded_ad_service.dart';
 import 'package:falora/services/interstitial_ad_service.dart';
@@ -8,26 +9,45 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 /// Android/iOS için gerçek AdMob.
 class AdServiceBootstrap {
-  static Future<void> init() async {
+  static Future<void>? _initFuture;
+  static bool initSucceeded = false;
+
+  static Future<void> init() {
+    return _initFuture ??= _initImpl();
+  }
+
+  static Future<void> ensureInitialized() => init();
+
+  static Future<void> _initImpl() async {
     if (!isAdMobSupportedPlatform) {
       RewardedAdService.instance = MockRewardedAdService();
       InterstitialAdService.instance = MockInterstitialAdService();
-      debugPrint('ADMOB SKIPPED: unsupported platform, using mock ads');
+      AdMobLogger.log('ADMOB SKIPPED: unsupported platform, using mock ads');
       return;
     }
 
-    debugPrint('ADMOB INIT START');
-    debugPrint('ADMOB APP ID: $admobAppId');
-    debugPrint(
-      'REWARDED AD UNIT ID: ${rewardedAdUnitId(defaultTargetPlatform)} '
-      '(${adUnitModeLabel(defaultTargetPlatform)})',
+    AdMobLogger.log('ADMOB INIT START');
+    AdMobLogger.log('ADMOB APP ID: $admobAppId');
+    AdMobLogger.log(
+      'REWARDED AD UNIT ID: ${rewardedAdUnitId(defaultTargetPlatform)}',
     );
-    debugPrint('BUILD MODE: ${kDebugMode ? 'debug' : 'release'}');
-    debugPrint('USE_PRODUCTION_ADS: $useProductionAds');
+    AdMobLogger.log(
+      'AD UNIT MODE: ${adUnitModeLabel(defaultTargetPlatform)}',
+    );
+    AdMobLogger.log('BUILD MODE: ${kDebugMode ? 'debug' : 'release'}');
+    AdMobLogger.log('USE_PRODUCTION_ADS: $useProductionAds');
 
     try {
-      await MobileAds.instance.initialize();
-      debugPrint('ADMOB INIT SUCCESS');
+      final status = await MobileAds.instance.initialize();
+      initSucceeded = true;
+      AdMobLogger.log('ADMOB INIT SUCCESS');
+
+      status.adapterStatuses.forEach((name, adapterStatus) {
+        AdMobLogger.log(
+          'ADMOB ADAPTER $name: state=${adapterStatus.state.name} '
+          'desc=${adapterStatus.description}',
+        );
+      });
 
       final rewarded = AdMobRewardedAdService();
       final interstitial = AdMobInterstitialAdService();
@@ -37,9 +57,13 @@ class AdServiceBootstrap {
       rewarded.preload();
       interstitial.preload();
     } catch (e, stackTrace) {
-      debugPrint('ADMOB INIT FAILED: $e');
-      debugPrint(stackTrace.toString());
-      RewardedAdService.instance = MockRewardedAdService();
+      initSucceeded = false;
+      AdMobLogger.log('ADMOB INIT FAILED: $e');
+      AdMobLogger.log(stackTrace.toString());
+
+      // Mock'a düşme — gerçek AdMob hatalarını logcat'te görmek için servisi koru.
+      final rewarded = AdMobRewardedAdService();
+      RewardedAdService.instance = rewarded;
       InterstitialAdService.instance = MockInterstitialAdService();
     }
   }

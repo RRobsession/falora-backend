@@ -56,6 +56,9 @@ class FortuneSubmitLogger {
   }
 }
 
-/// Manuel falcı Play ürünleri henüz aktif değilse gösterilecek mesaj.
-const manualBillingProductsNotReadyMessage =
-    'Ödeme ürünleri henüz hazır değil. Lütfen daha sonra tekrar deneyin.';
+/// Jeton paketi Play ürünleri henüz aktif değilse gösterilecek mesaj.
+const tokenBillingProductsNotReadyMessage =
+    'Jeton paketleri henüz hazır değil. Lütfen daha sonra tekrar deneyin.';
+
+@Deprecated('Use tokenBillingProductsNotReadyMessage')
+const manualBillingProductsNotReadyMessage = tokenBillingProductsNotReadyMessage;

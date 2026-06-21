@@ -408,7 +408,6 @@ const {
   scheduleFortuneNotify,
 } = require('./fcm');
 const {
-  completeManualFortunePurchase,
   completeTokenPurchase,
   restorePurchasesForUser,
 } = require('./play_billing');
@@ -502,24 +501,6 @@ app.post(
     return res.status(500).json({ error: 'Bildirim planlanamadı' });
   }
 },
-);
-
-app.post(
-  '/billing/manual-fortune/complete',
-  requireAuth,
-  requireVerifiedEmail,
-  requireMatchingUserId,
-  async (req, res) => {
-    try {
-      const result = await completeManualFortunePurchase(req.auth, req.body ?? {});
-      return res.json(result);
-    } catch (err) {
-      console.error('manual billing error:', err.message);
-      return res
-        .status(err.statusCode || 500)
-        .json({ error: err.message || 'Satın alma doğrulanamadı' });
-    }
-  },
 );
 
 app.post(
