@@ -349,22 +349,19 @@ class TokenService {
 
 
       if (adsToday >= maxRewardedAdsPerDay) {
-
         throw TokenException('Bugünkü ücretsiz jeton hakkını kullandın.');
-
       }
 
-
-
+      final newTokens = tokens + rewardAdTokenGrant;
       tx.update(ref, {
-
-        'tokens': tokens + rewardAdTokenGrant,
-
+        'tokens': newTokens,
         'rewardedAdsToday': adsToday + 1,
-
         'lastRewardAt': Timestamp.fromDate(DateTime.now()),
-
       });
+
+      debugPrint(
+        'REWARDED CLAIM SUCCESS: tokens $tokens -> $newTokens (+$rewardAdTokenGrant)',
+      );
 
     });
 

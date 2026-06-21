@@ -14,6 +14,9 @@ enum RewardedAdResult {
 abstract class RewardedAdService {
   static RewardedAdService instance = MockRewardedAdService();
 
+  /// Son reklam/jeton hatası (AdMob implementasyonunda doldurulur).
+  String? get lastErrorMessage => null;
+
   bool hasDailyRewardAvailable(AppUser user);
 
   int remainingDailyAds(AppUser user);
@@ -28,6 +31,9 @@ abstract class RewardedAdService {
 }
 
 class MockRewardedAdService implements RewardedAdService {
+  @override
+  String? get lastErrorMessage => null;
+
   @override
   bool hasDailyRewardAvailable(AppUser user) =>
       TokenService.instance.remainingRewardAds(user) > 0;

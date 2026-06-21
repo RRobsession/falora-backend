@@ -16,19 +16,31 @@ class AdServiceBootstrap {
       return;
     }
 
-    await MobileAds.instance.initialize();
-    debugPrint('ADMOB INITIALIZED');
+    debugPrint('ADMOB INIT START');
+    debugPrint('ADMOB APP ID: $admobAppId');
     debugPrint(
-      'AD UNIT ID (rewarded): ${rewardedAdUnitId(defaultTargetPlatform)} '
-      '(${kDebugMode ? 'Google test unit' : 'release unit'})',
+      'REWARDED AD UNIT ID: ${rewardedAdUnitId(defaultTargetPlatform)} '
+      '(${adUnitModeLabel(defaultTargetPlatform)})',
     );
+    debugPrint('BUILD MODE: ${kDebugMode ? 'debug' : 'release'}');
+    debugPrint('USE_PRODUCTION_ADS: $useProductionAds');
 
-    final rewarded = AdMobRewardedAdService();
-    final interstitial = AdMobInterstitialAdService();
-    RewardedAdService.instance = rewarded;
-    InterstitialAdService.instance = interstitial;
+    try {
+      await MobileAds.instance.initialize();
+      debugPrint('ADMOB INIT SUCCESS');
 
-    rewarded.preload();
-    interstitial.preload();
+      final rewarded = AdMobRewardedAdService();
+      final interstitial = AdMobInterstitialAdService();
+      RewardedAdService.instance = rewarded;
+      InterstitialAdService.instance = interstitial;
+
+      rewarded.preload();
+      interstitial.preload();
+    } catch (e, stackTrace) {
+      debugPrint('ADMOB INIT FAILED: $e');
+      debugPrint(stackTrace.toString());
+      RewardedAdService.instance = MockRewardedAdService();
+      InterstitialAdService.instance = MockInterstitialAdService();
+    }
   }
 }

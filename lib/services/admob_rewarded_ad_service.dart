@@ -11,14 +11,26 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 class AdMobRewardedAdService implements RewardedAdService {
   RewardedAd? _rewardedAd;
   bool _loading = false;
+  String? _lastErrorMessage;
+
+  @override
+  String? get lastErrorMessage => _lastErrorMessage;
+
+  void _logDailyRewardStatus(AppUser user) {
+    debugPrint(
+      'DAILY_REWARD_STATUS: remaining=${remainingDailyAds(user)} '
+      'rewardedAdsToday=${user.rewardedAdsToday} '
+      'lastRewardAt=${user.lastRewardAt?.toIso8601String() ?? 'null'}',
+    );
+  }
 
   void preload() {
     if (_loading || _rewardedAd != null) return;
     _loading = true;
 
     final unitId = rewardedAdUnitId(defaultTargetPlatform);
-    debugPrint('AD LOAD START');
-    debugPrint('AD UNIT ID: $unitId (debug=${kDebugMode ? 'test' : 'release'})');
+    debugPrint('REWARDED LOAD START');
+    debugPrint('REWARDED AD UNIT ID: $unitId (${adUnitModeLabel(defaultTargetPlatform)})');
 
     RewardedAd.load(
       adUnitId: unitId,
@@ -27,12 +39,15 @@ class AdMobRewardedAdService implements RewardedAdService {
         onAdLoaded: (ad) {
           _rewardedAd = ad;
           _loading = false;
-          debugPrint('AD LOAD SUCCESS');
+          _lastErrorMessage = null;
+          debugPrint('REWARDED LOAD SUCCESS');
         },
         onAdFailedToLoad: (error) {
           _rewardedAd = null;
           _loading = false;
-          debugPrint('AD LOAD FAILED: ${error.code} ${error.message}');
+          _lastErrorMessage =
+              'Reklam yüklenemedi (${error.code}): ${error.message}';
+          debugPrint('REWARDED LOAD FAILED: ${error.code} ${error.message}');
         },
       ),
     );
@@ -58,17 +73,23 @@ class AdMobRewardedAdService implements RewardedAdService {
     required String userId,
     required AppUser user,
   }) async {
+    _logDailyRewardStatus(user);
+
     if (remainingDailyAds(user) <= 0) {
+      _lastErrorMessage = 'Bugünkü ücretsiz jeton hakkını kullandın.';
+      debugPrint('REWARDED CLAIM ERROR: daily limit reached');
       return RewardedAdResult.limitReached;
     }
 
     var ad = _rewardedAd;
     if (ad == null) {
       preload();
-      ad = await _waitForAd(const Duration(seconds: 8));
+      ad = await _waitForAd(const Duration(seconds: 10));
     }
     if (ad == null) {
-      debugPrint('AD LOAD FAILED: no ad available after wait');
+      _lastErrorMessage ??=
+          'Reklam şu an yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.';
+      debugPrint('REWARDED LOAD FAILED: no ad available after wait');
       return RewardedAdResult.failed;
     }
 
@@ -88,37 +109,48 @@ class AdMobRewardedAdService implements RewardedAdService {
         _rewardedAd = null;
         preload();
         showFailed = true;
-        debugPrint('AD LOAD FAILED: show error ${error.code} ${error.message}');
+        _lastErrorMessage =
+            'Reklam gösterilemedi (${error.code}): ${error.message}';
+        debugPrint('REWARDED LOAD FAILED: show error ${error.code} ${error.message}');
         if (!dismissed.isCompleted) dismissed.complete();
       },
     );
 
     try {
-      debugPrint('AD SHOW START');
+      debugPrint('REWARDED SHOW START');
       await ad.show(
         onUserEarnedReward: (ad, reward) {
-          debugPrint('AD REWARD EARNED: ${reward.amount} ${reward.type}');
+          debugPrint('REWARDED EARNED: ${reward.amount} ${reward.type}');
           earned = true;
         },
       );
       await dismissed.future;
     } catch (e, stackTrace) {
-      debugPrint('AD LOAD FAILED: show exception $e');
+      _lastErrorMessage = 'Reklam gösterilirken hata oluştu: $e';
+      debugPrint('REWARDED LOAD FAILED: show exception $e');
       debugPrint(stackTrace.toString());
       return RewardedAdResult.failed;
     }
 
     if (showFailed) return RewardedAdResult.failed;
-    if (!earned) return RewardedAdResult.cancelled;
+    if (!earned) {
+      _lastErrorMessage = 'Reklam tam izlenmedi, jeton verilmedi.';
+      return RewardedAdResult.cancelled;
+    }
 
     try {
+      debugPrint('REWARDED CLAIM START');
       await TokenService.instance.claimRewardedAd(userId);
-      debugPrint('AD REWARD GRANTED');
+      debugPrint('REWARDED CLAIM SUCCESS');
+      _lastErrorMessage = null;
       return RewardedAdResult.rewarded;
-    } on TokenException {
+    } on TokenException catch (e) {
+      _lastErrorMessage = e.message;
+      debugPrint('REWARDED CLAIM ERROR: ${e.message}');
       return RewardedAdResult.limitReached;
     } catch (e, stackTrace) {
-      debugPrint('AD LOAD FAILED: claim error $e');
+      _lastErrorMessage = 'Jeton eklenemedi: $e';
+      debugPrint('REWARDED CLAIM ERROR: $e');
       debugPrint(stackTrace.toString());
       return RewardedAdResult.failed;
     }

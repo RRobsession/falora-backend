@@ -4,34 +4,54 @@ import 'package:flutter/foundation.dart';
 const admobAppId = 'ca-app-pub-5266723758630344~8041647287';
 
 /// Release ödüllü reklam birimi.
-/// Not: AdMob reklam birimleri `/` ile biter; App ID `~` kullanır.
 const releaseRewardedAdUnitId = 'ca-app-pub-5266723758630344/9865864848';
 
 /// Release geçiş reklamı birimi.
 const releaseInterstitialAdUnitId = 'ca-app-pub-5266723758630344/8041647287';
 
 // Google resmi test reklam birimleri
-const _androidTestRewarded = 'ca-app-pub-3940256099942544/5224354917';
-const _androidTestInterstitial = 'ca-app-pub-3940256099942544/1033173712';
-const _iosTestRewarded = 'ca-app-pub-3940256099942544/1712485313';
-const _iosTestInterstitial = 'ca-app-pub-3940256099942544/4411468910';
+const androidTestRewardedAdUnitId =
+    'ca-app-pub-3940256099942544/5224354917';
+const androidTestInterstitialAdUnitId =
+    'ca-app-pub-3940256099942544/1033173712';
+const iosTestRewardedAdUnitId = 'ca-app-pub-3940256099942544/1712485313';
+const iosTestInterstitialAdUnitId =
+    'ca-app-pub-3940256099942544/4411468910';
+
+/// Gerçek AdMob birimleri (--dart-define=USE_PRODUCTION_ADS=true).
+/// Kapalı test / release varsayılanı: Google test reklam birimleri.
+const useProductionAds = bool.fromEnvironment(
+  'USE_PRODUCTION_ADS',
+  defaultValue: false,
+);
+
+bool useTestAdUnits(TargetPlatform platform) {
+  if (kIsWeb) return true;
+  if (kDebugMode) return true;
+  return !useProductionAds;
+}
 
 String rewardedAdUnitId(TargetPlatform platform) {
-  if (kDebugMode) {
+  if (useTestAdUnits(platform)) {
     return platform == TargetPlatform.iOS
-        ? _iosTestRewarded
-        : _androidTestRewarded;
+        ? iosTestRewardedAdUnitId
+        : androidTestRewardedAdUnitId;
   }
   return releaseRewardedAdUnitId;
 }
 
 String interstitialAdUnitId(TargetPlatform platform) {
-  if (kDebugMode) {
+  if (useTestAdUnits(platform)) {
     return platform == TargetPlatform.iOS
-        ? _iosTestInterstitial
-        : _androidTestInterstitial;
+        ? iosTestInterstitialAdUnitId
+        : androidTestInterstitialAdUnitId;
   }
   return releaseInterstitialAdUnitId;
+}
+
+String adUnitModeLabel(TargetPlatform platform) {
+  if (useTestAdUnits(platform)) return 'google_test';
+  return 'production';
 }
 
 bool get isAdMobSupportedPlatform {

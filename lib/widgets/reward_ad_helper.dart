@@ -203,15 +203,14 @@ Future<void> watchRewardAdFlow(
       break;
 
     case RewardedAdResult.failed:
-
+      final detail = adService.lastErrorMessage;
       ScaffoldMessenger.of(context).showSnackBar(
-
-        const SnackBar(
-
-          content: Text('Reklam ödülü alınamadı, tekrar deneyin.'),
-
+        SnackBar(
+          content: Text(
+            detail ??
+                'Reklam yüklenemedi veya jeton verilemedi. Lütfen tekrar deneyin.',
+          ),
         ),
-
       );
 
   }
