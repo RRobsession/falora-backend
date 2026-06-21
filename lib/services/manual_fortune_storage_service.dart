@@ -54,6 +54,22 @@ class ManualFortuneStorageService {
 
   String newRequestId() => _db.collection(_collection).doc().id;
 
+  static List<Map<String, String>> encodeImagesForPayload(
+    List<PickedImage>? images,
+  ) {
+    if (images == null || images.isEmpty) return const [];
+
+    return images
+        .map(
+          (img) => {
+            'name': img.name,
+            'mime': _mimeForNameStatic(img.name),
+            'base64': base64Encode(img.bytes),
+          },
+        )
+        .toList();
+  }
+
 
 
   Future<List<FortuneReading>> loadUserReadings(String userId) async {
@@ -178,7 +194,7 @@ class ManualFortuneStorageService {
 
     debugPrint('MANUAL QUESTION_LIMIT: ${offer.questionLimit}');
 
-    final imageInfo = _encodeImages(images);
+    final imageInfo = encodeImagesForPayload(images);
 
 
 
@@ -394,37 +410,12 @@ class ManualFortuneStorageService {
     }
 
   }
-
-
-
-  List<Map<String, String>> _encodeImages(List<PickedImage>? images) {
-
-    if (images == null || images.isEmpty) return const [];
-
-    return images
-
-        .map(
-
-          (img) => {
-
-            'name': img.name,
-
-            'mime': _mimeForName(img.name),
-
-            'base64': base64Encode(img.bytes),
-
-          },
-
-        )
-
-        .toList();
+  String _mimeForName(String name) {
+    return _mimeForNameStatic(name);
 
   }
 
-
-
-  String _mimeForName(String name) {
-
+  static String _mimeForNameStatic(String name) {
     final lower = name.toLowerCase();
 
     if (lower.endsWith('.png')) return 'image/png';
@@ -432,7 +423,6 @@ class ManualFortuneStorageService {
     if (lower.endsWith('.webp')) return 'image/webp';
 
     return 'image/jpeg';
-
   }
 
 }

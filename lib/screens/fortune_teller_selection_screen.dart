@@ -316,9 +316,7 @@ class _ManualFortuneReaderCard extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: Text(
-                manualFortuneSkipBilling
-                    ? 'Seç · ${category.label}'
-                    : 'Satın Al · ${offer.priceLabel}',
+                'Satın Al · ${offer.priceLabel}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,

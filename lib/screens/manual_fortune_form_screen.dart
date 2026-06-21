@@ -539,12 +539,7 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
                         )
 
                       : Text(
-
-                          manualFortuneSkipBilling
-
-                              ? 'Talebi Gönder (${offer.priceLabel})'
-
-                              : 'Satın Al ve Gönder (${offer.priceLabel})',
+                          'Satın Al ve Gönder (${offer.priceLabel})',
 
                           style: const TextStyle(
 

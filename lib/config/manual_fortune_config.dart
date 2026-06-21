@@ -1,9 +1,6 @@
 import 'package:falora/models/fortune_models.dart';
 import 'package:flutter/foundation.dart';
 
-/// Test aşamasında ödeme atlanır; talep doğrudan Firestore'a yazılır.
-const manualFortuneSkipBilling = true;
-
 const manualReaderBadgeLabel = 'Özel Yorumcu';
 
 /// Fal türüne göre manuel yorum teklifi.
@@ -53,31 +50,6 @@ ManualFortuneOffer manualOfferFor(FortuneCategory category) {
       throw ArgumentError('Çift uyumu manuel falcı desteklemez');
   }
 }
-
-String manualProductId(String readerId, FortuneCategory category) {
-  final suffix = switch (category) {
-    FortuneCategory.tarot => 'tarot_4q',
-    FortuneCategory.kahve => 'coffee_2q',
-    FortuneCategory.bakla => 'bakla_2q',
-    FortuneCategory.iskambil => 'iskambil_2q',
-    FortuneCategory.su => 'su_2q',
-    FortuneCategory.ciftUyumu => throw ArgumentError('unsupported'),
-  };
-  return 'manual_${readerId}_$suffix';
-}
-
-const manualFortuneProductIds = <String>{
-  'manual_serdar_tarot_4q',
-  'manual_hatice_tarot_4q',
-  'manual_serdar_coffee_2q',
-  'manual_hatice_coffee_2q',
-  'manual_serdar_bakla_2q',
-  'manual_hatice_bakla_2q',
-  'manual_serdar_iskambil_2q',
-  'manual_hatice_iskambil_2q',
-  'manual_serdar_su_2q',
-  'manual_hatice_su_2q',
-};
 
 void logManualReaderConfig(FortuneCategory category) {
   final offer = manualOfferFor(category);

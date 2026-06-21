@@ -272,11 +272,7 @@ service cloud.firestore {
 
 
 
-      allow create: if isEmailVerified()
-
-        && request.resource.data.userId == request.auth.uid
-
-        && request.resource.data.status == 'pending';
+      allow create: if false;
 
 
 
@@ -284,9 +280,17 @@ service cloud.firestore {
 
 
 
-      allow delete: if isAdmin()
+      allow delete: if isAdmin();
 
-        || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /play_purchases/{purchaseToken} {
+
+      allow read: if isAdmin()
+
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      allow create, update, delete: if false;
 
     }
 

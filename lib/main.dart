@@ -13,6 +13,7 @@ import 'package:falora/ai_service.dart';
 import 'package:falora/app/auth_gate.dart';
 import 'package:falora/category_icon.dart';
 import 'package:falora/config/manual_fortune_config.dart';
+import 'package:falora/config/play_product_catalog.dart';
 import 'package:falora/firebase_messaging_background.dart';
 import 'package:falora/firebase_options.dart';
 import 'package:falora/image_upload_card.dart';
@@ -23,16 +24,18 @@ import 'package:falora/models/manual_fortune_request.dart';
 import 'package:falora/models/manual_fortune_reader.dart';
 import 'package:falora/screens/fortune_teller_selection_screen.dart';
 import 'package:falora/screens/manual_fortune_form_screen.dart';
-import 'package:falora/services/manual_fortune_billing_service.dart';
+import 'package:falora/services/billing_backend_service.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
 import 'package:falora/openai_backend_service.dart';
 import 'package:falora/picked_image.dart';
 import 'package:falora/screens/profile_screen.dart';
 import 'package:falora/services/ads/ad_service_bootstrap.dart';
 import 'package:falora/services/fortune_storage_service.dart';
+import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:falora/services/interstitial_ad_service.dart';
 import 'package:falora/services/notification_backend_service.dart';
 import 'package:falora/services/notification_service.dart';
+import 'package:falora/services/play_billing_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/screens/shop_screen.dart';
@@ -158,13 +161,13 @@ class _FaloraShellState extends State<FaloraShell> {
     super.initState();
     _user = widget.user;
     TokenService.instance.bindLiveUser(_userId);
-    unawaited(ManualFortuneBillingService.instance.init());
+    unawaited(PlayBillingService.instance.init());
     _loadUserFortunes();
   }
 
   @override
   void dispose() {
-    ManualFortuneBillingService.instance.dispose();
+    PlayBillingService.instance.dispose();
     super.dispose();
   }
 
@@ -458,6 +461,8 @@ class _FaloraShellState extends State<FaloraShell> {
   }) async {
     final storage = FortuneStorageService.instance;
     debugPrint('FORTUNE BACKEND START');
+    debugPrint('API ENDPOINT: $apiBaseUrl/generate-fortune');
+    debugPrint('IS MANUAL READER: false');
     try {
       final cached = await AiResultCache.get(_userId, requestId);
       if (cached != null && cached.isNotEmpty) {
@@ -672,7 +677,19 @@ class _FaloraShellState extends State<FaloraShell> {
     String niyet, {
     List<String>? photoNames,
   }) async {
-    debugPrint('FORTUNE SUBMIT START (teller=${teller.id})');
+    await FortuneSubmitLogger.logSubmitStart(
+      fortuneType: cat.label,
+      selectedReader: '${teller.id} (${teller.name})',
+      isManualReader: false,
+      endpoint: '$apiBaseUrl/generate-fortune',
+      requestBody: {
+        'flow': 'ai_token',
+        'tellerId': teller.id,
+        'tokenCost': teller.tokenCost,
+        'billingUsed': false,
+      },
+    );
+
     final storage = FortuneStorageService.instance;
     String? requestId;
     var tokensDeducted = false;
@@ -757,16 +774,13 @@ class _FaloraShellState extends State<FaloraShell> {
         ),
       );
     } on FortuneSubmitException catch (e) {
-      debugPrint('FORTUNE SUBMIT ERROR: ${e.message}');
-      debugPrint('FORTUNE REAL ERROR: ${e.message}');
+      FortuneSubmitLogger.logError(e);
       if (requestId != null && !tokensDeducted) {
         await _rollbackFortuneRequest(requestId);
       }
       _showSubmitError('Fal oluşturulamadı, jetonun düşmedi.');
     } catch (e, stackTrace) {
-      debugPrint('FORTUNE SUBMIT ERROR: $e');
-      debugPrint('FORTUNE REAL ERROR: $e');
-      debugPrint(stackTrace.toString());
+      FortuneSubmitLogger.logError(e, stackTrace);
       if (requestId != null && !tokensDeducted) {
         await _rollbackFortuneRequest(requestId);
       }
@@ -785,30 +799,43 @@ class _FaloraShellState extends State<FaloraShell> {
     required List<String> questions,
     List<PickedImage>? images,
   }) async {
-    debugPrint('MANUAL REQUEST SUBMIT START reader=${reader.id}');
-    debugPrint('MANUAL QUESTION_LIMIT: ${offer.questionLimit}');
-
     final productId = manualProductId(reader.id, category);
+    await FortuneSubmitLogger.logSubmitStart(
+      fortuneType: category.label,
+      selectedReader: '${reader.id} (${reader.name})',
+      isManualReader: true,
+      endpoint: '$apiBaseUrl/billing/manual-fortune/complete',
+      requestBody: {
+        'flow': 'manual_billing',
+        'productId': productId,
+        'billingUsed': true,
+      },
+    );
+
     final storage = ManualFortuneStorageService.instance;
     final requestId = storage.newRequestId();
     final now = DateTime.now();
 
     try {
-      await storage.createRequest(
-        id: requestId,
+      final purchase = await PlayBillingService.instance.buyConsumable(productId);
+
+      await BillingBackendService.instance.completeManualPurchase(
+        purchase: purchase,
         userId: _userId,
         userEmail: _liveUser.email,
-        category: category,
+        requestId: requestId,
+        category: category.name,
         readerId: reader.id,
         readerName: reader.name,
-        offer: offer,
-        productId: productId,
+        priceTRY: offer.priceTRY,
+        questionLimit: offer.questionLimit,
+        requiresIntention: offer.requiresIntention,
         name: name,
         age: age,
         zodiac: zodiac,
         intention: intention,
         questions: questions,
-        images: images,
+        imageInfo: ManualFortuneStorageService.encodeImagesForPayload(images),
       );
 
       final summary =
@@ -830,14 +857,20 @@ class _FaloraShellState extends State<FaloraShell> {
       _navigateAfterFortuneSubmit(
         logPrefix: 'MANUAL',
         tabIndex: 1,
-        successMessage: 'Özel fal talebin alındı. Falcın yorumunu hazırlıyor.',
+        successMessage: 'Satın alma doğrulandı. Özel fal talebin alındı.',
         openReading: reading,
       );
+    } on PlayBillingException catch (e) {
+      FortuneSubmitLogger.logError(e);
+      _showSubmitError(e.message);
+    } on BillingBackendException catch (e) {
+      FortuneSubmitLogger.logError(e);
+      _showSubmitError(e.message);
     } on ManualFortuneException catch (e) {
+      FortuneSubmitLogger.logError(e);
       _showSubmitError(e.message);
     } catch (e, stackTrace) {
-      debugPrint('MANUAL REQUEST CREATE ERROR: $e');
-      debugPrint(stackTrace.toString());
+      FortuneSubmitLogger.logError(e, stackTrace);
       _showSubmitError('Talep oluşturulamadı. Lütfen tekrar deneyin.');
     }
   }

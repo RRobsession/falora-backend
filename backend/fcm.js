@@ -110,6 +110,12 @@ function isFcmReady() {
   return initFirebaseAdmin();
 }
 
+function getFirestore() {
+  if (firestore) return firestore;
+  if (!initFirebaseAdmin()) return null;
+  return firestore;
+}
+
 async function getUserFcmToken(userId) {
   if (!isFcmReady()) {
     safeLog('FCM TOKEN NOT FOUND | reason=not_configured');
@@ -310,6 +316,7 @@ function scheduleFortuneNotify(userId, type, notifyAtIso, readingId) {
 module.exports = {
   initFirebaseAdmin,
   isFcmReady,
+  getFirestore,
   getUserFcmToken,
   sendNotification,
   notifyFortuneReady,

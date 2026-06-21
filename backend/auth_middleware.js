@@ -19,6 +19,7 @@ async function requireAuth(req, res, next) {
     const decoded = await admin.auth().verifyIdToken(match[1]);
     req.auth = {
       uid: decoded.uid,
+      email: typeof decoded.email === 'string' ? decoded.email : '',
       emailVerified: decoded.email_verified === true,
     };
     return next();

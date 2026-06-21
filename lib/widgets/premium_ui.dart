@@ -819,14 +819,14 @@ class ShopPackageCard extends StatelessWidget {
   const ShopPackageCard({
     super.key,
     required this.tokens,
-    required this.priceTry,
+    required this.priceLabel,
     required this.badge,
     required this.highlight,
     required this.onBuy,
   });
 
   final int tokens;
-  final int priceTry;
+  final String priceLabel;
   final String? badge;
   final bool highlight;
   final VoidCallback onBuy;
@@ -911,7 +911,7 @@ class ShopPackageCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$priceTry TL',
+                    priceLabel,
                     style: TextStyle(
                       color: faloraTextSecondary.withValues(alpha: 0.9),
                       fontSize: 13,

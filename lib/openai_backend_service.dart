@@ -9,6 +9,7 @@ import 'package:falora/ai_service.dart';
 import 'package:falora/picked_image.dart';
 
 import 'package:falora/services/backend_auth_client.dart';
+import 'package:falora/services/fortune_submit_logger.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -189,99 +190,57 @@ class OpenAiBackendService implements AiService {
 
 
   Future<String> _post(String path, Map<String, dynamic> body) async {
-
     final uri = Uri.parse('$_baseUrl$path');
 
-
-
-    late final http.Response response;
-
-    try {
-
-      final headers = await BackendAuthClient.authHeaders();
-
-      response = await _client
-
-          .post(
-
-            uri,
-
-            headers: headers,
-
-            body: jsonEncode(body),
-
-          )
-
-          .timeout(_timeout);
-
-    } on BackendAuthException catch (e) {
-
-      throw AiBackendException(e.message);
-
-    } catch (e, stackTrace) {
-
-      if (kDebugMode) {
-
-        debugPrint('AI ERROR: $e');
-
-        debugPrint(stackTrace.toString());
-
-      }
-
-      throw AiBackendException('Bağlantı hatası: $e');
-
-    }
-
-
-
-    BackendAuthClient.logRequest(
-
-      path,
-
-      statusCode: response.statusCode,
-
+    await FortuneSubmitLogger.logSubmitStart(
+      fortuneType: body['category']?.toString() ?? 'unknown',
+      selectedReader: body['tellerId']?.toString() ?? 'unknown',
+      isManualReader: false,
+      endpoint: uri.toString(),
+      requestBody: body,
     );
 
+    late final http.Response response;
+    try {
+      final headers = await BackendAuthClient.authHeaders();
+      response = await _client
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout);
+    } on BackendAuthException catch (e) {
+      FortuneSubmitLogger.logError(e);
+      throw AiBackendException(e.message);
+    } catch (e, stackTrace) {
+      FortuneSubmitLogger.logError(e, stackTrace);
+      throw AiBackendException('Bağlantı hatası: $e');
+    }
 
+    FortuneSubmitLogger.logResponse(
+      status: response.statusCode,
+      body: response.body,
+    );
 
     if (response.statusCode == 401 || response.statusCode == 403) {
-
       throw AiBackendException('Oturum doğrulanamadı. Lütfen tekrar giriş yapın.');
-
     }
-
-
 
     if (response.statusCode != 200) {
-
       throw AiBackendException('HTTP ${response.statusCode}');
-
     }
-
-
 
     try {
-
       final result = _parseResult(response.body);
-
-      BackendAuthClient.logRequest(path, statusCode: 200, resultLength: result.length);
-
-      return result;
-
-    } catch (e, stackTrace) {
-
       if (kDebugMode) {
-
-        debugPrint('AI PARSE ERROR: $e');
-
-        debugPrint(stackTrace.toString());
-
+        debugPrint('AI $path result length=${result.length}');
       }
-
+      return result;
+    } catch (e, stackTrace) {
+      FortuneSubmitLogger.logError(e, stackTrace);
       throw AiBackendException('Yanıt parse edilemedi: $e');
-
     }
-
   }
 
 

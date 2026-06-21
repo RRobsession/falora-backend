@@ -408,6 +408,11 @@ const {
   scheduleFortuneNotify,
 } = require('./fcm');
 const {
+  completeManualFortunePurchase,
+  completeTokenPurchase,
+  restorePurchasesForUser,
+} = require('./play_billing');
+const {
   requireAuth,
   requireVerifiedEmail,
   requireMatchingUserId,
@@ -497,6 +502,59 @@ app.post(
     return res.status(500).json({ error: 'Bildirim planlanamadı' });
   }
 },
+);
+
+app.post(
+  '/billing/manual-fortune/complete',
+  requireAuth,
+  requireVerifiedEmail,
+  requireMatchingUserId,
+  async (req, res) => {
+    try {
+      const result = await completeManualFortunePurchase(req.auth, req.body ?? {});
+      return res.json(result);
+    } catch (err) {
+      console.error('manual billing error:', err.message);
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || 'Satın alma doğrulanamadı' });
+    }
+  },
+);
+
+app.post(
+  '/billing/tokens/complete',
+  requireAuth,
+  requireVerifiedEmail,
+  requireMatchingUserId,
+  async (req, res) => {
+    try {
+      const result = await completeTokenPurchase(req.auth, req.body ?? {});
+      return res.json(result);
+    } catch (err) {
+      console.error('token billing error:', err.message);
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || 'Satın alma doğrulanamadı' });
+    }
+  },
+);
+
+app.post(
+  '/billing/restore',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+    try {
+      const result = await restorePurchasesForUser(req.auth.uid);
+      return res.json(result);
+    } catch (err) {
+      console.error('restore billing error:', err.message);
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || 'Restore işlemi tamamlanamadı' });
+    }
+  },
 );
 
 app.post(
@@ -630,6 +688,15 @@ app.listen(PORT, '0.0.0.0', () => {
     `couple: temperature=${COUPLE_TEMPERATURE} frequency_penalty=${COUPLE_FREQUENCY_PENALTY} presence_penalty=${COUPLE_PRESENCE_PENALTY}`,
   );
   console.log('OpenAI yapılandırması hazır.');
+  console.log(
+    `Google Play Billing package: ${process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.rrlime.falora'}`,
+  );
+  console.log(
+    process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON ||
+      process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_PATH
+      ? 'Google Play servis hesabı env tanımlı.'
+      : 'Google Play servis hesabı env eksik. Billing doğrulaması canlıda çalışmaz.',
+  );
   if (fcmReady) {
     console.log('FCM push bildirimleri aktif.');
   } else {
