@@ -1,13 +1,13 @@
-import 'package:falora/config/manual_fortune_config.dart';
 import 'package:falora/config/play_product_catalog.dart';
 import 'package:falora/services/billing_backend_service.dart';
 import 'package:falora/services/play_billing_service.dart';
+import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/token_config.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({
@@ -22,52 +22,150 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
-  final Map<String, ProductDetails> _productsById = {};
+  final Map<String, String> _priceByProductId = {};
   bool _loadingProducts = true;
+  bool _productsReady = false;
   bool _restoring = false;
-  String? _loadError;
   String? _activeProductId;
 
   @override
   void initState() {
     super.initState();
-    _loadProducts();
+    if (kIsWeb) {
+      _loadWebMockPrices();
+    } else {
+      _loadProducts();
+    }
+  }
+
+  /// Web'de Play Billing yok — mock fiyatları anında uygula (skeleton yok).
+  void _loadWebMockPrices() {
+    debugPrint('SHOP_LOAD_START (web mock)');
+    final prices = <String, String>{};
+    for (final id in tokenProductIds) {
+      final mock = mockPriceForProductId(id);
+      if (mock != null) {
+        prices[id] = mock;
+      }
+    }
+    _logProductResults(prices);
+    setState(() {
+      _priceByProductId
+        ..clear()
+        ..addAll(prices);
+      _loadingProducts = false;
+      _productsReady = prices.isNotEmpty;
+    });
+    debugPrint('SHOP_LOAD_COMPLETE (web mock)');
+  }
+
+  void _showLoadErrorSnackBar() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Ürünler şu anda yüklenemiyor.'),
+      ),
+    );
+  }
+
+  void _logProductResults(Map<String, String> prices) {
+    final foundIds = prices.keys.toList()..sort();
+    debugPrint('SHOP_PRODUCTS_FOUND: ${foundIds.join(', ')}');
+    debugPrint('SHOP_PRODUCTS_COUNT: ${prices.length}');
+    for (final id in tokenProductIds) {
+      final price = prices[id];
+      if (price == null || price.isEmpty) {
+        debugPrint('SHOP_PRODUCT: $id MISSING');
+      } else {
+        debugPrint('SHOP_PRODUCT: $id FOUND price=$price');
+      }
+    }
   }
 
   Future<void> _loadProducts() async {
+    debugPrint('SHOP_LOAD_START');
     setState(() {
       _loadingProducts = true;
-      _loadError = null;
+      _productsReady = false;
+      _priceByProductId.clear();
     });
 
     try {
-      final products = await PlayBillingService.instance.queryProducts(tokenProductIds);
+      final prices = await PlayBillingService.instance
+          .queryProductPrices(tokenProductIds);
       if (!mounted) return;
+
+      _logProductResults(prices);
+
+      if (prices.isEmpty) {
+        debugPrint('SHOP_LOAD_ERROR: no prices returned');
+        setState(() => _loadingProducts = false);
+        if (!kIsWeb) {
+          _showLoadErrorSnackBar();
+        }
+        debugPrint('SHOP_LOAD_COMPLETE (empty)');
+        return;
+      }
+
       setState(() {
-        _productsById
+        _priceByProductId
           ..clear()
-          ..addEntries(products.map((item) => MapEntry(item.id, item)));
+          ..addAll(prices);
         _loadingProducts = false;
+        _productsReady = true;
       });
+      debugPrint('SHOP_LOAD_COMPLETE');
     } on PlayBillingException catch (e) {
+      debugPrint('SHOP_LOAD_ERROR: $e');
       if (!mounted) return;
-      setState(() {
-        _loadError = e.message;
-        _loadingProducts = false;
-      });
+      setState(() => _loadingProducts = false);
+      if (!kIsWeb) {
+        _showLoadErrorSnackBar();
+      }
+      debugPrint('SHOP_LOAD_COMPLETE (error)');
     } catch (e) {
+      debugPrint('SHOP_LOAD_ERROR: $e');
       if (!mounted) return;
-      setState(() {
-        _loadError = 'Ürünler yüklenemedi: $e';
-        _loadingProducts = false;
-      });
+      setState(() => _loadingProducts = false);
+      if (!kIsWeb) {
+        _showLoadErrorSnackBar();
+      }
+      debugPrint('SHOP_LOAD_COMPLETE (error)');
     }
   }
 
   Future<void> _buy(TokenProductDefinition product) async {
     if (_activeProductId != null || _restoring) return;
     setState(() => _activeProductId = product.productId);
+
     try {
+      if (kIsWeb) {
+        if (kDebugMode) {
+          await TokenService.instance.mockPurchase(
+            widget.userId,
+            product.tokens,
+          );
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${product.tokens} jeton hesabına eklendi (önizleme).',
+              ),
+            ),
+          );
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Satın alma yalnızca Android uygulamasında kullanılabilir.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
       final purchase = await PlayBillingService.instance.buyConsumable(
         product.productId,
       );
@@ -80,20 +178,26 @@ class _ShopScreenState extends State<ShopScreen> {
           ? 'Bu satın alma daha önce işlenmiş.'
           : '${result.tokensGranted} jeton hesabına eklendi.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    } on PlayBillingException catch (e) {
+    } on PlayBillingException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        const SnackBar(
+          content: Text('Satın alma tamamlanamadı. Lütfen tekrar deneyin.'),
+        ),
       );
-    } on BillingBackendException catch (e) {
+    } on BillingBackendException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        const SnackBar(
+          content: Text('Satın alma doğrulanamadı. Lütfen tekrar deneyin.'),
+        ),
       );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Satın alma başarısız: $e')),
+        const SnackBar(
+          content: Text('Satın alma tamamlanamadı. Lütfen tekrar deneyin.'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -102,6 +206,8 @@ class _ShopScreenState extends State<ShopScreen> {
     }
   }
 
+  // UI gizli; ileride Play restore akışı için saklanıyor.
+  // ignore: unused_element
   Future<void> _restore() async {
     if (_activeProductId != null || _restoring) return;
     setState(() => _restoring = true);
@@ -122,23 +228,29 @@ class _ShopScreenState extends State<ShopScreen> {
       if (!mounted) return;
       final totalProcessed = processed > 0 ? processed : summary.processedCount;
       final message = totalProcessed > 0
-          ? 'Restore tamamlandı. İşlenen satın alma: $totalProcessed'
-          : 'Restore edilecek yeni satın alma bulunamadı.';
+          ? 'Satın almalarınız geri yüklendi.'
+          : 'Geri yüklenecek yeni satın alma bulunamadı.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    } on PlayBillingException catch (e) {
+    } on PlayBillingException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        const SnackBar(
+          content: Text('Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.'),
+        ),
       );
-    } on BillingBackendException catch (e) {
+    } on BillingBackendException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        const SnackBar(
+          content: Text('Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.'),
+        ),
       );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore başarısız: $e')),
+        const SnackBar(
+          content: Text('Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -147,109 +259,112 @@ class _ShopScreenState extends State<ShopScreen> {
     }
   }
 
+  Widget _buildHeader(int tokens) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.all(22),
+        decoration: faloraGlassDecoration(radius: 24, opacity: 0.16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Premium Jeton Mağazası',
+              style: FaloraTypography.sectionHeading.copyWith(
+                fontSize: 13,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 16),
+            PremiumTokenBalanceCard(tokens: tokens, compact: true),
+            const SizedBox(height: 14),
+            Text(
+              kIsWeb
+                  ? 'Web önizlemesinde örnek fiyatlar gösterilir. '
+                      'Gerçek satın alma Android uygulamasındadır.'
+                  : 'Jetonlarınızı özel yorumlar ve uygulama içi '
+                      'deneyimler için kullanabilirsiniz.',
+              style: TextStyle(
+                color: faloraTextSecondary.withValues(alpha: 0.92),
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildProductCards() {
+    return shopPackageCatalog
+        .where((pkg) {
+          final price = _priceByProductId[pkg.productId];
+          return price != null && price.isNotEmpty;
+        })
+        .map((pkg) {
+          final price = _priceByProductId[pkg.productId]!;
+          final isPurchasing = _activeProductId == pkg.productId;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: ShopPackageCard(
+              tokens: pkg.tokens,
+              subtitle: pkg.subtitle,
+              badge: pkg.badge,
+              highlight: pkg.highlight,
+              price: price,
+              isPurchasing: isPurchasing,
+              onBuy: () => _buy(pkg),
+            ),
+          );
+        })
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Jeton Mağazası')),
+      appBar: AppBar(
+        title: const Text('Jeton Mağazası'),
+        actions: [
+          IconButton(
+            tooltip: 'Yenile',
+            onPressed: _loadingProducts ? null : _loadProducts,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
       body: FaloraBackground(
         child: LiveTokenBuilder(
           builder: (context, tokens) {
+            if (_loadingProducts) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                    child: _buildHeader(tokens),
+                  ),
+                  const SizedBox(height: 24),
+                  const Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 22),
+                      child: ShopProductsSkeleton(),
+                    ),
+                  ),
+                ],
+              );
+            }
+
             return ListView(
               padding: const EdgeInsets.fromLTRB(22, 12, 22, 32),
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    padding: const EdgeInsets.all(22),
-                    decoration: faloraGlassDecoration(radius: 24, opacity: 0.16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Premium Jeton Mağazası',
-                          style: TextStyle(
-                            color: faloraGold.withValues(alpha: 0.95),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        PremiumTokenBalanceCard(tokens: tokens, compact: true),
-                        const SizedBox(height: 14),
-                        Text(
-                          '50, 100, 150 ve 1500 jeton paketleri mevcut. '
-                          'Özel yorumlar (Serdar/Hatice) $manualFortuneTokenCost jeton; '
-                          'AI fallar falcıya göre 50–150 jeton; çift uyumu $coupleTokenCost jeton harcar.',
-                          style: TextStyle(
-                            color: faloraTextSecondary.withValues(alpha: 0.92),
-                            fontSize: 13,
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Google Play Billing aktif. Test alımları için internal testing hesabı kullanın.',
-                                style: TextStyle(
-                                  color: faloraTextSecondary.withValues(alpha: 0.82),
-                                  fontSize: 12,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _restoring ? null : _restore,
-                              child: _restoring
-                                  ? const SizedBox(
-                                      height: 16,
-                                      width: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Text('Restore'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                if (_loadingProducts)
-                  const Center(child: CircularProgressIndicator())
-                else if (_loadError != null) ...[
-                  Text(
-                    _loadError!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: faloraTextSecondary.withValues(alpha: 0.8),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: OutlinedButton(
-                      onPressed: _loadProducts,
-                      child: const Text('Tekrar Dene'),
-                    ),
-                  ),
-                ] else
-                  ...shopPackageCatalog.map(
-                    (pkg) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: ShopPackageCard(
-                        tokens: pkg.tokens,
-                        priceLabel:
-                            _productsById[pkg.productId]?.price ?? 'Google Play fiyatı',
-                        badge: pkg.badge,
-                        highlight: pkg.highlight,
-                        onBuy: _activeProductId == pkg.productId
-                            ? () {}
-                            : () => _buy(pkg),
-                      ),
-                    ),
-                  ),
+                _buildHeader(tokens),
+                if (_productsReady) ...[
+                  const SizedBox(height: 24),
+                  ..._buildProductCards(),
+                ],
               ],
             );
           },
@@ -258,5 +373,3 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 }
-
-

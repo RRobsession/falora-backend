@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:falora/config/manual_fortune_config.dart';
 
+import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/fortune_models.dart';
 
 import 'package:falora/models/manual_fortune_request.dart';
@@ -192,7 +193,8 @@ class ManualFortuneStorageService {
 
     final imageInfo = encodeImagesForPayload(images);
 
-
+    final created = DateTime.now();
+    final ready = computeReadyAt(created);
 
     try {
 
@@ -232,7 +234,9 @@ class ManualFortuneStorageService {
 
         'paymentStatus': 'tokens',
 
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': Timestamp.fromDate(created),
+
+        'readyAt': Timestamp.fromDate(ready),
 
       });
 

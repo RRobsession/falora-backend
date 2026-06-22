@@ -1,208 +1,139 @@
+import 'package:falora/theme/falora_design_tokens.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-
-
-const faloraBg = Color(0xFF0A0612);
-
-const faloraSurface = Color(0xFF141022);
-
-const faloraCard = Color(0xFF1C1430);
-
-const faloraAccent = Color(0xFF9B6DFF);
-
-const faloraGold = Color(0xFFD4AF37);
-
-const faloraNightBlue = Color(0xFF1A2A4A);
-
-const faloraTextPrimary = Color(0xFFF3EBFF);
-
-const faloraTextSecondary = Color(0xFFB8A8D0);
-
-
+export 'falora_design_tokens.dart';
 
 ThemeData faloraTheme() {
+  const colorScheme = ColorScheme.light(
+    primary: faloraBronze,
+    onPrimary: faloraParchmentRaised,
+    secondary: faloraGold,
+    onSecondary: faloraInk,
+    surface: faloraParchmentCard,
+    onSurface: faloraInk,
+    error: Color(0xFF8B3A3A),
+    onError: faloraParchmentRaised,
+  );
 
   return ThemeData(
-
     useMaterial3: true,
-
-    brightness: Brightness.dark,
-
-    scaffoldBackgroundColor: faloraBg,
-
-    colorScheme: const ColorScheme.dark(
-
-      primary: faloraAccent,
-
-      secondary: faloraGold,
-
-      surface: faloraSurface,
-
-      onPrimary: Colors.white,
-
-      onSurface: faloraTextPrimary,
-
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: faloraParchmentMid,
+    colorScheme: colorScheme,
+    fontFamily: FaloraTypography.bodyFamily,
+    textTheme: const TextTheme(
+      displayLarge: FaloraTypography.displayLarge,
+      displayMedium: FaloraTypography.displayMedium,
+      titleLarge: FaloraTypography.titleLarge,
+      titleMedium: FaloraTypography.titleMedium,
+      bodyLarge: FaloraTypography.bodyLarge,
+      bodyMedium: FaloraTypography.bodyMedium,
+      labelLarge: FaloraTypography.labelLarge,
+      labelSmall: FaloraTypography.labelSmall,
     ),
-
     appBarTheme: AppBarTheme(
-
-      backgroundColor: faloraBg.withValues(alpha: 0.92),
-
-      foregroundColor: faloraTextPrimary,
-
+      backgroundColor: faloraParchmentMid.withValues(alpha: 0.94),
+      foregroundColor: faloraInk,
       elevation: 0,
-
       centerTitle: true,
-
       scrolledUnderElevation: 0,
-
-      titleTextStyle: const TextStyle(
-
-        fontSize: 18,
-
-        fontWeight: FontWeight.w600,
-
-        color: faloraTextPrimary,
-
-        letterSpacing: 0.3,
-
-      ),
-
+      titleTextStyle: FaloraTypography.titleLarge.copyWith(fontSize: 17),
+      iconTheme: const IconThemeData(color: faloraBronzeDark),
     ),
-
     cardTheme: CardThemeData(
-
-      color: faloraCard.withValues(alpha: 0.85),
-
+      color: faloraParchmentCard,
       elevation: 0,
-
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(FaloraRadius.lg),
+        side: const BorderSide(color: faloraGoldMuted, width: 1),
+      ),
     ),
-
-    dividerTheme: DividerThemeData(
-
-      color: Colors.white.withValues(alpha: 0.06),
-
+    dividerTheme: const DividerThemeData(
+      color: faloraBronze,
       thickness: 1,
-
+      space: 1,
     ),
-
     inputDecorationTheme: InputDecorationTheme(
-
       filled: true,
-
-      fillColor: faloraCard.withValues(alpha: 0.7),
-
-      labelStyle: const TextStyle(color: faloraTextSecondary),
-
-      hintStyle: const TextStyle(color: faloraTextSecondary),
-
+      fillColor: faloraParchmentRaised,
+      labelStyle: FaloraTypography.labelLarge,
+      hintStyle: FaloraTypography.bodyMedium.copyWith(color: faloraInkMuted),
       border: OutlineInputBorder(
-
-        borderRadius: BorderRadius.circular(14),
-
-        borderSide: BorderSide.none,
-
+        borderRadius: BorderRadius.circular(FaloraRadius.md),
+        borderSide: BorderSide(color: faloraBronze.withValues(alpha: 0.35)),
       ),
-
       enabledBorder: OutlineInputBorder(
-
-        borderRadius: BorderRadius.circular(14),
-
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-
+        borderRadius: BorderRadius.circular(FaloraRadius.md),
+        borderSide: BorderSide(color: faloraBronze.withValues(alpha: 0.35)),
       ),
-
       focusedBorder: OutlineInputBorder(
-
-        borderRadius: BorderRadius.circular(14),
-
-        borderSide: const BorderSide(color: faloraAccent, width: 1.5),
-
+        borderRadius: BorderRadius.circular(FaloraRadius.md),
+        borderSide: const BorderSide(color: faloraGoldDark, width: 1.5),
       ),
-
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
     ),
-
     elevatedButtonTheme: ElevatedButtonThemeData(
-
       style: ElevatedButton.styleFrom(
-
-        backgroundColor: faloraAccent,
-
-        foregroundColor: Colors.white,
-
+        backgroundColor: faloraBronzeDark,
+        foregroundColor: faloraParchmentRaised,
         elevation: 0,
-
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 28),
-
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-
-        textStyle: const TextStyle(fontWeight: FontWeight.w700),
-
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(FaloraRadius.md),
+          side: const BorderSide(color: faloraGold, width: 1),
+        ),
+        textStyle: FaloraTypography.labelLarge.copyWith(
+          color: faloraParchmentRaised,
+          letterSpacing: 0.4,
+        ),
       ),
-
     ),
-
-    bottomNavigationBarTheme: BottomNavigationBarThemeData(
-
-      backgroundColor: faloraSurface.withValues(alpha: 0.95),
-
-      selectedItemColor: faloraGold,
-
-      unselectedItemColor: faloraTextSecondary,
-
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: faloraBronzeDark,
+        side: BorderSide(color: faloraBronze.withValues(alpha: 0.55)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(FaloraRadius.md),
+        ),
+      ),
+    ),
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      backgroundColor: faloraParchmentCard,
+      selectedItemColor: faloraGoldDark,
+      unselectedItemColor: faloraInkMuted,
       type: BottomNavigationBarType.fixed,
-
       elevation: 0,
-
     ),
-
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: faloraBronzeDark,
+      contentTextStyle: FaloraTypography.bodyMedium.copyWith(
+        color: faloraParchmentRaised,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(FaloraRadius.sm),
+      ),
+      behavior: SnackBarBehavior.floating,
+    ),
     pageTransitionsTheme: const PageTransitionsTheme(
-
       builders: {
-
         TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-
         TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-
       },
-
     ),
-
   );
-
 }
-
-
 
 BoxDecoration faloraAuthBackground() {
-
   return const BoxDecoration(
-
     gradient: LinearGradient(
-
-      begin: Alignment.topLeft,
-
-      end: Alignment.bottomRight,
-
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
       colors: [
-
-        faloraBg,
-
-        Color(0xFF15102A),
-
-        Color(0xFF1A1035),
-
-        faloraBg,
-
+        faloraParchmentLight,
+        faloraParchmentMid,
+        faloraParchmentDeep,
       ],
-
     ),
-
   );
-
 }
-
-

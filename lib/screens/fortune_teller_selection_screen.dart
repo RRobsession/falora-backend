@@ -69,54 +69,32 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Falcını Seç',
-                          style: TextStyle(
-                            color: faloraGold.withValues(alpha: 0.95),
+                          'Yorumcunu Seç',
+                          style: FaloraTypography.labelLarge.copyWith(
+                            color: faloraBronzeDark,
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1,
+                            letterSpacing: 1,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'AI falcılar jeton ile anında yorum üretir. '
+                          'Yorumcular jeton ile kişisel yorum hazırlar. '
                           'Serdar ve Hatice birebir özel yorum sunar; '
-                          '${_manualOffer.questionLimit} soru · ${_manualOffer.priceLabel}.',
-                          style: const TextStyle(
-                            color: faloraTextSecondary,
-                            fontSize: 14,
-                            height: 1.45,
-                          ),
+                          '${_manualOffer.questionLimit} soru ${_manualOffer.tokenCost} jeton.',
+                          style: FaloraTypography.bodyMedium,
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Icon(Icons.toll, color: faloraGold, size: 18),
-                            const SizedBox(width: 6),
-                            Text(
-                              'AI bakiyen: $tokens jeton',
-                              style: const TextStyle(
-                                color: faloraGold,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                        FaloraTokenMedallion(
+                          tokens: tokens,
+                          compact: false,
+                          showLabel: true,
                         ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 22),
-                Text(
-                  'AI Falcılar',
-                  style: TextStyle(
-                    color: category.color.withValues(alpha: 0.95),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    letterSpacing: 0.8,
-                  ),
-                ),
+                const FaloraSectionHeading('Yorumcular'),
                 const SizedBox(height: 12),
                 ...fortuneTellers.map(
                   (teller) => Padding(
@@ -129,15 +107,7 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Özel Yorumcular',
-                  style: TextStyle(
-                    color: faloraGold.withValues(alpha: 0.95),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    letterSpacing: 0.8,
-                  ),
-                ),
+                const FaloraSectionHeading('Özel Yorumcular'),
                 const SizedBox(height: 12),
                 ...manualFortuneReaders.map(
                   (reader) => Padding(
@@ -178,28 +148,11 @@ class _ManualFortuneReaderCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              reader.accentColor.withValues(alpha: 0.22),
-              const Color(0xFF1A1228),
-              faloraGold.withValues(alpha: 0.06),
-            ],
-          ),
-          border: Border.all(
-            color: faloraGold.withValues(alpha: 0.32),
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: reader.accentColor.withValues(alpha: 0.14),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+        decoration: faloraParchmentDecoration(
+          base: Color.lerp(faloraParchmentCard, reader.accentColor, 0.1)!,
+          radius: FaloraRadius.xl,
+          raised: true,
+          borderWidth: 1.3,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -219,18 +172,17 @@ class _ManualFortuneReaderCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: faloraGold.withValues(alpha: 0.15),
+                          color: faloraParchmentInset.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: faloraGold.withValues(alpha: 0.35),
+                            color: faloraBronze.withValues(alpha: 0.35),
                           ),
                         ),
                         child: Text(
                           manualReaderBadgeLabel,
-                          style: const TextStyle(
-                            color: faloraGold,
+                          style: FaloraTypography.labelSmall.copyWith(
+                            color: faloraBronzeDark,
                             fontSize: 11,
-                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -255,26 +207,9 @@ class _ManualFortuneReaderCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.28),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: faloraGold.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Text(
-                    offer.priceLabel,
-                    style: const TextStyle(
-                      color: faloraGold,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
+                FaloraAncientPriceBadge(
+                  amount: offer.tokenCost,
+                  suffix: 'jeton',
                 ),
               ],
             ),
@@ -298,31 +233,14 @@ class _ManualFortuneReaderCard extends StatelessWidget {
                 ),
                 _InfoChip(
                   label: offer.intentionLabel,
-                  color: faloraGold,
+                  color: faloraBronze,
                 ),
               ],
             ),
             const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                gradient: LinearGradient(
-                  colors: [
-                    reader.accentColor,
-                    reader.accentColor.withValues(alpha: 0.75),
-                  ],
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                'Devam Et · ${offer.priceLabel}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
+            FaloraPrimaryButton(
+              label: 'Devam Et · ${offer.priceLabel}',
+              onPressed: onTap,
             ),
           ],
         ),
@@ -342,16 +260,15 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: color.withValues(alpha: 0.95),
+        style: FaloraTypography.labelSmall.copyWith(
+          color: faloraInkHeading,
           fontSize: 11,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -379,36 +296,15 @@ class _FortuneTellerCard extends StatelessWidget {
         opacity: _canAfford ? 1 : 0.55,
         child: Container(
           padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: teller.highlight
-                  ? [
-                      teller.accentColor.withValues(alpha: 0.22),
-                      const Color(0xFF1C1430),
-                      faloraGold.withValues(alpha: 0.08),
-                    ]
-                  : [
-                      teller.accentColor.withValues(alpha: 0.14),
-                      const Color(0xFF151020),
-                    ],
-            ),
-            border: Border.all(
-              color: teller.highlight
-                  ? faloraGold.withValues(alpha: 0.38)
-                  : teller.accentColor.withValues(alpha: 0.28),
-            ),
-            boxShadow: teller.highlight
-                ? [
-                    BoxShadow(
-                      color: teller.accentColor.withValues(alpha: 0.12),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ]
-                : null,
+          decoration: faloraParchmentDecoration(
+            base: Color.lerp(
+              faloraParchmentCard,
+              teller.accentColor,
+              teller.highlight ? 0.12 : 0.06,
+            )!,
+            radius: FaloraRadius.xl,
+            raised: true,
+            borderWidth: teller.highlight ? 1.4 : 1.2,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -441,10 +337,9 @@ class _FortuneTellerCard extends StatelessWidget {
                             ),
                             child: Text(
                               teller.badge!,
-                              style: const TextStyle(
-                                color: faloraGold,
+                              style: FaloraTypography.labelSmall.copyWith(
+                                color: faloraBronzeDark,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -461,43 +356,15 @@ class _FortuneTellerCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           teller.title,
-                          style: TextStyle(
-                            color: teller.accentColor.withValues(alpha: 0.95),
-                            fontSize: 13,
+                          style: FaloraTypography.bodyMedium.copyWith(
+                            color: faloraInkSoft,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.28),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: faloraGold.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.toll, color: faloraGold, size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${teller.tokenCost}',
-                          style: const TextStyle(
-                            color: faloraGold,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  FaloraAncientPriceBadge(amount: teller.tokenCost),
                 ],
               ),
               const SizedBox(height: 14),
@@ -512,38 +379,35 @@ class _FortuneTellerCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 teller.lengthLabel,
-                style: TextStyle(
-                  color: teller.accentColor.withValues(alpha: 0.9),
+                style: FaloraTypography.labelSmall.copyWith(
+                  color: faloraInkMuted,
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 13),
+                height: 52,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(FaloraRadius.md),
                   gradient: _canAfford
-                      ? LinearGradient(
-                          colors: [
-                            teller.accentColor,
-                            teller.accentColor.withValues(alpha: 0.75),
-                          ],
+                      ? const LinearGradient(
+                          colors: [faloraBronze, faloraBronzeDark],
                         )
                       : null,
-                  color: _canAfford ? null : Colors.white.withValues(alpha: 0.06),
-                  border: _canAfford
-                      ? null
-                      : Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  color: _canAfford ? null : faloraParchmentMid,
+                  border: Border.all(
+                    color: _canAfford
+                        ? faloraGold
+                        : faloraBronze.withValues(alpha: 0.25),
+                  ),
                 ),
-                alignment: Alignment.center,
                 child: Text(
                   _canAfford
                       ? '${teller.name} ile Devam Et'
                       : 'Yetersiz jeton (${teller.tokenCost} gerekli)',
-                  style: TextStyle(
-                    color: _canAfford ? Colors.white : faloraTextSecondary,
-                    fontWeight: FontWeight.w700,
+                  style: FaloraTypography.labelLarge.copyWith(
+                    color: _canAfford ? faloraParchmentRaised : faloraInkMuted,
                     fontSize: 14,
                   ),
                 ),

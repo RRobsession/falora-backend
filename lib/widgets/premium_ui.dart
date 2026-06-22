@@ -1,9 +1,10 @@
-import 'dart:ui';
-
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/widgets/falora_component_library.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
+export 'falora_component_library.dart';
 
 /// Yumuşak sayfa geçişi.
 Route<T> faloraPageRoute<T>(Widget page) {
@@ -31,38 +32,6 @@ Route<T> faloraPageRoute<T>(Widget page) {
   );
 }
 
-BoxDecoration faloraGlassDecoration({
-  Color accent = faloraAccent,
-  double radius = 24,
-  double opacity = 0.14,
-}) {
-  return BoxDecoration(
-    borderRadius: BorderRadius.circular(radius),
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Colors.white.withValues(alpha: 0.07),
-        accent.withValues(alpha: opacity),
-        const Color(0xFF120A22).withValues(alpha: 0.55),
-      ],
-    ),
-    border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
-    boxShadow: [
-      BoxShadow(
-        color: accent.withValues(alpha: 0.12),
-        blurRadius: 28,
-        offset: const Offset(0, 12),
-      ),
-      BoxShadow(
-        color: Colors.black.withValues(alpha: 0.35),
-        blurRadius: 16,
-        offset: const Offset(0, 6),
-      ),
-    ],
-  );
-}
-
 class FaloraBackground extends StatelessWidget {
   const FaloraBackground({super.key, required this.child});
 
@@ -70,60 +39,7 @@ class FaloraBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF0A0612),
-            Color(0xFF110D1F),
-            Color(0xFF0D1528),
-            Color(0xFF0A0612),
-          ],
-          stops: [0, 0.35, 0.7, 1],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -80,
-            right: -60,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    faloraAccent.withValues(alpha: 0.18),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 120,
-            left: -40,
-            child: Container(
-              width: 180,
-              height: 180,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    faloraGold.withValues(alpha: 0.1),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          child,
-        ],
-      ),
-    );
+    return FaloraParchmentBackground(child: child);
   }
 }
 
@@ -201,33 +117,19 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
     return AnimatedBuilder(
       animation: _glowCtrl,
       builder: (context, child) {
-        final glow = 0.35 + (_glowCtrl.value * 0.25);
         return Container(
           padding: EdgeInsets.symmetric(
             horizontal: widget.compact ? 14 : 18,
             vertical: widget.compact ? 10 : 14,
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                faloraGold.withValues(alpha: 0.22),
-                const Color(0xFF2A1F45).withValues(alpha: 0.9),
-                faloraAccent.withValues(alpha: 0.15),
-              ],
-            ),
-            border: Border.all(
-              color: faloraGold.withValues(alpha: 0.35 + (_glowCtrl.value * 0.15)),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: faloraGold.withValues(alpha: glow * 0.35),
-                blurRadius: 20 + (_glowCtrl.value * 8),
-                spreadRadius: _glowCtrl.value * 2,
-              ),
-            ],
+          decoration: faloraParchmentDecoration(
+            base: Color.lerp(
+              faloraParchmentCard,
+              faloraGold,
+              0.08 + (_glowCtrl.value * 0.04),
+            )!,
+            radius: 20,
+            raised: true,
           ),
           child: child,
         );
@@ -239,10 +141,10 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.black.withValues(alpha: 0.25),
-              border: Border.all(color: faloraGold.withValues(alpha: 0.4)),
+              color: faloraParchmentInset.withValues(alpha: 0.8),
+              border: Border.all(color: faloraGold.withValues(alpha: 0.5)),
             ),
-            child: const Icon(Icons.toll_rounded, color: faloraGold, size: 22),
+            child: const Icon(Icons.toll_rounded, color: faloraGoldReadable, size: 22),
           ),
           const SizedBox(width: 12),
           Column(
@@ -259,14 +161,14 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
               Text(
                 '${widget.tokens}',
                 style: TextStyle(
-                  color: faloraGold,
+                  color: faloraInk,
                   fontSize: widget.compact ? 22 : 28,
                   fontWeight: FontWeight.w700,
                   height: 1.1,
                   shadows: [
                     Shadow(
-                      color: faloraGold.withValues(alpha: 0.45),
-                      blurRadius: 12,
+                      color: faloraBronzeDark.withValues(alpha: 0.15),
+                      blurRadius: 4,
                     ),
                   ],
                 ),
@@ -291,31 +193,26 @@ class PremiumWelcomeHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 56, 22, 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(22, 26, 22, 24),
-            decoration: faloraGlassDecoration(radius: 28, opacity: 0.18),
-            child: Column(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(22, 26, 22, 24),
+        decoration: faloraParchmentDecoration(radius: FaloraRadius.xl),
+        child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     const FaIcon(
                       FontAwesomeIcons.wandMagicSparkles,
-                      color: faloraGold,
+                      color: faloraGoldReadable,
                       size: 18,
                     ),
                     const SizedBox(width: 10),
                     Text(
                       'FALORA',
-                      style: TextStyle(
+                      style: FaloraTypography.labelLarge.copyWith(
                         fontSize: 13,
-                        fontWeight: FontWeight.w700,
                         letterSpacing: 4,
-                        color: faloraGold.withValues(alpha: 0.95),
+                        color: faloraInkHeading,
                       ),
                     ),
                   ],
@@ -332,26 +229,18 @@ class PremiumWelcomeHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Kozmik rehberin seni bekliyor',
-                  style: TextStyle(
-                    color: faloraTextSecondary.withValues(alpha: 0.92),
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
+                  'Kadim yorumcunun sayfaları açıldı',
+                  style: FaloraTypography.bodyLarge,
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Bugün hangi enerjiyi keşfetmek istiyorsun?',
-                  style: TextStyle(
-                    color: faloraTextPrimary.withValues(alpha: 0.88),
-                    fontSize: 15,
+                  'Bugün hangi falı keşfetmek istiyorsun?',
+                  style: FaloraTypography.titleMedium.copyWith(
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
-          ),
-        ),
       ),
     );
   }
@@ -374,22 +263,7 @@ class HomeQuickActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: faloraGold.withValues(alpha: 0.35)),
-          ),
-          child: Text(
-            '🪙 $tokens',
-            style: const TextStyle(
-              color: faloraGold,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-        ),
+        FaloraTokenMedallion(tokens: tokens, compact: true),
         const SizedBox(width: 8),
         _QuickIconButton(
           icon: Icons.card_giftcard_rounded,
@@ -433,8 +307,8 @@ class _QuickIconButton extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.black.withValues(alpha: 0.28),
-            border: Border.all(color: accent.withValues(alpha: 0.35)),
+            color: faloraParchmentInset.withValues(alpha: 0.75),
+            border: Border.all(color: accent.withValues(alpha: 0.45)),
           ),
           child: Icon(icon, color: accent, size: 20),
         ),
@@ -459,26 +333,10 @@ class PremiumCategoryCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: 104,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              category.color.withValues(alpha: 0.20),
-              category.color.withValues(alpha: 0.07),
-            ],
-          ),
-          border: Border.all(
-            color: category.color.withValues(alpha: 0.24),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: category.color.withValues(alpha: 0.12),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
+        decoration: faloraParchmentDecoration(
+          base: Color.lerp(faloraParchmentCard, category.color, 0.1)!,
+          radius: FaloraRadius.xl,
+          raised: true,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -488,16 +346,16 @@ class PremiumCategoryCard extends StatelessWidget {
                 width: 58,
                 height: 58,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: category.color.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(FaloraRadius.lg),
+                  color: faloraParchmentInset.withValues(alpha: 0.65),
                   border: Border.all(
-                    color: category.color.withValues(alpha: 0.32),
+                    color: category.color.withValues(alpha: 0.35),
                   ),
                 ),
                 child: Center(
                   child: FaIcon(
                     category.fallbackIcon,
-                    color: Colors.white.withValues(alpha: 0.95),
+                    color: faloraBronzeDark,
                     size: 26,
                   ),
                 ),
@@ -510,11 +368,9 @@ class PremiumCategoryCard extends StatelessWidget {
                   children: [
                     Text(
                       category.label,
-                      style: const TextStyle(
-                        color: faloraTextPrimary,
+                      style: FaloraTypography.titleLarge.copyWith(
+                        color: faloraInk,
                         fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -522,9 +378,9 @@ class PremiumCategoryCard extends StatelessWidget {
                       category.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: faloraTextSecondary.withValues(alpha: 0.92),
-                        fontSize: 12.5,
+                      style: FaloraTypography.bodyMedium.copyWith(
+                        color: faloraInkSoft,
+                        fontSize: 13,
                         height: 1.35,
                       ),
                     ),
@@ -533,8 +389,8 @@ class PremiumCategoryCard extends StatelessWidget {
               ),
               Icon(
                 Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: category.color.withValues(alpha: 0.85),
+                size: 14,
+                color: faloraBronzeDark.withValues(alpha: 0.55),
               ),
             ],
           ),
@@ -558,37 +414,13 @@ class GiftRewardCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: hasReward
-              ? [
-                  const Color(0xFF3D2A5C),
-                  const Color(0xFF251838),
-                  faloraGold.withValues(alpha: 0.15),
-                ]
-              : [
-                  const Color(0xFF1E1630),
-                  const Color(0xFF151020),
-                ],
+        decoration: faloraParchmentDecoration(
+          base: hasReward
+              ? Color.lerp(faloraParchmentCard, faloraGold, 0.12)!
+              : faloraParchmentInset,
+          radius: FaloraRadius.xl,
+          raised: hasReward,
         ),
-        border: Border.all(
-          color: hasReward
-              ? faloraGold.withValues(alpha: 0.35)
-              : Colors.white.withValues(alpha: 0.06),
-        ),
-        boxShadow: hasReward
-            ? [
-                BoxShadow(
-                  color: faloraGold.withValues(alpha: 0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ]
-            : null,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -607,7 +439,7 @@ class GiftRewardCard extends StatelessWidget {
                 ),
                 child: const FaIcon(
                   FontAwesomeIcons.gift,
-                  color: faloraGold,
+                  color: faloraGoldReadable,
                   size: 22,
                 ),
               ),
@@ -616,17 +448,10 @@ class GiftRewardCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [faloraGold, Color(0xFFFFE8A3)],
-                      ).createShader(bounds),
-                      child: const Text(
-                        'Ücretsiz 50 Jeton Kazan',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
+                    Text(
+                      'Ücretsiz 50 Jeton Kazan',
+                      style: FaloraTypography.titleLarge.copyWith(
+                        color: faloraInkHeading,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -652,16 +477,13 @@ class GiftRewardCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 15),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: hasReward
-                    ? const LinearGradient(
-                        colors: [faloraGold, Color(0xFFB8942E)],
-                      )
-                    : null,
-                color: hasReward ? null : Colors.white.withValues(alpha: 0.05),
-                border: hasReward
-                    ? null
-                    : Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                borderRadius: BorderRadius.circular(FaloraRadius.md),
+                color: hasReward ? faloraBronzeDark : faloraParchmentMid,
+                border: Border.all(
+                  color: hasReward
+                      ? faloraGold
+                      : faloraBronze.withValues(alpha: 0.25),
+                ),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -669,7 +491,7 @@ class GiftRewardCard extends StatelessWidget {
                     ? 'Reklam İzle ve 50 Jeton Kazan'
                     : 'Bugünkü hak kullanıldı',
                 style: TextStyle(
-                  color: hasReward ? const Color(0xFF1A1028) : faloraTextSecondary,
+                  color: hasReward ? faloraParchmentRaised : faloraTextSecondary,
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),
@@ -707,59 +529,21 @@ class GiftRewardModal extends StatelessWidget {
       child: Container(
         width: cardWidth,
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: hasReward
-                ? [
-                    const Color(0xFF3D2A5C),
-                    const Color(0xFF251838),
-                    faloraGold.withValues(alpha: 0.12),
-                  ]
-                : [
-                    const Color(0xFF1E1630),
-                    const Color(0xFF151020),
-                  ],
-          ),
-          border: Border.all(
-            color: hasReward
-                ? faloraGold.withValues(alpha: 0.35)
-                : Colors.white.withValues(alpha: 0.08),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.35),
-              blurRadius: 28,
-              offset: const Offset(0, 12),
-            ),
-            if (hasReward)
-              BoxShadow(
-                color: faloraGold.withValues(alpha: 0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 6),
-              ),
-          ],
+        decoration: faloraParchmentDecoration(
+          base: hasReward
+              ? Color.lerp(faloraParchmentCard, faloraGold, 0.1)!
+              : faloraParchmentInset,
+          radius: FaloraRadius.xl,
+          raised: true,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [faloraGold, Color(0xFFFFE8A3)],
-              ).createShader(bounds),
-              child: const Text(
-                '🎁 Ücretsiz 50 Jeton Kazan',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  height: 1.25,
-                ),
-              ),
+            Text(
+              '🎁 Ücretsiz 50 Jeton Kazan',
+              textAlign: TextAlign.center,
+              style: FaloraTypography.titleLarge.copyWith(color: faloraInkHeading),
             ),
             if (!hasReward) ...[
               const SizedBox(height: 10),
@@ -781,15 +565,12 @@ class GiftRewardModal extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  gradient: hasReward
-                      ? const LinearGradient(
-                          colors: [faloraGold, Color(0xFFB8942E)],
-                        )
-                      : null,
-                  color: hasReward ? null : Colors.white.withValues(alpha: 0.06),
-                  border: hasReward
-                      ? null
-                      : Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  color: hasReward ? faloraBronzeDark : faloraParchmentMid,
+                  border: Border.all(
+                    color: hasReward
+                        ? faloraGold
+                        : faloraBronze.withValues(alpha: 0.25),
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Text(
@@ -799,7 +580,7 @@ class GiftRewardModal extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: hasReward
-                        ? const Color(0xFF1A1028)
+                        ? faloraParchmentRaised
                         : faloraTextPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
@@ -815,136 +596,329 @@ class GiftRewardModal extends StatelessWidget {
   }
 }
 
+/// Mağaza ürünleri yüklenirken tam liste iskeleti.
+class ShopProductsSkeleton extends StatefulWidget {
+  const ShopProductsSkeleton({super.key, this.itemCount = 4});
+
+  final int itemCount;
+
+  @override
+  State<ShopProductsSkeleton> createState() => _ShopProductsSkeletonState();
+}
+
+class _ShopProductsSkeletonState extends State<ShopProductsSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.only(bottom: 32),
+      itemCount: widget.itemCount,
+      separatorBuilder: (_, _) => const SizedBox(height: 14),
+      itemBuilder: (context, index) {
+        return _ShopPackageSkeletonCard(
+          animation: _controller,
+          highlight: index == 1,
+        );
+      },
+    );
+  }
+}
+
+class _ShopPackageSkeletonCard extends StatelessWidget {
+  const _ShopPackageSkeletonCard({
+    required this.animation,
+    required this.highlight,
+  });
+
+  final Animation<double> animation;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: faloraParchmentDecoration(
+        base: highlight
+            ? Color.lerp(faloraParchmentCard, faloraGold, 0.08)!
+            : faloraParchmentInset,
+        radius: FaloraRadius.xl,
+        raised: false,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (highlight) ...[
+            _ShimmerBar(animation: animation, width: 88, height: 22),
+            const SizedBox(height: 14),
+          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ShimmerBar(
+                      animation: animation,
+                      width: 120,
+                      height: highlight ? 36 : 32,
+                    ),
+                    const SizedBox(height: 10),
+                    _ShimmerBar(animation: animation, width: 140, height: 14),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _ShimmerBar(animation: animation, width: 72, height: 28),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _ShimmerBar(animation: animation, width: double.infinity, height: 48),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShimmerBar extends StatelessWidget {
+  const _ShimmerBar({
+    required this.animation,
+    required this.width,
+    required this.height,
+  });
+
+  final Animation<double> animation;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(height > 20 ? 12 : 8),
+            gradient: LinearGradient(
+              begin: Alignment(-1 + animation.value * 2, 0),
+              end: Alignment(animation.value * 2, 0),
+              colors: [
+                Colors.white.withValues(alpha: 0.04),
+                faloraGold.withValues(alpha: 0.2),
+                Colors.white.withValues(alpha: 0.04),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class ShopPackageCard extends StatelessWidget {
   const ShopPackageCard({
     super.key,
     required this.tokens,
-    required this.priceLabel,
+    required this.subtitle,
     required this.badge,
     required this.highlight,
+    required this.price,
+    this.isPurchasing = false,
     required this.onBuy,
   });
 
   final int tokens;
-  final String priceLabel;
+  final String subtitle;
   final String? badge;
   final bool highlight;
-  final VoidCallback onBuy;
+  final String price;
+  final bool isPurchasing;
+  final VoidCallback? onBuy;
+
+  bool get _canBuy => onBuy != null && !isPurchasing;
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTap(
-      onTap: onBuy,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: highlight
-                ? [
-                    faloraGold.withValues(alpha: 0.16),
-                    const Color(0xFF221836),
-                  ]
-                : [
-                    Colors.white.withValues(alpha: 0.05),
-                    const Color(0xFF181228),
-                  ],
-          ),
-          border: Border.all(
-            color: highlight
-                ? faloraGold.withValues(alpha: 0.4)
-                : Colors.white.withValues(alpha: 0.08),
-          ),
-          boxShadow: highlight
-              ? [
-                  BoxShadow(
-                    color: faloraGold.withValues(alpha: 0.1),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
+    return Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+        decoration: faloraParchmentDecoration(
+          base: highlight
+              ? Color.lerp(faloraParchmentCard, faloraGold, 0.16)!
+              : faloraParchmentCard,
+          radius: FaloraRadius.xl,
+          raised: true,
+          borderWidth: highlight ? 1.5 : 1.2,
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (badge != null) ...[
-                    Text(
-                      badge!,
-                      style: TextStyle(
-                        color: highlight ? faloraGold : faloraAccent,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                      ),
+            if (badge != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: highlight
+                        ? faloraGold.withValues(alpha: 0.2)
+                        : faloraAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: highlight
+                          ? faloraGold.withValues(alpha: 0.45)
+                          : faloraAccent.withValues(alpha: 0.3),
                     ),
-                    const SizedBox(height: 6),
-                  ],
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  ),
+                  child: Text(
+                    badge!,
+                    style: TextStyle(
+                      color: highlight ? faloraGoldReadable : faloraBronzeDark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '$tokens',
-                        style: TextStyle(
-                          fontSize: highlight ? 28 : 24,
-                          fontWeight: FontWeight.w800,
-                          color: highlight ? faloraGold : faloraTextPrimary,
-                          height: 1,
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.only(left: 6, bottom: 3),
-                        child: Text(
-                          'Jeton',
-                          style: TextStyle(
-                            color: faloraTextSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '$tokens',
+                            style: TextStyle(
+                              fontSize: highlight ? 36 : 32,
+                              fontWeight: FontWeight.w800,
+                              color: highlight ? faloraGoldReadable : faloraInk,
+                              height: 1,
+                              letterSpacing: -0.5,
+                            ),
                           ),
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8, bottom: 4),
+                            child: Text(
+                              'Jeton',
+                              style: TextStyle(
+                                color: faloraTextSecondary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: highlight
+                              ? faloraInkHeading
+                              : faloraInkSoft.withValues(alpha: 0.95),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    priceLabel,
-                    style: TextStyle(
-                      color: faloraTextSecondary.withValues(alpha: 0.9),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: highlight
-                    ? const LinearGradient(
-                        colors: [faloraGold, Color(0xFFB8942E)],
-                      )
-                    : LinearGradient(
-                        colors: [
-                          faloraAccent.withValues(alpha: 0.85),
-                          faloraAccent.withValues(alpha: 0.6),
-                        ],
-                      ),
-              ),
-              child: Text(
-                'Satın Al',
-                style: TextStyle(
-                  color: highlight ? const Color(0xFF1A1028) : Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
                 ),
-              ),
+                const SizedBox(width: 12),
+                FaloraGoldPrice(price: price, large: highlight),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _BuyButton(
+              highlight: highlight,
+              enabled: _canBuy,
+              isPurchasing: isPurchasing,
+              onPressed: _canBuy ? onBuy : null,
             ),
           ],
+        ),
+    );
+  }
+}
+
+class _BuyButton extends StatelessWidget {
+  const _BuyButton({
+    required this.highlight,
+    required this.enabled,
+    required this.isPurchasing,
+    required this.onPressed,
+  });
+
+  final bool highlight;
+  final bool enabled;
+  final bool isPurchasing;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(FaloraRadius.md),
+            color: enabled
+                ? (highlight ? faloraBronzeDark : faloraBronze)
+                : faloraParchmentMid,
+            border: Border.all(
+              color: enabled
+                  ? faloraGold
+                  : faloraBronze.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Center(
+            child: isPurchasing
+                ? SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: faloraParchmentRaised,
+                    ),
+                  )
+                : Text(
+                    'Satın Al',
+                    style: TextStyle(
+                      color: enabled
+                          ? faloraParchmentRaised
+                          : faloraTextSecondary.withValues(alpha: 0.5),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+          ),
         ),
       ),
     );
@@ -972,14 +946,8 @@ class CompatibilityRing extends StatelessWidget {
             child: CircularProgressIndicator(
               value: value,
               strokeWidth: 12,
-              backgroundColor: Colors.white.withValues(alpha: 0.06),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                percent >= 70
-                    ? const Color(0xFFE879A8)
-                    : percent >= 50
-                        ? faloraGold
-                        : faloraAccent,
-              ),
+              backgroundColor: faloraProgressTrack,
+              valueColor: const AlwaysStoppedAnimation<Color>(faloraProgressFill),
             ),
           ),
           Column(
@@ -990,16 +958,16 @@ class CompatibilityRing extends StatelessWidget {
                 style: TextStyle(
                   fontSize: size * 0.24,
                   fontWeight: FontWeight.w800,
-                  color: faloraTextPrimary,
+                  color: faloraInk,
                   height: 1,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 'Uyumluluk',
-                style: TextStyle(
+                style: FaloraTypography.bodyMedium.copyWith(
                   fontSize: 13,
-                  color: faloraTextSecondary.withValues(alpha: 0.9),
+                  color: faloraInkHeading,
                 ),
               ),
             ],
@@ -1075,10 +1043,9 @@ class CoupleCompatibilityDashboard extends StatelessWidget {
           children: items.map((item) {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: Colors.white.withValues(alpha: 0.04),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+              decoration: faloraParchmentDecoration(
+                radius: FaloraRadius.md,
+                raised: false,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1086,25 +1053,25 @@ class CoupleCompatibilityDashboard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(item.$3, size: 14, color: faloraAccent),
+                      Icon(item.$3, size: 14, color: faloraBronzeDark),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           item.$1,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: faloraTextSecondary,
+                          style: FaloraTypography.labelSmall.copyWith(
+                            color: faloraInkHeading,
                             fontSize: 11,
                           ),
                         ),
                       ),
                       Text(
                         '${item.$2}%',
-                        style: const TextStyle(
-                          color: faloraGold,
-                          fontWeight: FontWeight.w700,
+                        style: FaloraTypography.labelLarge.copyWith(
+                          color: faloraInk,
                           fontSize: 13,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
@@ -1115,9 +1082,9 @@ class CoupleCompatibilityDashboard extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: item.$2 / 100,
                       minHeight: 5,
-                      backgroundColor: Colors.white.withValues(alpha: 0.06),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        faloraAccent.withValues(alpha: 0.85),
+                      backgroundColor: faloraProgressTrack,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        faloraProgressFill,
                       ),
                     ),
                   ),
@@ -1168,26 +1135,28 @@ class PremiumOutlinedButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: faloraGold.withValues(alpha: 0.55)),
-          gradient: LinearGradient(
-            colors: [
-              faloraGold.withValues(alpha: 0.08),
-              Colors.transparent,
-            ],
-          ),
+          borderRadius: BorderRadius.circular(FaloraRadius.md),
+          color: faloraParchmentInset.withValues(alpha: 0.85),
+          border: Border.all(color: faloraGoldDark, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: faloraBronzeDark.withValues(alpha: 0.12),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: faloraGold, size: 20),
+            Icon(icon, color: faloraInkHeading, size: 20),
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(
-                color: faloraGold,
-                fontWeight: FontWeight.w600,
+              style: FaloraTypography.labelLarge.copyWith(
+                color: faloraInkHeading,
                 fontSize: 15,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

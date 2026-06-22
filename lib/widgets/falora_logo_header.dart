@@ -35,7 +35,7 @@ class FaloraLogoHeader extends StatelessWidget {
           ),
           child: Icon(
             Icons.auto_awesome,
-            color: faloraGold,
+            color: faloraGoldReadable,
             size: compact ? 32 : 42,
           ),
         ),

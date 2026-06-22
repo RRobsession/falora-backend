@@ -162,6 +162,9 @@ const {
   buildCoupleSystemPrompt,
   buildFortuneUserPrompt,
   buildCoupleUserPrompt,
+  validateAutoCategoryInput,
+  buildAutoCategorySystemPrompt,
+  buildAutoCategoryUserPrompt,
 } = require('./fortune_personas');
 
 function newRequestId() {
@@ -543,7 +546,34 @@ app.post(
   requireAuth,
   requireVerifiedEmail,
   async (req, res) => {
-  const { category, name, age, zodiac, intention, tellerId } = req.body ?? {};
+  const { categoryType, inputData, category, name, age, zodiac, intention, tellerId } =
+    req.body ?? {};
+
+  if (categoryType) {
+    const validation = validateAutoCategoryInput(categoryType, inputData);
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    try {
+      const persona = pickFortunePersona();
+      const structure = pickFortuneStructure();
+      console.log(`AUTO CATEGORY REQUEST: ${categoryType}`);
+
+      const result = await generate(
+        openai,
+        'fortune',
+        buildAutoCategorySystemPrompt(categoryType, persona),
+        buildAutoCategoryUserPrompt(categoryType, inputData, persona, structure),
+        1800,
+      );
+      return res.json({ result });
+    } catch (err) {
+      console.error(`generate-fortune auto category error (${categoryType}):`, err.message);
+      return res.status(500).json({ error: 'AI yanıtı üretilemedi' });
+    }
+  }
+
   if (!category || !name || !age || !zodiac || !intention) {
     return res.status(400).json({ error: 'Eksik alanlar' });
   }

@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/fortune_models.dart';
+import 'package:falora/config/category_fortune_config.dart';
+import 'package:falora/models/tarot_card.dart';
 import 'package:flutter/foundation.dart';
 
 class FortuneSubmitException implements Exception {
@@ -56,7 +59,7 @@ class FortuneStorageService {
     }
   }
 
-  /// Eski kayıtları ready yap: result dolu + (status yok veya availableAt yok).
+  /// Eski kayıtları ready yap: result dolu + readyAt alanı yok.
   Future<void> migrateLegacyRecords(String userId) async {
     try {
       await Future.wait([
@@ -79,17 +82,43 @@ class FortuneStorageService {
       final result = (d['result'] as String?)?.trim() ?? '';
       if (result.isEmpty) continue;
 
-      final hasAvailableAt = d.containsKey('availableAt') && d['availableAt'] != null;
+      final hasReadyAt = (d.containsKey('readyAt') && d['readyAt'] != null) ||
+          (d.containsKey('availableAt') && d['availableAt'] != null);
       final rawStatus = d['status'] as String?;
 
       final needsMigration =
-          !hasAvailableAt || rawStatus == null || rawStatus.isEmpty;
+          !hasReadyAt || rawStatus == null || rawStatus.isEmpty;
 
       if (needsMigration && rawStatus != 'ready') {
         await doc.reference.update({'status': 'ready'});
         debugPrint('MIGRATE legacy $collection/${doc.id} -> ready');
       }
     }
+  }
+
+  Future<void> createCategoryFortune({
+    required String id,
+    required String userId,
+    required FortuneCategory category,
+    required String title,
+    required Map<String, dynamic> inputData,
+    required int tokenCost,
+    DateTime? createdAt,
+    DateTime? readyAt,
+  }) async {
+    final created = createdAt ?? DateTime.now();
+    final ready = readyAt ?? computeReadyAt(created);
+    await _db.collection(_fortunes).doc(id).set({
+      'userId': userId,
+      'category': category.name,
+      'title': title,
+      'inputData': inputData,
+      'result': '',
+      'status': 'pending',
+      'tokenCost': tokenCost,
+      'createdAt': Timestamp.fromDate(created),
+      'readyAt': Timestamp.fromDate(ready),
+    });
   }
 
   Future<void> createFortune({
@@ -103,7 +132,12 @@ class FortuneStorageService {
     List<String> imageNames = const [],
     String? tellerId,
     String? tellerName,
+    List<TarotCardSelection> selectedTarotCards = const [],
+    DateTime? createdAt,
+    DateTime? readyAt,
   }) async {
+    final created = createdAt ?? DateTime.now();
+    final ready = readyAt ?? computeReadyAt(created);
     await _db.collection(_fortunes).doc(id).set({
       'userId': userId,
       'category': category.name,
@@ -114,9 +148,12 @@ class FortuneStorageService {
       if (imageNames.isNotEmpty) 'imageNames': imageNames,
       if (tellerId != null) 'tellerId': tellerId,
       if (tellerName != null) 'tellerName': tellerName,
+      if (selectedTarotCards.isNotEmpty)
+        'selectedCards': selectedTarotCards.map((c) => c.toMap()).toList(),
       'result': '',
       'status': 'pending',
-      'createdAt': Timestamp.fromDate(DateTime.now()),
+      'createdAt': Timestamp.fromDate(created),
+      'readyAt': Timestamp.fromDate(ready),
     });
   }
 
@@ -194,7 +231,11 @@ class FortuneStorageService {
     int? maleAge,
     String? womanImageName,
     String? manImageName,
+    DateTime? createdAt,
+    DateTime? readyAt,
   }) async {
+    final created = createdAt ?? DateTime.now();
+    final ready = readyAt ?? computeReadyAt(created);
     await _db.collection(_couples).doc(id).set({
       'userId': userId,
       'femaleName': femaleName,
@@ -207,7 +248,8 @@ class FortuneStorageService {
       if (manImageName != null) 'manImageName': manImageName,
       'result': '',
       'status': 'pending',
-      'createdAt': Timestamp.fromDate(DateTime.now()),
+      'createdAt': Timestamp.fromDate(created),
+      'readyAt': Timestamp.fromDate(ready),
     });
   }
 
@@ -310,19 +352,19 @@ class FortuneStorageService {
     required FortuneCategory category,
     required String summary,
     required Map<String, dynamic> d,
+    List<TarotCardSelection> selectedTarotCards = const [],
   }) {
     final result = (d['result'] as String?)?.trim() ?? '';
     final createdAt = _parseCreatedAt(d['createdAt']);
-    final availableAt = _parseOptionalDate(d['availableAt']);
-    final hasAvailableAtField =
-        d.containsKey('availableAt') && d['availableAt'] != null;
     final rawStatus = d['status'] as String?;
-
-    final usesDelayGate = hasAvailableAtField && rawStatus == 'pending' && result.isEmpty;
+    final readyAt = _parseOptionalDate(d['readyAt']) ??
+        _parseOptionalDate(d['availableAt']);
+    final usesDelayGate = readyAt != null;
     final firestoreStatus = _resolveFirestoreStatus(
       rawStatus: rawStatus,
       result: result,
       usesDelayGate: usesDelayGate,
+      readyAt: readyAt,
     );
 
     return FortuneReading(
@@ -334,9 +376,10 @@ class FortuneStorageService {
       createdAt: createdAt,
       summary: summary,
       result: result,
-      availableAt: availableAt,
+      readyAt: readyAt,
       firestoreStatus: firestoreStatus,
       usesDelayGate: usesDelayGate,
+      selectedTarotCards: selectedTarotCards,
     );
   }
 
@@ -344,10 +387,16 @@ class FortuneStorageService {
     required String? rawStatus,
     required String result,
     required bool usesDelayGate,
+    required DateTime? readyAt,
   }) {
+    if (rawStatus == 'error') return 'error';
+    if (rawStatus == 'answered') return 'answered';
+    if (usesDelayGate && readyAt != null) {
+      final elapsed = !DateTime.now().isBefore(readyAt);
+      if (elapsed && result.isNotEmpty) return 'ready';
+      return rawStatus ?? 'pending';
+    }
     if (rawStatus == 'ready') return 'ready';
-    if (result.isNotEmpty && !usesDelayGate) return 'ready';
-    if (rawStatus == 'pending') return 'pending';
     if (result.isNotEmpty) return 'ready';
     return rawStatus ?? 'pending';
   }
@@ -378,22 +427,52 @@ class FortuneStorageService {
     }
   }
 
+  List<TarotCardSelection> _parseSelectedCards(Map<String, dynamic> d) {
+    final raw = d['selectedCards'] ?? d['selectedTarotCards'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => TarotCardSelection.fromMap(Map<String, dynamic>.from(item)))
+        .toList()
+      ..sort((a, b) => a.positionIndex.compareTo(b.positionIndex));
+  }
+
   FortuneReading _fortuneFromData(String id, Map<String, dynamic> d) {
     final categoryName = d['category'] as String? ?? 'tarot';
     final category = FortuneCategory.values.firstWhere(
       (c) => c.name == categoryName,
       orElse: () => FortuneCategory.tarot,
     );
+    final selectedCards = _parseSelectedCards(d);
+
+    final inputData = d['inputData'];
+    if (inputData is Map) {
+      final map = Map<String, dynamic>.from(inputData);
+      return _readingFromFields(
+        id: id,
+        category: category,
+        summary: buildCategorySummary(category, map),
+        d: d,
+        selectedTarotCards: selectedCards,
+      );
+    }
+
     final name = d['name'] as String? ?? '';
     final age = (d['age'] as num?)?.toInt() ?? 0;
     final zodiac = d['zodiac'] as String? ?? '';
     final intention = d['intention'] as String? ?? '';
+    var summary =
+        '${category.label} — $name, $age, $zodiac\nNiyet: $intention';
+    if (selectedCards.isNotEmpty) {
+      summary += '\n${selectedCards.length} tarot kartı seçildi';
+    }
 
     return _readingFromFields(
       id: id,
       category: category,
-      summary: '${category.label} — $name, $age, $zodiac\nNiyet: $intention',
+      summary: summary,
       d: d,
+      selectedTarotCards: selectedCards,
     );
   }
 

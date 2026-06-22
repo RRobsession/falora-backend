@@ -1,8 +1,9 @@
 import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/interstitial_ad_service.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
+import 'package:flutter/foundation.dart';
 
-/// Web ve AdMob desteklemeyen platformlar için mock reklamlar.
+/// Web (Chrome) — yalnızca geliştirme/test için mock ödüllü reklam.
 class AdServiceBootstrap {
   static Future<void>? _initFuture;
   static bool initSucceeded = false;
@@ -14,9 +15,14 @@ class AdServiceBootstrap {
   static Future<void> ensureInitialized() => init();
 
   static Future<void> _initImpl() async {
+    assert(kIsWeb, 'Stub bootstrap yalnızca web derlemesinde kullanılmalı.');
     RewardedAdService.instance = MockRewardedAdService();
     InterstitialAdService.instance = MockInterstitialAdService();
     initSucceeded = true;
-    AdMobLogger.log('MOCK ADS ACTIVE (web/desktop — no AdMob SDK)');
+    AdMobLogger.log(
+      'REWARD SERVICE TYPE: ${RewardedAdService.instance.serviceTypeName}',
+    );
+    AdMobLogger.log('MOCK REWARD USED: allowed (web only)');
+    AdMobLogger.log('ADMOB REWARD USED: no');
   }
 }

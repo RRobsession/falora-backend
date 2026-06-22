@@ -18,6 +18,9 @@ class AdMobRewardedAdService implements RewardedAdService {
   int _loadAttempt = 0;
 
   @override
+  String get serviceTypeName => 'AdMobRewardedAdService';
+
+  @override
   String? get lastErrorMessage => _lastErrorMessage;
 
   void _logDailyRewardStatus(AppUser user) {
@@ -50,8 +53,7 @@ class AdMobRewardedAdService implements RewardedAdService {
         onAdFailedToLoad: (error) {
           _rewardedAd = null;
           _loading = false;
-          _lastErrorMessage =
-              'Reklam yüklenemedi (${error.code}): ${error.message}';
+          _lastErrorMessage = rewardedAdLoadFailedMessage;
           AdMobLogger.rewardedLoadFailed(error);
           _scheduleRetry();
         },
@@ -89,12 +91,14 @@ class AdMobRewardedAdService implements RewardedAdService {
     required AppUser user,
   }) async {
     await AdServiceBootstrap.ensureInitialized();
+    AdMobLogger.log('REWARD SERVICE TYPE: $serviceTypeName');
+    AdMobLogger.log('MOCK REWARD USED: no');
+    AdMobLogger.log('ADMOB REWARD USED: yes');
     _logDailyRewardStatus(user);
 
     if (!AdServiceBootstrap.initSucceeded) {
-      _lastErrorMessage =
-          'AdMob başlatılamadı. Uygulamayı kapatıp tekrar açın.';
-      AdMobLogger.log('REWARDED CLAIM ERROR: AdMob init not successful');
+      _lastErrorMessage = rewardedAdLoadFailedMessage;
+      AdMobLogger.log('REWARDED LOAD FAILED: AdMob init not successful');
       return RewardedAdResult.failed;
     }
 
@@ -110,8 +114,7 @@ class AdMobRewardedAdService implements RewardedAdService {
       ad = await _waitForAd(const Duration(seconds: 15));
     }
     if (ad == null) {
-      _lastErrorMessage ??=
-          'Reklam şu an yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.';
+      _lastErrorMessage ??= rewardedAdLoadFailedMessage;
       AdMobLogger.log('REWARDED LOAD FAILED: no ad available after wait');
       return RewardedAdResult.failed;
     }
@@ -132,8 +135,7 @@ class AdMobRewardedAdService implements RewardedAdService {
         _rewardedAd = null;
         preload();
         showFailed = true;
-        _lastErrorMessage =
-            'Reklam gösterilemedi (${error.code}): ${error.message}';
+        _lastErrorMessage = rewardedAdLoadFailedMessage;
         AdMobLogger.rewardedShowFailed(error);
         if (!dismissed.isCompleted) dismissed.complete();
       },
@@ -154,7 +156,7 @@ class AdMobRewardedAdService implements RewardedAdService {
       );
       await dismissed.future;
     } catch (e, stackTrace) {
-      _lastErrorMessage = 'Reklam gösterilirken hata oluştu: $e';
+      _lastErrorMessage = rewardedAdLoadFailedMessage;
       AdMobLogger.log('REWARDED SHOW FAILED exception: $e');
       AdMobLogger.log(stackTrace.toString());
       return RewardedAdResult.failed;

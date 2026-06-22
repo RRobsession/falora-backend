@@ -48,6 +48,10 @@ ManualFortuneOffer manualOfferFor(FortuneCategory category) {
       );
     case FortuneCategory.ciftUyumu:
       throw ArgumentError('Çift uyumu manuel falcı desteklemez');
+    case FortuneCategory.ruyaTabiri:
+    case FortuneCategory.numeroloji:
+    case FortuneCategory.burcYorumu:
+      throw ArgumentError('Bu kategori manuel falcı desteklemez');
   }
 }
 

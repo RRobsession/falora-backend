@@ -1,6 +1,7 @@
 // Falora — Kişiye özel, seed tabanlı mock AI fal yorumu üretici servisi.
 
 import 'package:falora/ai_service.dart';
+import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
 enum FalCategory { tarot, bakla, kahve, su, iskambil }
@@ -236,6 +237,7 @@ class MockAiService implements AiService {
     required String intention,
     required String tellerId,
     List<String> imageNames = const [],
+    List<TarotCardSelection> selectedTarotCards = const [],
   }) async {
     return MockAiService.generateFal(
       FalInput(
@@ -274,6 +276,63 @@ class MockAiService implements AiService {
         erkekFotoAdi: manImage?.name,
       ),
     );
+  }
+
+  @override
+  Future<String> generateCategoryReading({
+    required String categoryType,
+    required Map<String, dynamic> inputData,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    switch (categoryType) {
+      case 'dream_interpretation':
+        return _mockDreamReading(inputData['dreamText'] as String? ?? '');
+      case 'numerology':
+        return _mockNumerologyReading(
+          inputData['name'] as String? ?? '',
+          inputData['birthDate'] as String? ?? '',
+        );
+      case 'horoscope':
+        return _mockHoroscopeReading(
+          inputData['sunSign'] as String? ?? '',
+          inputData['moonSign'] as String? ?? '',
+          inputData['focusArea'] as String? ?? '',
+        );
+      default:
+        return 'Yorum hazırlanıyor…';
+    }
+  }
+
+  static String _mockDreamReading(String dream) {
+    final excerpt = dream.length > 80 ? '${dream.substring(0, 80)}…' : dream;
+    return 'Rüyandaki imgeler bilinçaltının nazik bir diliyle konuşuyor. '
+        'Anlattığın sahnede ($excerpt) gizlenen semboller, içinde biriken '
+        'duygulara ayna tutuyor.\n\n'
+        'Bu yorum eğlence ve farkındalık amaçlıdır; kesin bir kehanet değildir. '
+        'Kalbinin yönlendirdiği adımlara güvenmen için seni destekleyen bir enerji '
+        'görünüyor. Kendine nazik davran, sembollerin mesajını zamanla sindir.';
+  }
+
+  static String _mockNumerologyReading(String name, String birthDate) {
+    return '$name, $birthDate doğum tarihinle birlikte güçlü bir yaşam yolu '
+        'enerjisi taşıyorsun. İsminin titreşimi iletişimde sıcaklık ve sezgi '
+        'getiriyor; doğum tarihin ise sabır ve dönüşüm temalarını vurguluyor.\n\n'
+        'Bu dönemde kişisel gelişim ve iç huzur ön planda. Kesin kader veya '
+        'finansal garanti yok; numeroloji burada eğlence ve kişisel içgörü '
+        'için bir rehber. Kendi seçimlerinle yolunu şekillendirmeye devam et.';
+  }
+
+  static String _mockHoroscopeReading(
+    String sunSign,
+    String moonSign,
+    String focusArea,
+  ) {
+    return 'Güneş burcun $sunSign, ay burcun $moonSign — bu ikili $focusArea '
+        'alanında derin bir iç rehberlik sunuyor. Gökyüzü enerjileri seni '
+        'yumuşak ama net bir perspektifle destekliyor.\n\n'
+        'Bu yorum eğlence amaçlıdır; tıbbi veya finansal tavsiye içermez. '
+        'Odak alanın olan $focusArea için kalbini dinlemen, acele etmemen '
+        've küçük adımlarla ilerlemen önerilir. Kendine güvenmeye devam et.';
   }
 
   static FalCategory _categoryFromLabel(String label) => switch (label) {

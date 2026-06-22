@@ -69,7 +69,10 @@ class PlayBillingService {
   }
 
   Future<List<ProductDetails>> queryProducts(Set<String> productIds) async {
-    if (kIsWeb) return const [];
+    if (kIsWeb) {
+      debugPrint('PLAY BILLING: web — queryProducts skipped (use queryProductPrices)');
+      return const [];
+    }
     await init();
     final available = await _iap.isAvailable();
     if (!available) {
@@ -78,19 +81,55 @@ class PlayBillingService {
       );
     }
 
+    debugPrint('PLAY BILLING queryProductDetails: ${productIds.join(', ')}');
     final response = await _iap.queryProductDetails(productIds);
     if (response.error != null) {
       debugPrint('PLAY BILLING query error: ${response.error!.message}');
       throw PlayBillingException(tokenBillingProductsNotReadyMessage);
     }
 
+    debugPrint('PLAY BILLING query OK: ${response.productDetails.length} product(s)');
+    for (final product in response.productDetails) {
+      debugPrint('PLAY BILLING product: ${product.id} price=${product.price}');
+    }
+    if (response.notFoundIDs.isNotEmpty) {
+      debugPrint('PLAY BILLING not found: ${response.notFoundIDs.join(', ')}');
+    }
+
     return response.productDetails;
   }
+
+  /// Android: Play Store fiyatları. Web: katalog mock fiyatları.
+  Future<Map<String, String>> queryProductPrices(Set<String> productIds) async {
+    if (kIsWeb) {
+      debugPrint('PLAY BILLING: web — returning mock shop prices');
+      final prices = <String, String>{};
+      for (final id in productIds) {
+        final mock = mockPriceForProductId(id);
+        if (mock != null) {
+          prices[id] = mock;
+          debugPrint('PLAY BILLING mock: $id price=$mock');
+        }
+      }
+      return prices;
+    }
+
+    final products = await queryProducts(productIds);
+    final prices = <String, String>{};
+    for (final product in products) {
+      if (product.price.isNotEmpty) {
+        prices[product.id] = product.price;
+      }
+    }
+    return prices;
+  }
+
+  bool get isWebMockShop => kIsWeb;
 
   Future<PlayPurchaseResult> buyConsumable(String productId) async {
     if (kIsWeb) {
       throw PlayBillingException(
-        'Google Play Billing yalnizca Android uygulamasinda kullanilabilir.',
+        'Satın alma yalnızca Android uygulamasında kullanılabilir.',
       );
     }
 

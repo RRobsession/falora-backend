@@ -1,11 +1,12 @@
 import 'package:falora/ai_config.dart';
 import 'package:falora/mock_ai_service.dart';
 import 'package:falora/openai_backend_service.dart';
+import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
 /// Kullanıcıya gösterilecek genel hata mesajı.
 const String aiErrorMessage =
-    'AI yorumu şu anda oluşturulamadı. Lütfen tekrar deneyin.';
+    'Yorum şu anda oluşturulamadı. Lütfen tekrar deneyin.';
 
 const String coupleErrorMessage =
     'Uyum raporu oluşturulamadı, lütfen tekrar deneyin.';
@@ -23,6 +24,7 @@ abstract class AiService {
     required String intention,
     required String tellerId,
     List<String> imageNames = const [],
+    List<TarotCardSelection> selectedTarotCards = const [],
   });
 
   Future<String> generateCoupleCompatibility({
@@ -34,6 +36,12 @@ abstract class AiService {
     required String manZodiac,
     PickedImage? womanImage,
     PickedImage? manImage,
+  });
+
+  /// Otomatik kategori yorumları: dream_interpretation, numerology, horoscope.
+  Future<String> generateCategoryReading({
+    required String categoryType,
+    required Map<String, dynamic> inputData,
   });
 }
 

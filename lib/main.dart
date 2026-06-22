@@ -12,7 +12,9 @@ import 'package:falora/ai_result_cache.dart';
 import 'package:falora/ai_service.dart';
 import 'package:falora/app/auth_gate.dart';
 import 'package:falora/category_icon.dart';
+import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/config/manual_fortune_config.dart';
+import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/firebase_messaging_background.dart';
 import 'package:falora/firebase_options.dart';
 import 'package:falora/image_upload_card.dart';
@@ -21,6 +23,8 @@ import 'package:falora/models/fortune_models.dart';
 import 'package:falora/models/fortune_teller_models.dart';
 import 'package:falora/models/manual_fortune_request.dart';
 import 'package:falora/models/manual_fortune_reader.dart';
+import 'package:falora/models/tarot_card.dart';
+import 'package:falora/screens/auto_category_form_screens.dart';
 import 'package:falora/screens/fortune_teller_selection_screen.dart';
 import 'package:falora/screens/manual_fortune_form_screen.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
@@ -34,13 +38,18 @@ import 'package:falora/services/interstitial_ad_service.dart';
 import 'package:falora/services/notification_backend_service.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/play_billing_service.dart';
+import 'package:falora/services/reading_ready_logger.dart';
+import 'package:falora/services/tarot_deck_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/screens/shop_screen.dart';
 import 'package:falora/token_config.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/premium_ui.dart';
+import 'package:falora/widgets/reading_record_card.dart';
 import 'package:falora/widgets/reward_ad_helper.dart';
+import 'package:falora/widgets/tarot_card_picker_sheet.dart';
+import 'package:falora/widgets/tarot_card_widgets.dart';
 
 bool get _isMobilePlatform => !kIsWeb;
 
@@ -75,7 +84,6 @@ void main() async {
 
 const _card = faloraCard;
 const _accent = faloraAccent;
-const _gold = faloraGold;
 const _textPrimary = faloraTextPrimary;
 const _textSecondary = faloraTextSecondary;
 
@@ -143,6 +151,7 @@ class _FaloraShellState extends State<FaloraShell> {
   final List<FortuneReading> _fortuneRequests = [];
   final List<FortuneReading> _coupleCompatibilityRequests = [];
   final Map<String, ValueNotifier<FortuneReading>> _readingNotifiers = {};
+  final Map<String, Timer> _readyTimers = {};
   final AiService _aiService =
       useRealAi ? OpenAiBackendService() : createAiService();
 
@@ -160,11 +169,16 @@ class _FaloraShellState extends State<FaloraShell> {
     _user = widget.user;
     TokenService.instance.bindLiveUser(_userId);
     unawaited(PlayBillingService.instance.init());
+    unawaited(TarotDeckService.instance.loadDeck());
     _loadUserFortunes();
   }
 
   @override
   void dispose() {
+    for (final timer in _readyTimers.values) {
+      timer.cancel();
+    }
+    _readyTimers.clear();
     PlayBillingService.instance.dispose();
     super.dispose();
   }
@@ -190,6 +204,101 @@ class _FaloraShellState extends State<FaloraShell> {
         _readingNotifiers[r.id] = ValueNotifier(r);
       }
     });
+    _armReadyAtTimersForLoadedReadings();
+  }
+
+  FortuneReading _newPendingReading({
+    required String id,
+    required FortuneCategory category,
+    required DateTime createdAt,
+    required String summary,
+    bool isManualPremium = false,
+    String? manualReaderName,
+    List<TarotCardSelection> selectedTarotCards = const [],
+  }) {
+    final readyAt = computeReadyAt(createdAt);
+    ReadingReadyLogger.submitCreated(id);
+    ReadingReadyLogger.readyAtSet(id, readyAt);
+    return FortuneReading(
+      id: id,
+      category: category,
+      status: FortuneStatus.hazirlaniyor,
+      createdAt: createdAt,
+      summary: summary,
+      result: '',
+      readyAt: readyAt,
+      firestoreStatus: 'pending',
+      usesDelayGate: true,
+      isManualPremium: isManualPremium,
+      manualReaderName: manualReaderName,
+      selectedTarotCards: selectedTarotCards,
+    );
+  }
+
+  void _armReadyAtTimersForLoadedReadings() {
+    for (final list in [_fortuneRequests, _coupleCompatibilityRequests]) {
+      for (final reading in list) {
+        if (reading.readyAt == null) continue;
+        if (reading.isReadyDisplay) continue;
+        if (reading.hasResult && !isFortuneResultError(reading.result)) {
+          if (reading.isReadyAtElapsed) {
+            _onReadyAtElapsed(reading, list);
+          } else {
+            ReadingReadyLogger.resultReadyLockedUntilReadyAt(reading.id);
+            _scheduleReadyAtUnlock(reading, list);
+          }
+        } else if (!reading.isReadyAtElapsed) {
+          _scheduleReadyAtUnlock(reading, list);
+        }
+      }
+    }
+  }
+
+  void _scheduleReadyAtUnlock(FortuneReading reading, List<FortuneReading> list) {
+    _readyTimers[reading.id]?.cancel();
+    final delay = reading.remainingUntilReady;
+    if (delay <= Duration.zero) {
+      _onReadyAtElapsed(reading, list);
+      return;
+    }
+    _readyTimers[reading.id] = Timer(
+      delay + const Duration(milliseconds: 200),
+      () {
+        if (!mounted) return;
+        final idx = list.indexWhere((r) => r.id == reading.id);
+        if (idx == -1) return;
+        _onReadyAtElapsed(list[idx], list);
+      },
+    );
+  }
+
+  void _onReadyAtElapsed(FortuneReading reading, List<FortuneReading> list) {
+    _readyTimers.remove(reading.id)?.cancel();
+    ReadingReadyLogger.countdownDone(reading.id);
+    final idx = list.indexWhere((r) => r.id == reading.id);
+    if (idx == -1) return;
+    final current = list[idx];
+    if (!current.hasResult || isFortuneResultError(current.result)) {
+      if (mounted) setState(() {});
+      return;
+    }
+    if (!current.isReadyDisplay) {
+      if (mounted) setState(() {});
+      return;
+    }
+    if (!current.isManualPremium && current.firestoreStatus != 'ready') {
+      unawaited(_markReadingReady(current, list));
+    }
+    final refreshed = current.copyWith(
+      status: FortuneStatus.hazir,
+      firestoreStatus: current.isManualPremium ? 'answered' : 'ready',
+    );
+    if (mounted) {
+      setState(() => list[idx] = refreshed);
+    } else {
+      list[idx] = refreshed;
+    }
+    _readingNotifiers[current.id]?.value = refreshed;
   }
 
   bool _checkTokenBalance({
@@ -248,6 +357,42 @@ class _FaloraShellState extends State<FaloraShell> {
     return false;
   }
 
+  Future<bool> _checkCategoryTokenBalance(int tokenCost) async {
+    debugPrint('CATEGORY TOKEN CHECK');
+    if (_liveUser.tokens >= tokenCost) {
+      debugPrint('CATEGORY TOKEN CHECK OK');
+      return true;
+    }
+    if (!mounted) return false;
+
+    final goShop = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yetersiz Jeton'),
+        content: Text(
+          'Bu yorum için $tokenCost jeton gerekiyor.\n'
+          'Jeton bakiyeniz yetersiz.\n'
+          'Jeton mağazasından paket satın alabilirsiniz.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Jeton Yükle'),
+          ),
+        ],
+      ),
+    );
+
+    if (goShop == true && mounted) {
+      _openShop();
+    }
+    return false;
+  }
+
   void _showSubmitError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -278,6 +423,10 @@ class _FaloraShellState extends State<FaloraShell> {
   }
 
   void _clearSessionData() {
+    for (final timer in _readyTimers.values) {
+      timer.cancel();
+    }
+    _readyTimers.clear();
     _fortuneRequests.clear();
     _coupleCompatibilityRequests.clear();
     _readingNotifiers.clear();
@@ -335,6 +484,18 @@ class _FaloraShellState extends State<FaloraShell> {
   }
 
   void _openSonuc(FortuneReading reading) {
+    if (!reading.isViewable) {
+      final remaining = reading.remainingUntilReady;
+      ReadingReadyLogger.resultOpenBlockedRemainingTime(reading.id, remaining);
+      final message = reading.readyAt != null && !reading.isReadyAtElapsed
+          ? 'Yorumunuz hazırlanıyor. Kalan süre: ${formatReadingCountdown(remaining)}'
+          : 'Yorumunuz hazırlanıyor.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      return;
+    }
+    ReadingReadyLogger.resultOpenAllowed(reading.id);
     final notifier = _readingNotifiers[reading.id];
     if (notifier == null) return;
     Navigator.of(context).push(
@@ -352,6 +513,30 @@ class _FaloraShellState extends State<FaloraShell> {
       Navigator.of(context).push(
         faloraPageRoute<void>(
           CiftUyumuFormPage(onSubmit: _submitCiftUyumu),
+        ),
+      );
+      return;
+    }
+    if (cat == FortuneCategory.ruyaTabiri) {
+      Navigator.of(context).push(
+        faloraPageRoute<void>(
+          DreamInterpretationFormPage(onSubmit: _submitDreamInterpretation),
+        ),
+      );
+      return;
+    }
+    if (cat == FortuneCategory.numeroloji) {
+      Navigator.of(context).push(
+        faloraPageRoute<void>(
+          NumerologyFormPage(onSubmit: _submitNumerology),
+        ),
+      );
+      return;
+    }
+    if (cat == FortuneCategory.burcYorumu) {
+      Navigator.of(context).push(
+        faloraPageRoute<void>(
+          HoroscopeFormPage(onSubmit: _submitHoroscope),
         ),
       );
       return;
@@ -467,6 +652,20 @@ class _FaloraShellState extends State<FaloraShell> {
       status: status,
       firestoreStatus: firestoreStatus,
     );
+
+    if (result != null &&
+        result.isNotEmpty &&
+        !isFortuneResultError(result)) {
+      if (updated.isReadyDisplay) {
+        if (!updated.isManualPremium) {
+          unawaited(_markReadingReady(updated, list));
+        }
+      } else if (updated.readyAt != null && !updated.isReadyAtElapsed) {
+        ReadingReadyLogger.resultReadyLockedUntilReadyAt(id);
+        _scheduleReadyAtUnlock(updated, list);
+      }
+    }
+
     if (!mounted) {
       list[idx] = updated;
       _readingNotifiers[id]?.value = updated;
@@ -474,12 +673,6 @@ class _FaloraShellState extends State<FaloraShell> {
     }
     setState(() => list[idx] = updated);
     _readingNotifiers[id]?.value = updated;
-
-    if (result != null &&
-        result.isNotEmpty &&
-        !isFortuneResultError(result)) {
-      unawaited(_markReadingReady(updated, list));
-    }
   }
 
   Future<void> _resolveFortuneInBackground({
@@ -491,6 +684,7 @@ class _FaloraShellState extends State<FaloraShell> {
     required String burc,
     required String niyet,
     List<String>? photoNames,
+    List<TarotCardSelection>? selectedTarotCards,
   }) async {
     final storage = FortuneStorageService.instance;
     debugPrint('FORTUNE BACKEND START');
@@ -515,6 +709,7 @@ class _FaloraShellState extends State<FaloraShell> {
         intention: niyet,
         tellerId: tellerId,
         imageNames: photoNames ?? const [],
+        selectedTarotCards: selectedTarotCards ?? const [],
       );
       debugPrint('FORTUNE BACKEND SUCCESS');
       await storage.updateFortuneResult(requestId, result);
@@ -529,6 +724,53 @@ class _FaloraShellState extends State<FaloraShell> {
         await storage.markFortuneError(requestId);
       } catch (markError) {
         debugPrint('FORTUNE ERROR STATUS SAVE FAILED: $markError');
+      }
+      if (!mounted) return;
+      _updateReading(
+        _fortuneRequests,
+        requestId,
+        result: aiErrorMessage,
+        firestoreStatus: 'error',
+      );
+    }
+  }
+
+  Future<void> _resolveAutoCategoryInBackground({
+    required String requestId,
+    required FortuneCategory category,
+    required String backendType,
+    required Map<String, dynamic> inputData,
+    required String logPrefix,
+  }) async {
+    final storage = FortuneStorageService.instance;
+    debugPrint('$logPrefix BACKEND START');
+    debugPrint('API ENDPOINT: $apiBaseUrl/generate-fortune');
+    try {
+      final cached = await AiResultCache.get(_userId, requestId);
+      if (cached != null && cached.isNotEmpty) {
+        debugPrint('CATEGORY RESPONSE SUCCESS');
+        await storage.updateFortuneResult(requestId, cached);
+        if (!mounted) return;
+        _updateReading(_fortuneRequests, requestId, result: cached);
+        return;
+      }
+
+      final result = await _aiService.generateCategoryReading(
+        categoryType: backendType,
+        inputData: inputData,
+      );
+      debugPrint('CATEGORY RESPONSE SUCCESS');
+      await storage.updateFortuneResult(requestId, result);
+      await AiResultCache.put(_userId, requestId, result);
+      if (!mounted) return;
+      _updateReading(_fortuneRequests, requestId, result: result);
+    } catch (e, stackTrace) {
+      debugPrint('CATEGORY RESPONSE ERROR: $e');
+      debugPrint(stackTrace.toString());
+      try {
+        await storage.markFortuneError(requestId);
+      } catch (markError) {
+        debugPrint('CATEGORY ERROR STATUS SAVE FAILED: $markError');
       }
       if (!mounted) return;
       _updateReading(
@@ -669,13 +911,18 @@ class _FaloraShellState extends State<FaloraShell> {
     required int tabIndex,
     required String successMessage,
     FortuneReading? openReading,
+    bool popToRoot = false,
   }) {
     debugPrint('$logPrefix NAVIGATION START');
     if (!mounted) {
       debugPrint('$logPrefix NAVIGATION SKIPPED (not mounted)');
       return;
     }
-    Navigator.of(context).pop();
+    if (popToRoot) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } else {
+      Navigator.of(context).pop();
+    }
     if (!mounted) {
       debugPrint('$logPrefix NAVIGATION SKIPPED (not mounted after pop)');
       return;
@@ -709,7 +956,16 @@ class _FaloraShellState extends State<FaloraShell> {
     String burc,
     String niyet, {
     List<String>? photoNames,
+    List<TarotCardSelection>? selectedTarotCards,
   }) async {
+    if (cat == FortuneCategory.tarot) {
+      final cards = selectedTarotCards ?? const [];
+      if (cards.length != tarotSpreadCardCount) {
+        _showSubmitError('Tarot falı için $tarotSpreadCardCount kart seçmelisiniz.');
+        return;
+      }
+    }
+
     await FortuneSubmitLogger.logSubmitStart(
       fortuneType: cat.label,
       selectedReader: '${teller.id} (${teller.name})',
@@ -738,6 +994,7 @@ class _FaloraShellState extends State<FaloraShell> {
 
       requestId = storage.newFortuneId();
       final now = DateTime.now();
+      final readyAt = computeReadyAt(now);
 
       try {
         debugPrint('FORTUNE REQUEST CREATE START');
@@ -752,6 +1009,9 @@ class _FaloraShellState extends State<FaloraShell> {
           imageNames: photoNames ?? const [],
           tellerId: teller.id,
           tellerName: teller.name,
+          selectedTarotCards: selectedTarotCards ?? const [],
+          createdAt: now,
+          readyAt: readyAt,
         );
         debugPrint('FORTUNE REQUEST CREATE OK');
       } catch (e, stackTrace) {
@@ -772,26 +1032,28 @@ class _FaloraShellState extends State<FaloraShell> {
         rethrow;
       }
 
-      final summary =
-          '${cat.label} — ${teller.name} — $name, $age, $burc\nNiyet: $niyet';
-      final reading = FortuneReading(
+      final summary = cat == FortuneCategory.tarot &&
+              (selectedTarotCards?.isNotEmpty ?? false)
+          ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+              'Niyet: $niyet\n'
+              '${selectedTarotCards!.length} tarot kartı seçildi'
+          : '${cat.label} — ${teller.name} — $name, $age, $burc\nNiyet: $niyet';
+      final reading = _newPendingReading(
         id: requestId,
         category: cat,
-        status: FortuneStatus.hazirlaniyor,
         createdAt: now,
         summary: summary,
-        result: '',
-        firestoreStatus: 'pending',
-        usesDelayGate: false,
+        selectedTarotCards: selectedTarotCards ?? const [],
       );
       _registerReading(reading);
       _addFortuneRequest(reading);
+      _scheduleReadyAtUnlock(reading, _fortuneRequests);
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'FORTUNE',
         tabIndex: 1,
         successMessage: 'Falınız hazırlanıyor...',
-        openReading: reading,
+        popToRoot: true,
       );
       unawaited(_onFortuneSubmitted());
       unawaited(
@@ -804,6 +1066,7 @@ class _FaloraShellState extends State<FaloraShell> {
           burc: burc,
           niyet: niyet,
           photoNames: photoNames,
+          selectedTarotCards: selectedTarotCards,
         ),
       );
     } on FortuneSubmitException catch (e) {
@@ -819,6 +1082,118 @@ class _FaloraShellState extends State<FaloraShell> {
       }
       _showSubmitError('Fal oluşturulamadı, jetonun düşmedi.');
     }
+  }
+
+  Future<void> _submitAutoCategory({
+    required FortuneCategory category,
+    required String logPrefix,
+    required Map<String, dynamic> inputData,
+  }) async {
+    debugPrint('$logPrefix SUBMIT START');
+    final tokenCost = tokenCostForCategory(category);
+    final backendType = backendCategoryType(category);
+    final title = categoryFortuneTitle(category);
+    final summary = buildCategorySummary(category, inputData);
+
+    final storage = FortuneStorageService.instance;
+    String? requestId;
+    var tokensDeducted = false;
+
+    try {
+      if (!await _checkCategoryTokenBalance(tokenCost)) return;
+
+      requestId = storage.newFortuneId();
+      final now = DateTime.now();
+      final readyAt = computeReadyAt(now);
+
+      await storage.createCategoryFortune(
+        id: requestId,
+        userId: _userId,
+        category: category,
+        title: title,
+        inputData: inputData,
+        tokenCost: tokenCost,
+        createdAt: now,
+        readyAt: readyAt,
+      );
+
+      await _deductSubmitTokens(logPrefix: logPrefix, amount: tokenCost);
+      tokensDeducted = true;
+
+      final reading = _newPendingReading(
+        id: requestId,
+        category: category,
+        createdAt: now,
+        summary: summary,
+      );
+      _registerReading(reading);
+      _addFortuneRequest(reading);
+      _scheduleReadyAtUnlock(reading, _fortuneRequests);
+
+      _navigateAfterFortuneSubmit(
+        logPrefix: logPrefix,
+        tabIndex: 1,
+        successMessage: '${category.label} hazırlanıyor...',
+        popToRoot: true,
+      );
+      unawaited(_onFortuneSubmitted());
+      unawaited(
+        _resolveAutoCategoryInBackground(
+          requestId: requestId,
+          category: category,
+          backendType: backendType,
+          inputData: inputData,
+          logPrefix: logPrefix,
+        ),
+      );
+    } on FortuneSubmitException catch (e) {
+      FortuneSubmitLogger.logError(e);
+      if (requestId != null && !tokensDeducted) {
+        await _rollbackFortuneRequest(requestId);
+      }
+      _showSubmitError('Yorum oluşturulamadı, jetonun düşmedi.');
+    } catch (e, stackTrace) {
+      FortuneSubmitLogger.logError(e, stackTrace);
+      if (requestId != null && !tokensDeducted) {
+        await _rollbackFortuneRequest(requestId);
+      }
+      _showSubmitError('Yorum oluşturulamadı, jetonun düşmedi.');
+    }
+  }
+
+  Future<void> _submitDreamInterpretation(String dreamText) async {
+    await _submitAutoCategory(
+      category: FortuneCategory.ruyaTabiri,
+      logPrefix: 'DREAM',
+      inputData: {'dreamText': dreamText},
+    );
+  }
+
+  Future<void> _submitNumerology(String name, DateTime birthDate) async {
+    await _submitAutoCategory(
+      category: FortuneCategory.numeroloji,
+      logPrefix: 'NUMEROLOGY',
+      inputData: {
+        'name': name,
+        'birthDate': formatBirthDate(birthDate),
+      },
+    );
+  }
+
+  Future<void> _submitHoroscope(
+    String sunSign,
+    String moonSign,
+    String focusArea,
+  ) async {
+    await _submitAutoCategory(
+      category: FortuneCategory.burcYorumu,
+      logPrefix: 'HOROSCOPE',
+      inputData: {
+        'sunSign': sunSign,
+        'moonSign': moonSign,
+        'focusArea': focusArea,
+      },
+    );
   }
 
   Future<void> _submitManualFortune({
@@ -849,6 +1224,7 @@ class _FaloraShellState extends State<FaloraShell> {
     final storage = ManualFortuneStorageService.instance;
     final requestId = storage.newRequestId();
     final now = DateTime.now();
+    final readyAt = computeReadyAt(now);
     var tokensDeducted = false;
 
     try {
@@ -874,26 +1250,24 @@ class _FaloraShellState extends State<FaloraShell> {
 
       final summary =
           '${category.label} — ${reader.name} (Özel)\n$name, $age, $zodiac\nNiyet: $intention';
-      final reading = FortuneReading(
+      final reading = _newPendingReading(
         id: requestId,
         category: category,
-        status: FortuneStatus.hazirlaniyor,
         createdAt: now,
         summary: summary,
-        result: '',
-        firestoreStatus: 'pending',
         isManualPremium: true,
         manualReaderName: reader.name,
       );
       _registerReading(reading);
       _addFortuneRequest(reading);
+      _scheduleReadyAtUnlock(reading, _fortuneRequests);
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'MANUAL',
         tabIndex: 1,
         successMessage:
             'Özel fal talebin alındı. $tokenCost jeton hesabından düşüldü.',
-        openReading: reading,
+        popToRoot: true,
       );
     } on ManualFortuneException catch (e) {
       FortuneSubmitLogger.logError(e);
@@ -941,6 +1315,7 @@ class _FaloraShellState extends State<FaloraShell> {
 
       requestId = storage.newCoupleId();
       final now = DateTime.now();
+      final readyAt = computeReadyAt(now);
       final summary =
           'Kadın: $kadinIsim, $kadinYas, $kadinBurc\n'
           'Erkek: $erkekIsim, $erkekYas, $erkekBurc';
@@ -958,6 +1333,8 @@ class _FaloraShellState extends State<FaloraShell> {
           maleAge: erkekYas,
           womanImageName: kadinFoto.name,
           manImageName: erkekFoto.name,
+          createdAt: now,
+          readyAt: readyAt,
         );
         debugPrint('COUPLE REQUEST CREATE OK');
       } catch (e, stackTrace) {
@@ -978,24 +1355,21 @@ class _FaloraShellState extends State<FaloraShell> {
         rethrow;
       }
 
-      final reading = FortuneReading(
+      final reading = _newPendingReading(
         id: requestId,
         category: FortuneCategory.ciftUyumu,
-        status: FortuneStatus.hazirlaniyor,
         createdAt: now,
         summary: summary,
-        result: '',
-        firestoreStatus: 'pending',
-        usesDelayGate: false,
       );
       _registerReading(reading);
       _addCoupleRequest(reading);
+      _scheduleReadyAtUnlock(reading, _coupleCompatibilityRequests);
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'COUPLE',
         tabIndex: 2,
         successMessage: 'Uyum raporunuz hazırlanıyor...',
-        openReading: reading,
+        popToRoot: true,
       );
       unawaited(_onFortuneSubmitted());
       unawaited(
@@ -1057,7 +1431,7 @@ class _FaloraShellState extends State<FaloraShell> {
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Center(
-                    child: _TokenChip(tokens: user.tokens),
+                    child: FaloraTokenMedallion(tokens: user.tokens, compact: true),
                   ),
                 ),
               ],
@@ -1089,65 +1463,10 @@ class _FaloraShellState extends State<FaloraShell> {
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: faloraAccent.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: EdgeInsets.only(bottom: _mobileBottomInset(context)),
-          child: BottomNavigationBar(
-            currentIndex: _tabIndex,
-            onTap: (i) => setState(() => _tabIndex = i),
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Ana Sayfa'),
-              BottomNavigationBarItem(icon: Icon(Icons.auto_stories_rounded), label: 'Fallarım'),
-              BottomNavigationBarItem(icon: Icon(Icons.favorite_rounded), label: 'Çift Uyumu'),
-              BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profil'),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TokenChip extends StatelessWidget {
-  const _TokenChip({required this.tokens});
-
-  final int tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: _gold.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _gold.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.toll, color: _gold, size: 16),
-          const SizedBox(width: 4),
-          Text(
-            '$tokens',
-            style: const TextStyle(
-              color: _gold,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
-          ),
-        ],
+      bottomNavigationBar: FaloraAncientBottomNav(
+        currentIndex: _tabIndex,
+        onTap: (i) => setState(() => _tabIndex = i),
+        bottomPadding: _mobileBottomInset(context),
       ),
     );
   }
@@ -1259,51 +1578,29 @@ class _FallarimPage extends StatelessWidget {
       itemCount: readings.length,
       itemBuilder: (context, i) {
         final r = readings[i];
-        final hazir = r.displayStatus == FortuneStatus.hazir;
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: CategoryIconWidget(
-              iconPath: r.category.iconPath,
-              fallbackIcon: r.category.fallbackIcon,
-              color: r.category.color,
-              size: 44,
-              iconSize: 24,
-            ),
-            title: Text(
-              r.isManualPremium
-                  ? '${r.category.label} · ${r.manualReaderName ?? 'Özel'}'
-                  : r.category.label,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              r.isManualPremium
-                  ? '${_formatDate(r.createdAt)} · ${hazir ? 'Hazır' : 'Beklemede'}'
-                  : _formatDate(r.createdAt),
-              style: const TextStyle(color: _textSecondary, fontSize: 12),
-            ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: hazir
-                    ? Colors.green.withValues(alpha: 0.2)
-                    : Colors.orange.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(20),
+        final notifier = readingNotifiers[r.id];
+        if (notifier == null) return const SizedBox.shrink();
+        return ValueListenableBuilder<FortuneReading>(
+          valueListenable: notifier,
+          builder: (context, reading, _) {
+            return ReadingRecordCard(
+              leading: CategoryIconWidget(
+                iconPath: reading.category.iconPath,
+                fallbackIcon: reading.category.fallbackIcon,
+                color: reading.category.color,
+                size: 48,
+                iconSize: 22,
               ),
-              child: Text(
-                hazir
-                    ? 'Hazır'
-                    : (r.isManualPremium ? 'Beklemede' : 'Hazırlanıyor'),
-                style: TextStyle(
-                  color: hazir ? Colors.greenAccent : Colors.orangeAccent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            onTap: readingNotifiers.containsKey(r.id) ? () => onTap(r) : null,
-          ),
+              title: reading.isManualPremium
+                  ? '${reading.category.label} · ${reading.manualReaderName ?? 'Özel'}'
+                  : reading.category.label,
+              subtitle: reading.isManualPremium
+                  ? '${_formatDate(reading.createdAt)} · ${reading.isReadyDisplay ? 'Hazır' : 'Beklemede'}'
+                  : _formatDate(reading.createdAt),
+              reading: reading,
+              onTap: () => onTap(reading),
+            );
+          },
         );
       },
     );
@@ -1346,53 +1643,12 @@ class CiftUyumuTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [
-                        FortuneCategory.ciftUyumu.color.withValues(alpha: 0.18),
-                        _accent.withValues(alpha: 0.1),
-                      ],
-                    ),
-                    border: Border.all(
-                      color: FortuneCategory.ciftUyumu.color.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      CategoryIconWidget(
-                        iconPath: FortuneCategory.ciftUyumu.iconPath,
-                        fallbackIcon: FortuneCategory.ciftUyumu.fallbackIcon,
-                        color: FortuneCategory.ciftUyumu.color,
-                        size: 44,
-                        iconSize: 24,
-                        hasGradient: true,
-                      ),
-                      const SizedBox(height: 14),
-                      const Text(
-                        'Çift Uyumu Analizi',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: _textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Burç uyumu, çekim, iletişim ve ilişki potansiyelinizi keşfedin.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: _textSecondary, height: 1.5),
-                      ),
-                      const SizedBox(height: 18),
-                      ElevatedButton.icon(
-                        onPressed: onStart,
-                        icon: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 16),
-                        label: const Text('Yeni Analiz Başlat'),
-                      ),
-                    ],
-                  ),
+                FaloraZodiacHero(
+                  title: 'Çift Uyumu Analizi',
+                  subtitle:
+                      'Burç uyumu, çekim, iletişim ve ilişki potansiyelinizi keşfedin.',
+                  accent: FortuneCategory.ciftUyumu.color,
+                  onStart: onStart,
                 ),
                 const SizedBox(height: 24),
                 const Text(
@@ -1436,49 +1692,26 @@ class CiftUyumuTab extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, i) {
                 final r = readings[i];
-                final hazir = r.displayStatus == FortuneStatus.hazir;
-                return Card(
-                  child: ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: CategoryIconWidget(
-                      iconPath: FortuneCategory.ciftUyumu.iconPath,
-                      fallbackIcon: FortuneCategory.ciftUyumu.fallbackIcon,
-                      color: FortuneCategory.ciftUyumu.color,
-                      size: 44,
-                      iconSize: 24,
-                      hasGradient: true,
-                    ),
-                    title: Text(
-                      _coupleListTitle(r.summary),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      _FallarimPage.formatDate(r.createdAt),
-                      style: const TextStyle(color: _textSecondary, fontSize: 12),
-                    ),
-                    trailing: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: hazir
-                            ? Colors.green.withValues(alpha: 0.2)
-                            : Colors.orange.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
+                final notifier = readingNotifiers[r.id];
+                if (notifier == null) return const SizedBox.shrink();
+                return ValueListenableBuilder<FortuneReading>(
+                  valueListenable: notifier,
+                  builder: (context, reading, _) {
+                    return ReadingRecordCard(
+                      leading: CategoryIconWidget(
+                        iconPath: FortuneCategory.ciftUyumu.iconPath,
+                        fallbackIcon: FortuneCategory.ciftUyumu.fallbackIcon,
+                        color: FortuneCategory.ciftUyumu.color,
+                        size: 48,
+                        iconSize: 22,
+                        hasGradient: true,
                       ),
-                      child: Text(
-                        hazir ? 'Hazır' : 'Hazırlanıyor',
-                        style: TextStyle(
-                          color: hazir ? Colors.greenAccent : Colors.orangeAccent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    onTap: readingNotifiers.containsKey(r.id) ? () => onTap(r) : null,
-                  ),
+                      title: _coupleListTitle(reading.summary),
+                      subtitle: _FallarimPage.formatDate(reading.createdAt),
+                      reading: reading,
+                      onTap: () => onTap(reading),
+                    );
+                  },
                 );
               },
             ),
@@ -1506,6 +1739,7 @@ typedef NormalSubmit = Future<void> Function(
   String burc,
   String niyet, {
   List<String>? photoNames,
+  List<TarotCardSelection>? selectedTarotCards,
 });
 
 class NormalFalFormPage extends StatefulWidget {
@@ -1531,6 +1765,9 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
   bool _submitting = false;
+  List<TarotCardSelection> _selectedTarotCards = const [];
+
+  bool get _isTarot => widget.category == FortuneCategory.tarot;
 
   @override
   void dispose() {
@@ -1540,8 +1777,28 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
     super.dispose();
   }
 
+  Future<void> _openTarotPicker() async {
+    final result = await showTarotCardPickerSheet(
+      context,
+      initialSelection: _selectedTarotCards,
+    );
+    if (result != null && mounted) {
+      setState(() => _selectedTarotCards = result);
+    }
+  }
+
   Future<void> _submit() async {
     if (_submitting || !_formKey.currentState!.validate()) return;
+    if (_isTarot && _selectedTarotCards.length != tarotSpreadCardCount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Tarot falı için $tarotSpreadCardCount kart seçmelisiniz.',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _submitting = true);
     try {
       await widget.onSubmit(
@@ -1551,6 +1808,8 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
         int.parse(_ageCtrl.text.trim()),
         _burc,
         _niyetCtrl.text.trim(),
+        selectedTarotCards:
+            _isTarot ? _selectedTarotCards : null,
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -1611,19 +1870,41 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Niyet gerekli' : null,
               ),
+              if (_isTarot) ...[
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FaloraSealButton(
+                        label: 'Kartları Seç',
+                        icon: Icons.style_rounded,
+                        enabled: !_submitting,
+                        onPressed: _openTarotPicker,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    FaloraSelectionCounter(
+                      selected: _selectedTarotCards.length,
+                      total: tarotSpreadCardCount,
+                      prefix:
+                          '${_selectedTarotCards.length}/$tarotSpreadCardCount',
+                    ),
+                  ],
+                ),
+                if (_selectedTarotCards.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  TarotSelectedCardsStrip(cards: _selectedTarotCards),
+                ],
+              ],
               const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _submitting ? null : _submit,
-                child: _submitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Falı Gönder'),
+              FaloraPrimaryButton(
+                label: 'Falı Gönder',
+                loading: _submitting,
+                onPressed: (_submitting ||
+                        (_isTarot &&
+                            _selectedTarotCards.length != tarotSpreadCardCount))
+                    ? null
+                    : _submit,
               ),
             ],
           ),
@@ -1672,7 +1953,7 @@ class _KahveFormPageState extends State<KahveFormPage> {
           content: Text(
             'Lütfen 2 fincan ve 1 tabak fotoğrafı yükleyin. Tüm alanlar zorunludur.',
           ),
-          backgroundColor: Color(0xFFB76E79),
+          backgroundColor: faloraBronzeDark,
         ),
       );
       return;
@@ -1870,7 +2151,7 @@ class _CiftUyumuFormPageState extends State<CiftUyumuFormPage> {
           content: Text(
             'Lütfen kadın ve erkek fotoğraflarını yükleyin. Her iki alan zorunludur.',
           ),
-          backgroundColor: Color(0xFFB76E79),
+          backgroundColor: faloraBronzeDark,
         ),
       );
       return;
@@ -1920,7 +2201,7 @@ class _CiftUyumuFormPageState extends State<CiftUyumuFormPage> {
               const SizedBox(height: 24),
               _PersonSection(
                 title: 'Kadın',
-                color: const Color(0xFFE879A8),
+                color: FortuneCategory.ciftUyumu.color,
                 isimCtrl: _kadinIsim,
                 yasCtrl: _kadinYas,
                 burc: _kadinBurc,
@@ -1931,7 +2212,7 @@ class _CiftUyumuFormPageState extends State<CiftUyumuFormPage> {
               const SizedBox(height: 24),
               _PersonSection(
                 title: 'Erkek',
-                color: const Color(0xFF64B5F6),
+                color: const Color(0xFF5C4228),
                 isimCtrl: _erkekIsim,
                 yasCtrl: _erkekYas,
                 burc: _erkekBurc,
@@ -2076,19 +2357,17 @@ class _FormHeader extends StatelessWidget {
             children: [
               Text(
                 category.label,
-                style: const TextStyle(
+                style: FaloraTypography.titleLarge.copyWith(
                   fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: _textPrimary,
+                  color: faloraInk,
                 ),
               ),
               if (teller != null) ...[
                 const SizedBox(height: 4),
                 Text(
                   '${teller!.name} · ${teller!.tokenCost} jeton',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: teller!.accentColor.withValues(alpha: 0.95),
+                  style: FaloraTypography.bodyMedium.copyWith(
+                    color: faloraInkSoft,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2217,6 +2496,9 @@ class _SonucContentState extends State<_SonucContent>
     final reading = widget.reading;
     final isError = isFortuneResultError(reading.result);
     final isCouple = reading.category == FortuneCategory.ciftUyumu;
+    final isAutoCategory = isAutoOnlyCategory(reading.category);
+    final hasTarotCards = reading.category == FortuneCategory.tarot &&
+        reading.selectedTarotCards.isNotEmpty;
     final compatibility = isCouple && !isError
         ? parseCompatibilityPercent(reading.result)
         : null;
@@ -2270,17 +2552,21 @@ class _SonucContentState extends State<_SonucContent>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isCouple ? 'Uyum Raporu' : 'Fal Yorumun',
-                                style: TextStyle(
-                                  color: faloraGold.withValues(alpha: 0.9),
+                                isCouple
+                                    ? 'Uyum Raporu'
+                                    : isAutoCategory
+                                        ? reading.category.resultScreenTitle
+                                        : 'Fal Yorumun',
+                                style: FaloraTypography.sectionHeading.copyWith(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w700,
                                   letterSpacing: 1.1,
                                 ),
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                reading.category.label,
+                                isAutoCategory
+                                    ? reading.category.resultScreenTitle
+                                    : reading.category.label,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 22,
@@ -2312,10 +2598,28 @@ class _SonucContentState extends State<_SonucContent>
                       const SizedBox(height: 28),
                       Text(
                         'Detaylı Yorum',
-                        style: TextStyle(
-                          color: faloraGold.withValues(alpha: 0.9),
+                        style: FaloraTypography.sectionHeading.copyWith(
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ] else if (hasTarotCards) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        'Seçilen Kartlar',
+                        style: FaloraTypography.sectionHeading.copyWith(
+                          fontSize: 12,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TarotResultCardsGrid(cards: reading.selectedTarotCards),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Tarot Yorumu',
+                        style: FaloraTypography.sectionHeading.copyWith(
+                          fontSize: 12,
                           letterSpacing: 1.1,
                         ),
                       ),
@@ -2340,12 +2644,10 @@ class _SonucContentState extends State<_SonucContent>
                     }),
                     if (widget.answerImageInfo['base64']?.isNotEmpty == true) ...[
                       const SizedBox(height: 24),
-                      const Text(
+                      Text(
                         'Falcı Görseli',
-                        style: TextStyle(
-                          color: faloraGold,
+                        style: FaloraTypography.sectionHeading.copyWith(
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
                           letterSpacing: 1.1,
                         ),
                       ),

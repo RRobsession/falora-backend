@@ -26,7 +26,7 @@ const manualFortuneReaders = <ManualFortuneReader>[
     title: 'Sezgisel Yorumcu',
     bio:
         'Genç ve modern bakış açısıyla kişisel yorum sunar. Jeton harcanmaz; yanıtınız özenle hazırlanır.',
-    accentColor: Color(0xFF5C6BC0),
+    accentColor: Color(0xFF5C4228),
     avatarAsset: 'assets/avatars/serdar.png',
   ),
   ManualFortuneReader(
@@ -35,7 +35,7 @@ const manualFortuneReaders = <ManualFortuneReader>[
     title: 'Bilge Yorumcu',
     bio:
         'Tecrübeli ve anaç yaklaşımıyla derinlemesine yorum yapar. Jeton harcanmaz; yanıtınız özenle hazırlanır.',
-    accentColor: Color(0xFFCE93D8),
+    accentColor: Color(0xFF7A5C3E),
     avatarAsset: 'assets/avatars/hatice.png',
   ),
 ];

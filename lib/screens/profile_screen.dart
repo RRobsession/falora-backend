@@ -526,7 +526,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         icon: Icons.storefront_rounded,
 
-                        iconColor: faloraGold,
+                        iconColor: faloraBronzeDark,
 
                         title: 'Jeton Mağazası',
 
@@ -616,11 +616,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       style: OutlinedButton.styleFrom(
 
-                        foregroundColor: faloraGold,
+                        foregroundColor: faloraBronzeDark,
 
                         side: BorderSide(
 
-                          color: faloraGold.withValues(alpha: 0.45),
+                          color: faloraBronze.withValues(alpha: 0.6),
 
                         ),
 
@@ -782,7 +782,7 @@ class _ProfileUserCard extends StatelessWidget {
 
                 fontWeight: FontWeight.w800,
 
-                color: faloraGold,
+                color: faloraInkHeading,
 
               ),
 
@@ -878,7 +878,7 @@ class _ProfileUserCard extends StatelessWidget {
 
                         children: [
 
-                          const Icon(Icons.toll, color: faloraGold, size: 18),
+                          const Icon(Icons.toll, color: faloraGoldReadable, size: 18),
 
                           const SizedBox(width: 6),
 
@@ -888,7 +888,7 @@ class _ProfileUserCard extends StatelessWidget {
 
                             style: const TextStyle(
 
-                              color: faloraGold,
+                              color: faloraInkHeading,
 
                               fontWeight: FontWeight.w700,
 

@@ -28,16 +28,18 @@ class CategoryIconWidget extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFE879A8), Color(0xFFA78BFA)],
+              colors: [Color(0xFFD4AF37), Color(0xFF8B6A3E)],
             ),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Color(0xFFB8860B), width: 0.8),
           )
         : BoxDecoration(
             color: color.withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.28)),
           );
 
-    final iconColor = hasGradient ? Colors.white : color;
+    final iconColor = hasGradient ? const Color(0xFF2E2115) : color;
 
     return SizedBox(
       width: size,

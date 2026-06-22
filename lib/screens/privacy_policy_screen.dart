@@ -30,7 +30,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
     _PolicySection(
       title: '4. Üçüncü Taraf Hizmetler',
       body:
-          'Uygulama Firebase (kimlik doğrulama, veritabanı, bildirimler), yapay zeka servisleri '
+          'Uygulama Firebase (kimlik doğrulama, veritabanı, bildirimler), yorum hizmetleri '
           've ödeme altyapıları gibi üçüncü taraf hizmetler kullanabilir. Bu hizmetler kendi '
           'gizlilik politikalarına tabidir.',
     ),
@@ -88,27 +88,14 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 },
                 icon: const Icon(Icons.open_in_new),
                 label: const Text('Web sürümünü aç'),
+                style: faloraOutlinedOnParchmentStyle(),
               ),
               const SizedBox(height: 16),
             ],
             for (final section in _sections) ...[
-              Text(
-                section.title,
-                style: const TextStyle(
-                  color: faloraGold,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
+              Text(section.title, style: FaloraTypography.sectionHeading),
               const SizedBox(height: 8),
-              Text(
-                section.body,
-                style: const TextStyle(
-                  color: faloraTextSecondary,
-                  fontSize: 14,
-                  height: 1.55,
-                ),
-              ),
+              Text(section.body, style: FaloraTypography.bodyOnParchment),
               const SizedBox(height: 20),
             ],
           ],

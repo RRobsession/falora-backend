@@ -3,6 +3,7 @@ import 'package:falora/auth/auth_validators.dart';
 import 'package:falora/screens/register_screen.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/falora_logo_header.dart';
+import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -165,8 +166,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             OutlinedButton(
                               onPressed: _loading ? null : _openRegister,
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: faloraGold,
-                                side: const BorderSide(color: faloraGold),
+                                foregroundColor: faloraBronzeDark,
+                                side: BorderSide(
+                                  color: faloraBronze.withValues(alpha: 0.6),
+                                ),
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 14),
                               ),

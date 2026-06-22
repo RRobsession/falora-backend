@@ -46,6 +46,8 @@ class ManualFortuneRequest {
 
     required this.createdAt,
 
+    this.readyAt,
+
     this.imageInfo = const [],
 
     this.answerImageInfo = const {},
@@ -106,6 +108,8 @@ class ManualFortuneRequest {
 
   final DateTime createdAt;
 
+  final DateTime? readyAt;
+
   final DateTime? answeredAt;
 
   final String answerText;
@@ -164,7 +168,11 @@ class ManualFortuneRequest {
 
       result: answerText,
 
+      readyAt: readyAt,
+
       firestoreStatus: status,
+
+      usesDelayGate: readyAt != null,
 
       isManualPremium: true,
 
@@ -279,6 +287,8 @@ class ManualFortuneRequest {
       answerImageInfo: answerImageInfo,
 
       createdAt: _parseTs(data['createdAt']),
+
+      readyAt: data['readyAt'] != null ? _parseTs(data['readyAt']) : null,
 
       answeredAt: data['answeredAt'] != null ? _parseTs(data['answeredAt']) : null,
 

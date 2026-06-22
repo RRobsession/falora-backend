@@ -1,7 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:falora/auth/auth_service.dart';
 import 'package:falora/auth/firebase_auth_service.dart';
-import 'package:falora/theme/falora_theme.dart';import 'package:falora/widgets/falora_logo_header.dart';
+import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/widgets/falora_logo_header.dart';
+import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
 
 class VerificationScreen extends StatefulWidget {
@@ -138,7 +140,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                           const Icon(
                             Icons.mark_email_unread_outlined,
                             size: 48,
-                            color: faloraGold,
+                            color: faloraGoldReadable,
                           ),
                           const SizedBox(height: 20),
                           const Text(
@@ -165,7 +167,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                             widget.email,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
-                              color: faloraGold,
+                              color: faloraInkHeading,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -195,18 +197,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
                           const SizedBox(height: 12),
                           OutlinedButton(
                             onPressed: _resending ? null : _resend,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: faloraGold,
-                              side: const BorderSide(color: faloraGold),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
+                            style: faloraOutlinedOnParchmentStyle(),
                             child: _resending
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: faloraGold,
+                                      color: faloraBronzeDark,
                                     ),
                                   )
                                 : const Text('Tekrar Gönder'),

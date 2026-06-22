@@ -2,11 +2,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:falora/picked_image.dart';
+import 'package:falora/theme/falora_theme.dart';
 
-const _card = Color(0xFF241A35);
-const _accent = Color(0xFF9B6DFF);
-const _textPrimary = Color(0xFFF0E6FF);
-const _textSecondary = Color(0xFFB8A8D0);
+const _card = faloraParchmentCard;
+const _accent = faloraBronze;
+const _textPrimary = faloraInk;
+const _textSecondary = faloraInkSoft;
 
 class ImageUploadCard extends StatelessWidget {
   const ImageUploadCard({
@@ -68,7 +69,7 @@ class ImageUploadCard extends StatelessWidget {
             border: Border.all(
               color: hasImage
                   ? accentColor.withValues(alpha: 0.6)
-                  : const Color(0xFF3D2E55),
+                  : faloraBronze.withValues(alpha: 0.35),
               width: hasImage ? 1.5 : 1,
             ),
             boxShadow: [
@@ -133,10 +134,10 @@ class ImageUploadCard extends StatelessWidget {
                   Container(
                     height: 100,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A1228),
+                      color: faloraParchmentInset,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: const Color(0xFF3D2E55),
+                        color: faloraBronze.withValues(alpha: 0.35),
                         style: BorderStyle.solid,
                       ),
                     ),

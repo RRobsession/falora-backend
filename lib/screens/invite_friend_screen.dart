@@ -103,7 +103,11 @@ class _InviteFriendScreenState extends State<InviteFriendScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(_error!, textAlign: TextAlign.center),
+                          Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: FaloraTypography.bodyOnParchment,
+                          ),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: _loadCode,
@@ -123,30 +127,22 @@ class _InviteFriendScreenState extends State<InviteFriendScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Container(
+                        FaloraParchmentCard(
                           padding: const EdgeInsets.all(22),
-                          decoration: faloraGlassDecoration(
-                            accent: faloraAccent,
-                            radius: 22,
-                            opacity: 0.18,
-                          ),
                           child: Column(
                             children: [
-                              const Text(
+                              Text(
                                 'Davet Kodun',
-                                style: TextStyle(
-                                  color: faloraTextSecondary,
-                                  fontSize: 13,
+                                style: FaloraTypography.labelLarge.copyWith(
+                                  color: faloraInkSoft,
                                 ),
                               ),
                               const SizedBox(height: 12),
                               SelectableText(
                                 _code ?? '—',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: faloraGold,
+                                style: FaloraTypography.goldReadable.copyWith(
                                   fontSize: 32,
-                                  fontWeight: FontWeight.w800,
                                   letterSpacing: 4,
                                 ),
                               ),
@@ -157,33 +153,21 @@ class _InviteFriendScreenState extends State<InviteFriendScreen> {
                         Text(
                           'Arkadaşın kayıt olurken bu kodu girsin. E-postasını doğruladığında '
                           'sen $referralInviterRewardTokens, o $referralInviteeRewardTokens jeton kazanır.',
-                          style: const TextStyle(
-                            color: faloraTextSecondary,
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
+                          style: FaloraTypography.bodyOnParchment,
                         ),
                         const SizedBox(height: 24),
-                        ElevatedButton.icon(
+                        FaloraPrimaryButton(
+                          label: 'Kodu Kopyala',
+                          icon: Icons.copy_rounded,
                           onPressed: _copyCode,
-                          icon: const Icon(Icons.copy_rounded),
-                          label: const Text('Kodu Kopyala'),
                         ),
                         const SizedBox(height: 12),
                         Builder(
                           builder: (buttonContext) {
-                            return OutlinedButton.icon(
+                            return FaloraSealButton(
+                              label: 'Paylaş',
+                              icon: Icons.share_rounded,
                               onPressed: () => _shareCode(buttonContext),
-                              icon: const Icon(Icons.share_rounded),
-                              label: const Text('Paylaş'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: faloraGold,
-                                side: BorderSide(
-                                  color: faloraGold.withValues(alpha: 0.45),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                              ),
                             );
                           },
                         ),

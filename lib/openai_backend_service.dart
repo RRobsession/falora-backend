@@ -6,6 +6,7 @@ import 'package:falora/ai_config.dart';
 
 import 'package:falora/ai_service.dart';
 
+import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
 import 'package:falora/services/backend_auth_client.dart';
@@ -59,6 +60,8 @@ class OpenAiBackendService implements AiService {
 
     List<String> imageNames = const [],
 
+    List<TarotCardSelection> selectedTarotCards = const [],
+
   }) async {
 
     BackendAuthClient.logRequest('/generate-fortune');
@@ -82,6 +85,10 @@ class OpenAiBackendService implements AiService {
         'tellerId': tellerId,
 
         'imageNames': imageNames,
+
+        if (selectedTarotCards.isNotEmpty)
+          'selectedCards':
+              selectedTarotCards.map((c) => c.toMap()).toList(),
 
       },
 
@@ -168,6 +175,36 @@ class OpenAiBackendService implements AiService {
     BackendAuthClient.logRequest('/generate-couple');
 
     return _post('/generate-couple', body);
+
+  }
+
+
+
+  @override
+
+  Future<String> generateCategoryReading({
+
+    required String categoryType,
+
+    required Map<String, dynamic> inputData,
+
+  }) async {
+
+    BackendAuthClient.logRequest('/generate-fortune');
+
+    return _post(
+
+      '/generate-fortune',
+
+      {
+
+        'categoryType': categoryType,
+
+        'inputData': inputData,
+
+      },
+
+    );
 
   }
 

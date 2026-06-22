@@ -359,19 +359,50 @@ Kendini ${persona.name} olarak tut; başka isim veya persona kullanma.`;
 }
 
 function buildFortuneUserPrompt(body, teller, structure) {
-  const { category, name, age, zodiac, intention, imageNames } = body;
+  const { category, name, age, zodiac, intention, imageNames, selectedCards } =
+    body;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const photos =
     Array.isArray(imageNames) && imageNames.length > 0
       ? `Fotoğraf: ${imageNames.length} adet.`
       : '';
 
+  const tarotSection = formatSelectedTarotCards(selectedCards);
+
   return `${categoryGuidance(category)}
 Danışan: ${name}, ${age} yaş, ${zodiac}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
 Falcı: ${teller.name} | Yapı: ${structure.name}
-[id:${requestId}]
+${tarotSection}[id:${requestId}]
 ${teller.minWords}-${teller.maxWords} kelime. ${structure.instruction}
 Cevabı tamamlanmış cümleyle bitir.`;
+}
+
+function formatSelectedTarotCards(selectedCards) {
+  if (!Array.isArray(selectedCards) || selectedCards.length === 0) {
+    return '';
+  }
+
+  const cards = selectedCards.slice(0, 8);
+  const count = cards.length;
+
+  const lines = cards.map((card, index) => {
+    const pos = card.positionIndex ?? index + 1;
+    const label = card.id || card.nameTr || card.nameEn || 'Kart';
+    const orientation = card.isReversed ? 'Ters' : 'Düz';
+    return `${pos}. ${label} (${orientation})`;
+  });
+
+  return `SEÇİLEN ${count} TAROT KARTI (mutlaka dikkate al — falın omurgası):
+${lines.join('\n')}
+
+TAROT YORUM KURALLARI:
+- Önce her kartın anlamını tek tek yorumla (sırayla, kart başına 1-2 cümle).
+- Tüm kartları yorumladıktan sonra bütünsel genel yorum oluştur.
+- Kartları danışanın niyeti/sorusu ile ilişkilendir.
+- Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
+- Premium, sezgisel ve doğal bir dil kullan.
+
+`;
 }
 
 function buildCoupleUserPrompt(
@@ -415,6 +446,126 @@ GÖREV:
 8) Cevabı tamamlanmış cümleyle bitir.`;
 }
 
+const AUTO_CATEGORY_TYPES = new Set([
+  'dream_interpretation',
+  'numerology',
+  'horoscope',
+]);
+
+const AUTO_CATEGORY_SAFETY = `GÜVENLİK VE ETİK:
+- Tıbbi teşhis, psikolojik tanı, finansal garanti veya kesin gelecek vaadi verme.
+- Eğlence ve kişisel farkındalık amaçlı yorum yap; danışmanlık veya profesyonel tavsiye gibi konuşma.
+- Umut ver ama kesin tarih, kesin sonuç, kesin kader dili kullanma.
+- Türkçe yaz; samimi, premium ve kişisel bir ton kullan.`;
+
+function validateAutoCategoryInput(categoryType, inputData) {
+  if (!AUTO_CATEGORY_TYPES.has(categoryType)) {
+    return { ok: false, error: 'Geçersiz kategori tipi' };
+  }
+  if (!inputData || typeof inputData !== 'object') {
+    return { ok: false, error: 'inputData gerekli' };
+  }
+
+  switch (categoryType) {
+    case 'dream_interpretation': {
+      const dreamText = String(inputData.dreamText ?? '').trim();
+      if (dreamText.length < 20) {
+        return { ok: false, error: 'Rüya metni en az 20 karakter olmalı' };
+      }
+      return { ok: true };
+    }
+    case 'numerology': {
+      const name = String(inputData.name ?? '').trim();
+      const birthDate = String(inputData.birthDate ?? '').trim();
+      if (!name || !birthDate) {
+        return { ok: false, error: 'İsim ve doğum tarihi gerekli' };
+      }
+      return { ok: true };
+    }
+    case 'horoscope': {
+      const sunSign = String(inputData.sunSign ?? '').trim();
+      const moonSign = String(inputData.moonSign ?? '').trim();
+      const focusArea = String(inputData.focusArea ?? '').trim();
+      if (!sunSign || !moonSign || !focusArea) {
+        return { ok: false, error: 'Burç ve odak alanı bilgileri gerekli' };
+      }
+      return { ok: true };
+    }
+    default:
+      return { ok: false, error: 'Geçersiz kategori tipi' };
+  }
+}
+
+function buildAutoCategorySystemPrompt(categoryType, persona) {
+  const titles = {
+    dream_interpretation: 'Rüya Tabiri Uzmanı',
+    numerology: 'Numeroloji Yorumcusu',
+    horoscope: 'Astroloji Yorumcusu',
+  };
+  const title = titles[categoryType] || 'Yorum Uzmanı';
+
+  return `Sen ${persona.name} adında deneyimli bir ${title}sın. Gerçek bir oturumda danışanın karşısındasın.
+
+KİŞİLİK VE SES:
+${persona.voice}
+
+KELİME TARZIN:
+${persona.vocabulary}
+
+YORUMLAMA YAKLAŞIMIN:
+${persona.approach}
+
+${AUTO_CATEGORY_SAFETY}
+
+250-400 kelime arasında, paragraflar halinde, tamamlanmış cümleyle bitir.
+Kendini ${persona.name} olarak tut.`;
+}
+
+function buildAutoCategoryUserPrompt(categoryType, inputData, persona, structure) {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  switch (categoryType) {
+    case 'dream_interpretation': {
+      const dreamText = String(inputData.dreamText).trim();
+      return `GÖREV: Rüya Tabiri yaz.
+Rüya metni: "${dreamText}"
+
+Sembolik, sezgisel ve eğlence amaçlı yorum yap. Rüyadaki imgeleri duygusal katmanla bağla.
+Psikolojik teşhis veya sağlık yorumu yapma.
+Yapı: ${structure.name} — ${structure.instruction}
+[id:${requestId}]`;
+    }
+    case 'numerology': {
+      const name = String(inputData.name).trim();
+      const birthDate = String(inputData.birthDate).trim();
+      return `GÖREV: Numeroloji Yorumu yaz.
+İsim: ${name}
+Doğum tarihi: ${birthDate}
+
+Kişilik, yaşam yolu, enerji ve dönemsel tema tarzında yorum ver.
+Kesin kader, sağlık veya para garantisi verme.
+Yapı: ${structure.name} — ${structure.instruction}
+[id:${requestId}]`;
+    }
+    case 'horoscope': {
+      const sunSign = String(inputData.sunSign).trim();
+      const moonSign = String(inputData.moonSign).trim();
+      const focusArea = String(inputData.focusArea).trim();
+      return `GÖREV: Burç Yorumu yaz.
+Güneş burcu: ${sunSign}
+Ay burcu: ${moonSign}
+Odak alanı: ${focusArea}
+
+Premium, kişisel ve sıcak bir dille yaz. Odak alanına (${focusArea}) özel vurgu yap.
+Tıbbi/finansal garanti veya kesin gelecek vaadi verme.
+Yapı: ${structure.name} — ${structure.instruction}
+[id:${requestId}]`;
+    }
+    default:
+      return `Yorum yaz. [id:${requestId}]`;
+  }
+}
+
 module.exports = {
   FORTUNE_PERSONAS,
   FORTUNE_TELLERS,
@@ -429,4 +580,8 @@ module.exports = {
   buildFortuneUserPrompt,
   buildCoupleUserPrompt,
   categoryGuidance,
+  formatSelectedTarotCards,
+  validateAutoCategoryInput,
+  buildAutoCategorySystemPrompt,
+  buildAutoCategoryUserPrompt,
 };
