@@ -1,5 +1,7 @@
+import 'package:falora/config/app_branding.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/token_config.dart';
 import 'package:falora/widgets/falora_component_library.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -208,7 +210,7 @@ class PremiumWelcomeHeader extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      'FALORA',
+                      appDisplayName.toUpperCase(),
                       style: FaloraTypography.labelLarge.copyWith(
                         fontSize: 13,
                         letterSpacing: 4,
@@ -263,7 +265,12 @@ class HomeQuickActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FaloraTokenMedallion(tokens: tokens, compact: true),
+        FaloraTappableTokenBalance(
+          tokens: tokens,
+          onTap: onOpenShop,
+          compact: true,
+          showHint: false,
+        ),
         const SizedBox(width: 8),
         _QuickIconButton(
           icon: Icons.card_giftcard_rounded,
@@ -404,11 +411,16 @@ class GiftRewardCard extends StatelessWidget {
   const GiftRewardCard({
     super.key,
     required this.hasReward,
+    required this.rewardAdsUsed,
     required this.onWatch,
   });
 
   final bool hasReward;
+  final int rewardAdsUsed;
   final VoidCallback? onWatch;
+
+  String get _quotaLabel =>
+      'Bugünkü reklam hakkı: $rewardAdsUsed/$maxRewardedAdsPerDay';
 
   @override
   Widget build(BuildContext context) {
@@ -456,9 +468,19 @@ class GiftRewardCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
+                      _quotaLabel,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: faloraBronzeDark,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
                       hasReward
-                          ? 'Bugünkü ücretsiz jeton hakkın hazır.'
-                          : 'Bugünkü ücretsiz jeton hakkını kullandın.',
+                          ? 'Her reklam +$rewardAdTokenGrant jeton kazandırır.'
+                          : rewardAdLimitReachedMessage,
                       style: const TextStyle(
                         fontSize: 12,
                         color: faloraTextSecondary,
@@ -489,7 +511,7 @@ class GiftRewardCard extends StatelessWidget {
               child: Text(
                 hasReward
                     ? 'Reklam İzle ve 50 Jeton Kazan'
-                    : 'Bugünkü hak kullanıldı',
+                    : 'Bugünkü hak doldu',
                 style: TextStyle(
                   color: hasReward ? faloraParchmentRaised : faloraTextSecondary,
                   fontWeight: FontWeight.w700,
@@ -509,13 +531,18 @@ class GiftRewardModal extends StatelessWidget {
   const GiftRewardModal({
     super.key,
     required this.hasReward,
+    required this.rewardAdsUsed,
     required this.onClose,
     this.onWatch,
   });
 
   final bool hasReward;
+  final int rewardAdsUsed;
   final VoidCallback onClose;
   final VoidCallback? onWatch;
+
+  String get _quotaLabel =>
+      'Bugünkü reklam hakkı: $rewardAdsUsed/$maxRewardedAdsPerDay';
 
   @override
   Widget build(BuildContext context) {
@@ -545,10 +572,21 @@ class GiftRewardModal extends StatelessWidget {
               textAlign: TextAlign.center,
               style: FaloraTypography.titleLarge.copyWith(color: faloraInkHeading),
             ),
+            const SizedBox(height: 8),
+            Text(
+              _quotaLabel,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: faloraBronzeDark,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
             if (!hasReward) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               const Text(
-                'Bugünkü ücretsiz jeton hakkını kullandın.',
+                rewardAdLimitReachedMessage,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,

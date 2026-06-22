@@ -11,7 +11,7 @@ class BackendAuthClient {
       throw BackendAuthException('Oturum bulunamadı.');
     }
 
-    final token = await user.getIdToken();
+    final token = await user.getIdToken(true);
     if (token == null || token.isEmpty) {
       throw BackendAuthException('Kimlik doğrulama tokenı alınamadı.');
     }

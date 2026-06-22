@@ -176,7 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               enabled: !_loading,
                               textCapitalization: TextCapitalization.characters,
                               decoration: const InputDecoration(
-                                labelText: 'Davet Kodu (isteğe bağlı)',
+                                labelText: 'Referans kodu (isteğe bağlı)',
                                 prefixIcon: Icon(Icons.card_giftcard_outlined),
                               ),
                             ),

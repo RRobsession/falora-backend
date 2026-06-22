@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:falora/config/play_product_catalog.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 enum PurchaseSource { purchased, restored }
@@ -24,12 +25,22 @@ class PlayPurchaseResult {
 }
 
 class PlayBillingException implements Exception {
-  PlayBillingException(this.message);
+  PlayBillingException(this.message, {this.code});
 
   final String message;
+  final String? code;
 
   @override
   String toString() => message;
+}
+
+/// Kullanıcı Google Play ödeme ekranını kapattı / vazgeçti.
+class PlayBillingCancelledException extends PlayBillingException {
+  PlayBillingCancelledException([String? message])
+      : super(
+          message ?? 'Satın alma iptal edildi.',
+          code: 'user_cancelled',
+        );
 }
 
 class PlayBillingService {
@@ -44,18 +55,18 @@ class PlayBillingService {
   Completer<List<PlayPurchaseResult>>? _restoreCompleter;
   bool _initialized = false;
 
+  static const _purchaseTimeout = Duration(minutes: 3);
+
   Future<void> init() async {
     if (_initialized || kIsWeb) return;
     _purchaseSub ??= _iap.purchaseStream.listen(
       _onPurchaseUpdate,
       onError: (Object e) {
-        final message = 'Odeme akisi hatasi: $e';
-        for (final completer in _purchaseCompleters.values) {
-          if (!completer.isCompleted) {
-            completer.completeError(PlayBillingException(message));
-          }
-        }
-        _purchaseCompleters.clear();
+        debugPrint('PURCHASE_FAILED stream_error: $e');
+        _failAllPendingPurchases(
+          e,
+          reason: 'stream_error',
+        );
         _completeRestore();
       },
     );
@@ -66,6 +77,10 @@ class PlayBillingService {
     await _purchaseSub?.cancel();
     _purchaseSub = null;
     _initialized = false;
+    _failAllPendingPurchases(
+      PlayBillingException('Billing servisi kapatıldı.'),
+      reason: 'dispose',
+    );
   }
 
   Future<List<ProductDetails>> queryProducts(Set<String> productIds) async {
@@ -99,7 +114,6 @@ class PlayBillingService {
     return response.productDetails;
   }
 
-  /// Android: Play Store fiyatları. Web: katalog mock fiyatları.
   Future<Map<String, String>> queryProductPrices(Set<String> productIds) async {
     if (kIsWeb) {
       debugPrint('PLAY BILLING: web — returning mock shop prices');
@@ -148,25 +162,49 @@ class PlayBillingService {
 
     final completer = Completer<PlayPurchaseResult>();
     _purchaseCompleters[productId] = completer;
+    debugPrint('PURCHASE_STARTED productId=$productId');
 
-    final started = await _iap.buyConsumable(
-      purchaseParam: PurchaseParam(productDetails: products.first),
-    );
+    try {
+      final started = await _iap.buyConsumable(
+        purchaseParam: PurchaseParam(productDetails: products.first),
+      );
 
-    if (!started) {
-      _purchaseCompleters.remove(productId);
-      throw PlayBillingException('Odeme baslatilamadi.');
-    }
-
-    return completer.future.timeout(
-      const Duration(minutes: 3),
-      onTimeout: () {
+      if (!started) {
         _purchaseCompleters.remove(productId);
-        throw PlayBillingException(
-          'Satin alma islemi zaman asimina ugradi. Google Play penceresini kapattiysaniz tekrar deneyin.',
-        );
-      },
-    );
+        debugPrint('PURCHASE_FAILED productId=$productId reason=not_started');
+        throw PlayBillingException('Odeme baslatilamadi.');
+      }
+
+      return await completer.future.timeout(
+        _purchaseTimeout,
+        onTimeout: () {
+          _purchaseCompleters.remove(productId);
+          debugPrint('PURCHASE_TIMEOUT productId=$productId');
+          throw PlayBillingException(
+            'Satin alma islemi zaman asimina ugradi. Google Play penceresini kapattiysaniz tekrar deneyin.',
+            code: 'timeout',
+          );
+        },
+      );
+    } on PlatformException catch (e) {
+      _purchaseCompleters.remove(productId);
+      if (_isPlatformCancellation(e)) {
+        debugPrint('PURCHASE_CANCELLED productId=$productId platform=${e.code}');
+        throw PlayBillingCancelledException();
+      }
+      debugPrint('PURCHASE_FAILED productId=$productId platform=${e.code} ${e.message}');
+      throw PlayBillingException(
+        e.message?.isNotEmpty == true ? e.message! : 'Odeme basarisiz oldu.',
+        code: e.code,
+      );
+    } catch (e) {
+      if (e is PlayBillingException || e is PlayBillingCancelledException) {
+        rethrow;
+      }
+      _purchaseCompleters.remove(productId);
+      debugPrint('PURCHASE_FAILED productId=$productId error=$e');
+      rethrow;
+    }
   }
 
   Future<List<PlayPurchaseResult>> restorePurchases() async {
@@ -185,66 +223,129 @@ class PlayBillingService {
 
   Future<void> _onPurchaseUpdate(List<PurchaseDetails> purchases) async {
     for (final purchase in purchases) {
-      if (!allBillingProductIds.contains(purchase.productID)) continue;
-
-      if (purchase.status == PurchaseStatus.pending) {
-        continue;
-      }
-
-      if (purchase.status == PurchaseStatus.error) {
-        _completePurchaseError(
-          purchase.productID,
-          purchase.error?.message.isNotEmpty == true
-              ? purchase.error!.message
-              : 'Odeme basarisiz oldu.',
-        );
-        await _completePlayPurchaseIfNeeded(purchase);
-        continue;
-      }
-
-      if (purchase.status == PurchaseStatus.canceled) {
-        _completePurchaseError(purchase.productID, 'Odeme iptal edildi.');
-        await _completePlayPurchaseIfNeeded(purchase);
-        continue;
-      }
-
-      if (purchase.status == PurchaseStatus.purchased ||
-          purchase.status == PurchaseStatus.restored) {
-        final token = purchase.verificationData.serverVerificationData.trim();
-        if (token.isEmpty) {
-          _completePurchaseError(
-            purchase.productID,
-            'Play satin alma dogrulamasi alinmadi.',
-          );
-          await _completePlayPurchaseIfNeeded(purchase);
-          continue;
-        }
-
-        final result = PlayPurchaseResult(
-          productId: purchase.productID,
-          purchaseToken: token,
-          purchaseId: purchase.purchaseID,
-          transactionDate: purchase.transactionDate,
-          source: purchase.status == PurchaseStatus.restored
-              ? PurchaseSource.restored
-              : PurchaseSource.purchased,
-        );
-
-        final completer = _purchaseCompleters.remove(purchase.productID);
-        if (completer != null && !completer.isCompleted) {
-          completer.complete(result);
-        }
-
-        if (purchase.status == PurchaseStatus.restored) {
-          _restoredPurchases.add(result);
-        }
-
-        await _completePlayPurchaseIfNeeded(purchase);
-      }
+      await _handlePurchaseUpdate(purchase);
     }
 
     if (_restoreCompleter != null && _restoredPurchases.isNotEmpty) {
       _completeRestore();
+    }
+  }
+
+  Future<void> _handlePurchaseUpdate(PurchaseDetails purchase) async {
+    final productId = purchase.productID;
+    final isKnownProduct =
+        productId.isNotEmpty && allBillingProductIds.contains(productId);
+    final isAnonymous =
+        productId.isEmpty && _purchaseCompleters.isNotEmpty;
+
+    if (!isKnownProduct && !isAnonymous) {
+      return;
+    }
+
+    if (purchase.status == PurchaseStatus.pending) {
+      return;
+    }
+
+    if (purchase.status == PurchaseStatus.canceled ||
+        _isPurchaseCancelled(purchase)) {
+      debugPrint(
+        'PURCHASE_CANCELLED productId=${productId.isEmpty ? 'anonymous' : productId}',
+      );
+      _resolvePendingCancellation(
+        productId: productId,
+        purchase: purchase,
+      );
+      await _completePlayPurchaseIfNeeded(purchase);
+      return;
+    }
+
+    if (purchase.status == PurchaseStatus.error) {
+      debugPrint(
+        'PURCHASE_FAILED productId=${productId.isEmpty ? 'anonymous' : productId} '
+        'error=${purchase.error?.message}',
+      );
+      _resolvePendingFailure(
+        productId: productId,
+        message: purchase.error?.message.isNotEmpty == true
+            ? purchase.error!.message
+            : 'Odeme basarisiz oldu.',
+      );
+      await _completePlayPurchaseIfNeeded(purchase);
+      return;
+    }
+
+    if (purchase.status == PurchaseStatus.purchased ||
+        purchase.status == PurchaseStatus.restored) {
+      final resolvedProductId = isKnownProduct
+          ? productId
+          : (_purchaseCompleters.length == 1
+              ? _purchaseCompleters.keys.first
+              : productId);
+
+      final token = purchase.verificationData.serverVerificationData.trim();
+      if (token.isEmpty) {
+        _resolvePendingFailure(
+          productId: resolvedProductId,
+          message: 'Play satin alma dogrulamasi alinmadi.',
+        );
+        await _completePlayPurchaseIfNeeded(purchase);
+        return;
+      }
+
+      final result = PlayPurchaseResult(
+        productId: resolvedProductId,
+        purchaseToken: token,
+        purchaseId: purchase.purchaseID,
+        transactionDate: purchase.transactionDate,
+        source: purchase.status == PurchaseStatus.restored
+            ? PurchaseSource.restored
+            : PurchaseSource.purchased,
+      );
+
+      final completer = _purchaseCompleters.remove(resolvedProductId);
+      if (completer != null && !completer.isCompleted) {
+        debugPrint('PURCHASE_SUCCESS productId=$resolvedProductId');
+        completer.complete(result);
+      }
+
+      if (purchase.status == PurchaseStatus.restored) {
+        _restoredPurchases.add(result);
+      }
+
+      await _completePlayPurchaseIfNeeded(purchase);
+    }
+  }
+
+  void _resolvePendingCancellation({
+    required String productId,
+    required PurchaseDetails purchase,
+  }) {
+    if (productId.isNotEmpty) {
+      _completePurchaseCancelled(productId);
+      return;
+    }
+    for (final id in _purchaseCompleters.keys.toList()) {
+      _completePurchaseCancelled(id);
+    }
+  }
+
+  void _resolvePendingFailure({
+    required String productId,
+    required String message,
+  }) {
+    if (productId.isNotEmpty) {
+      _completePurchaseError(productId, message);
+      return;
+    }
+    for (final id in _purchaseCompleters.keys.toList()) {
+      _completePurchaseError(id, message);
+    }
+  }
+
+  void _completePurchaseCancelled(String productId) {
+    final completer = _purchaseCompleters.remove(productId);
+    if (completer != null && !completer.isCompleted) {
+      completer.completeError(PlayBillingCancelledException());
     }
   }
 
@@ -253,6 +354,51 @@ class PlayBillingService {
     if (completer != null && !completer.isCompleted) {
       completer.completeError(PlayBillingException(message));
     }
+  }
+
+  void _failAllPendingPurchases(
+    Object error, {
+    required String reason,
+  }) {
+    final ids = _purchaseCompleters.keys.toList();
+    for (final productId in ids) {
+      final completer = _purchaseCompleters.remove(productId);
+      if (completer == null || completer.isCompleted) continue;
+      if (error is PlayBillingCancelledException) {
+        debugPrint('PURCHASE_CANCELLED productId=$productId reason=$reason');
+        completer.completeError(error);
+      } else if (error is PlayBillingException) {
+        debugPrint('PURCHASE_FAILED productId=$productId reason=$reason');
+        completer.completeError(error);
+      } else {
+        debugPrint('PURCHASE_FAILED productId=$productId reason=$reason error=$error');
+        completer.completeError(PlayBillingException('Odeme akisi hatasi: $error'));
+      }
+    }
+  }
+
+  bool _isPurchaseCancelled(PurchaseDetails purchase) {
+    if (purchase.status == PurchaseStatus.canceled) return true;
+    final error = purchase.error;
+    if (error == null) return false;
+    final code = error.code.toLowerCase();
+    final message = error.message.toLowerCase();
+    final details = '${error.details ?? ''}'.toLowerCase();
+    return code.contains('cancel') ||
+        message.contains('cancel') ||
+        message.contains('usercanceled') ||
+        details.contains('usercanceled') ||
+        details.contains('user_cancel');
+  }
+
+  bool _isPlatformCancellation(PlatformException e) {
+    final code = e.code.toLowerCase();
+    final message = '${e.message}'.toLowerCase();
+    return code.contains('cancel') ||
+        code == 'user_canceled' ||
+        code == 'purchase_cancelled' ||
+        message.contains('cancel') ||
+        message.contains('usercanceled');
   }
 
   Future<void> _completePlayPurchaseIfNeeded(PurchaseDetails purchase) async {

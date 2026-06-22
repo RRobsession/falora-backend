@@ -1,14 +1,22 @@
 import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class DreamInterpretationFormPage extends StatefulWidget {
-  const DreamInterpretationFormPage({super.key, required this.onSubmit});
+  const DreamInterpretationFormPage({
+    super.key,
+    required this.tokenCost,
+    required this.onSubmit,
+    required this.onOpenShop,
+  });
 
+  final int tokenCost;
   final Future<void> Function(String dreamText) onSubmit;
+  final VoidCallback onOpenShop;
 
   @override
   State<DreamInterpretationFormPage> createState() =>
@@ -46,6 +54,7 @@ class _DreamInterpretationFormPageState extends State<DreamInterpretationFormPag
     return _PremiumCategoryShell(
       title: FortuneCategory.ruyaTabiri.label,
       accent: _accent,
+      onOpenShop: widget.onOpenShop,
       child: Form(
         key: _formKey,
         child: Column(
@@ -56,7 +65,7 @@ class _DreamInterpretationFormPageState extends State<DreamInterpretationFormPag
               emoji: '🌙',
               title: 'Rüya Tabiri',
               subtitle: 'Kelimelerin ötesindeki sembolleri keşfet',
-              tokenCost: autoCategoryTokenCost,
+              tokenCost: widget.tokenCost,
               hints: const [
                 'Son gördüğünüz rüyayı anlatın',
                 'İstediğiniz kadar detay ekleyebilirsiniz',
@@ -120,7 +129,7 @@ class _DreamInterpretationFormPageState extends State<DreamInterpretationFormPag
             _PremiumSubmitButton(
               accent: _accent,
               label: 'Rüyamı Yorumla',
-              tokenCost: autoCategoryTokenCost,
+              tokenCost: widget.tokenCost,
               loading: _submitting,
               onPressed: _submit,
             ),
@@ -132,9 +141,16 @@ class _DreamInterpretationFormPageState extends State<DreamInterpretationFormPag
 }
 
 class NumerologyFormPage extends StatefulWidget {
-  const NumerologyFormPage({super.key, required this.onSubmit});
+  const NumerologyFormPage({
+    super.key,
+    required this.tokenCost,
+    required this.onSubmit,
+    required this.onOpenShop,
+  });
 
+  final int tokenCost;
   final Future<void> Function(String name, DateTime birthDate) onSubmit;
+  final VoidCallback onOpenShop;
 
   @override
   State<NumerologyFormPage> createState() => _NumerologyFormPageState();
@@ -207,6 +223,7 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
     return _PremiumCategoryShell(
       title: FortuneCategory.numeroloji.label,
       accent: _accent,
+      onOpenShop: widget.onOpenShop,
       child: Form(
         key: _formKey,
         child: Column(
@@ -217,7 +234,7 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
               heroVisual: const _NumerologyHeroSymbol(),
               title: 'Numeroloji Analizi',
               subtitle: 'İsminiz ve doğum tarihinizin enerjisini keşfedin',
-              tokenCost: autoCategoryTokenCost,
+              tokenCost: widget.tokenCost,
             ),
             const SizedBox(height: 28),
             _PremiumSectionCard(
@@ -266,7 +283,7 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
             _PremiumSubmitButton(
               accent: _accent,
               label: 'Analizi Başlat',
-              tokenCost: autoCategoryTokenCost,
+              tokenCost: widget.tokenCost,
               loading: _submitting,
               onPressed: _submit,
             ),
@@ -278,13 +295,20 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
 }
 
 class HoroscopeFormPage extends StatefulWidget {
-  const HoroscopeFormPage({super.key, required this.onSubmit});
+  const HoroscopeFormPage({
+    super.key,
+    required this.tokenCost,
+    required this.onSubmit,
+    required this.onOpenShop,
+  });
 
+  final int tokenCost;
   final Future<void> Function(
     String sunSign,
     String moonSign,
     String focusArea,
   ) onSubmit;
+  final VoidCallback onOpenShop;
 
   @override
   State<HoroscopeFormPage> createState() => _HoroscopeFormPageState();
@@ -315,6 +339,7 @@ class _HoroscopeFormPageState extends State<HoroscopeFormPage> {
     return _PremiumCategoryShell(
       title: FortuneCategory.burcYorumu.label,
       accent: _accent,
+      onOpenShop: widget.onOpenShop,
       child: Form(
         key: _formKey,
         child: Column(
@@ -325,7 +350,7 @@ class _HoroscopeFormPageState extends State<HoroscopeFormPage> {
               emoji: '✨',
               title: 'Burç Yorumu',
               subtitle: 'Kozmik enerjilerin sizin için ne söylediğini öğrenin',
-              tokenCost: autoCategoryTokenCost,
+              tokenCost: widget.tokenCost,
             ),
             const SizedBox(height: 28),
             _PremiumSectionCard(
@@ -361,7 +386,7 @@ class _HoroscopeFormPageState extends State<HoroscopeFormPage> {
             _PremiumSubmitButton(
               accent: _accent,
               label: 'Yorumumu Al',
-              tokenCost: autoCategoryTokenCost,
+              tokenCost: widget.tokenCost,
               loading: _submitting,
               onPressed: _submit,
             ),
@@ -380,11 +405,13 @@ class _PremiumCategoryShell extends StatelessWidget {
   const _PremiumCategoryShell({
     required this.title,
     required this.accent,
+    required this.onOpenShop,
     required this.child,
   });
 
   final String title;
   final Color accent;
+  final VoidCallback onOpenShop;
   final Widget child;
   static const _horizontalPadding = 20.0;
   static const _topSpacing = 16.0;
@@ -408,7 +435,14 @@ class _PremiumCategoryShell extends StatelessWidget {
               _horizontalPadding,
               _bottomSpacing + MediaQuery.viewPaddingOf(context).bottom,
             ),
-            child: child,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FaloraLiveTappableTokenBalance(onOpenShop: onOpenShop),
+                const SizedBox(height: 12),
+                child,
+              ],
+            ),
           ),
         ),
       ),

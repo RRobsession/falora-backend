@@ -414,6 +414,7 @@ const {
   completeTokenPurchase,
   restorePurchasesForUser,
 } = require('./play_billing');
+const { claimReferral } = require('./referrals');
 const {
   requireAuth,
   requireVerifiedEmail,
@@ -520,6 +521,51 @@ app.post(
       return res
         .status(err.statusCode || 500)
         .json({ error: err.message || 'Satın alma doğrulanamadı' });
+    }
+  },
+);
+
+app.post(
+  '/referrals/claim',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+    const { referralCode } = req.body ?? {};
+    if (!referralCode || typeof referralCode !== 'string' || !referralCode.trim()) {
+      return res.status(400).json({ error: 'referralCode gerekli' });
+    }
+
+    try {
+      const result = await claimReferral({
+        uid: req.auth.uid,
+        referralCode,
+      });
+
+      if (!result.ok) {
+        const status =
+          result.code === 'already_claimed' || result.code === 'self_referral'
+            ? 409
+            : result.code === 'not_found'
+              ? 404
+              : 400;
+        return res.status(status).json({
+          ok: false,
+          code: result.code,
+          rewardTokens: 0,
+        });
+      }
+
+      return res.json({
+        ok: true,
+        code: 'success',
+        rewardTokens: result.rewardTokens,
+        inviterUid: result.inviterUid,
+      });
+    } catch (err) {
+      console.error('referral claim error:', err.message);
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || 'Referans ödülü işlenemedi' });
     }
   },
 );

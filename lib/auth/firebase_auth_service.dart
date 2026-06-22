@@ -44,29 +44,41 @@ class FirebaseAuthService implements AuthService {
   }
 
   Future<void> _sendVerificationEmailToCurrentUser() async {
-    debugPrint('SEND VERIFICATION START');
+    debugPrint('EMAIL_VERIFICATION_SEND_START');
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      debugPrint('SEND VERIFICATION ERROR: currentUser is null');
+      debugPrint('EMAIL_VERIFICATION_SEND_FAILED: currentUser is null');
       throw AuthException('Oturum bulunamadı, doğrulama e-postası gönderilemedi.');
     }
 
-    debugPrint('SEND VERIFICATION uid: ${user.uid}');
+    debugPrint('EMAIL_VERIFICATION_SEND uid: ${user.uid}');
     if (kDebugMode) {
-      debugPrint('SEND VERIFICATION email present: ${user.email != null}');
+      debugPrint('EMAIL_VERIFICATION_SEND email present: ${user.email != null}');
     }
 
     try {
       await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-      debugPrint('SEND VERIFICATION SUCCESS');
+      debugPrint('EMAIL_VERIFICATION_SEND_SUCCESS');
     } on FirebaseAuthException catch (e) {
-      debugPrint('SEND VERIFICATION ERROR: code=${e.code} message=${e.message}');
+      debugPrint('EMAIL_VERIFICATION_SEND_FAILED: code=${e.code} message=${e.message}');
       throw AuthException(mapVerificationEmailError(e));
     } catch (e, stackTrace) {
-      debugPrint('SEND VERIFICATION ERROR: $e');
+      debugPrint('EMAIL_VERIFICATION_SEND_FAILED: $e');
       debugPrint(stackTrace.toString());
       throw AuthException('Doğrulama e-postası gönderilemedi: $e');
+    }
+  }
+
+  Future<void> _rollbackNewAuthAccount(User? user) async {
+    if (user == null) return;
+    debugPrint('REGISTER_AUTH_ROLLBACK_DELETE_START');
+    try {
+      await user.delete();
+      debugPrint('REGISTER_AUTH_ROLLBACK_DELETE_SUCCESS');
+    } catch (e, stackTrace) {
+      debugPrint('REGISTER_AUTH_ROLLBACK_DELETE_FAILED: $e');
+      debugPrint(stackTrace.toString());
     }
   }
 
@@ -120,13 +132,25 @@ class FirebaseAuthService implements AuthService {
     } catch (e, stackTrace) {
       debugPrint('Firestore user fetch failed: $e');
       debugPrint(stackTrace.toString());
-      return AppUser(
-        userId: fbUser.uid,
-        name: fbUser.displayName?.trim() ?? '',
-        email: fbUser.email?.trim().toLowerCase() ?? '',
-        tokens: initialUserTokens,
-        emailVerified: emailVerified,
-      );
+      try {
+        final recovered = await TokenService.instance.ensureUserDocument(
+          uid: fbUser.uid,
+          name: fbUser.displayName?.trim() ?? '',
+          email: fbUser.email?.trim().toLowerCase() ?? '',
+        );
+        debugPrint('ENSURE_USER_DOC_RECOVERY_SUCCESS uid=${fbUser.uid}');
+        return _appUserFromFirebaseAndFirestore(fbUser, recovered);
+      } catch (ensureError, ensureStack) {
+        debugPrint('ensureUserDocument failed: $ensureError');
+        debugPrint(ensureStack.toString());
+        return AppUser(
+          userId: fbUser.uid,
+          name: fbUser.displayName?.trim() ?? '',
+          email: fbUser.email?.trim().toLowerCase() ?? '',
+          tokens: initialUserTokens,
+          emailVerified: emailVerified,
+        );
+      }
     }
   }
 
@@ -144,13 +168,8 @@ class FirebaseAuthService implements AuthService {
     }
 
     try {
-      String? pendingInviterUid;
       if (referralCode != null && referralCode.trim().isNotEmpty) {
-        pendingInviterUid =
-            await ReferralService.instance.resolveInviterUid(referralCode);
-        if (pendingInviterUid == null) {
-          throw AuthException('Geçersiz davet kodu.');
-        }
+        debugPrint('REFERRAL_CODE_ENTERED code=${referralCode.trim()}');
       }
 
       final cred = await _auth.createUserWithEmailAndPassword(
@@ -158,36 +177,41 @@ class FirebaseAuthService implements AuthService {
         password: password,
       );
       final uid = cred.user!.uid;
+      final newUser = cred.user;
 
-      debugPrint('REGISTER SUCCESS uid: $uid');
-
-      await _sendVerificationEmailToCurrentUser();
+      debugPrint('REGISTER_AUTH_CREATED uid: $uid');
+      debugPrint('REGISTER_AUTH_TOKEN_EMAIL: ${newUser?.email ?? '<null>'}');
 
       try {
-        final userData = <String, dynamic>{
-          'uid': uid,
-          'name': name.trim(),
-          'email': normalizedEmail,
-          'tokens': initialUserTokens,
-          'rewardedAdsToday': 0,
-          'emailVerified': false,
-          'referralRewardClaimed': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        };
-        await _db.collection('users').doc(uid).set(userData);
+        debugPrint('REGISTER_USER_DOC_CREATE_START uid: $uid');
+        await TokenService.instance.ensureUserDocument(
+          uid: uid,
+          name: name.trim(),
+          email: normalizedEmail,
+        );
+        debugPrint('REGISTER_USER_DOC_CREATE_SUCCESS uid: $uid');
 
-        if (pendingInviterUid != null) {
-          if (pendingInviterUid == uid) {
-            throw AuthException('Kendi davet kodunu kullanamazsın.');
-          }
-          await ReferralService.instance.applyReferralOnRegister(
-            newUserId: uid,
-            referralCode: referralCode,
-          );
+        if (referralCode != null && referralCode.trim().isNotEmpty) {
+          ReferralService.instance.storePendingReferralCode(uid, referralCode);
         }
-      } catch (e, stackTrace) {
-        debugPrint('Firestore register write failed: $e');
+
+        await _sendVerificationEmailToCurrentUser();
+      } on AuthException {
+        await _rollbackNewAuthAccount(newUser);
+        rethrow;
+      } on FirebaseException catch (e, stackTrace) {
+        debugPrint('REGISTER_USER_DOC_CREATE_FAILED uid: $uid code=${e.code}');
         debugPrint(stackTrace.toString());
+        await _rollbackNewAuthAccount(newUser);
+        final message = e.code == 'permission-denied'
+            ? 'Hesap kaydı tamamlanamadı (veritabanı izni). Lütfen tekrar deneyin.'
+            : 'Hesap kaydı tamamlanamadı. Lütfen tekrar deneyin.';
+        throw AuthException(message);
+      } catch (e, stackTrace) {
+        debugPrint('REGISTER_USER_DOC_CREATE_FAILED uid: $uid error: $e');
+        debugPrint(stackTrace.toString());
+        await _rollbackNewAuthAccount(newUser);
+        throw AuthException('Hesap kaydı tamamlanamadı. Lütfen tekrar deneyin.');
       }
 
       return AppUser(
@@ -202,6 +226,9 @@ class FirebaseAuthService implements AuthService {
     } on FirebaseAuthException catch (e) {
       debugPrint('Firebase register error code: ${e.code}');
       debugPrint('Firebase register error message: ${e.message}');
+      if (e.code == 'email-already-in-use') {
+        debugPrint('EMAIL_ALREADY_EXISTS_BROKEN_RECOVERY hint=try_login');
+      }
       throw AuthException(mapFirebaseAuthError(e));
     } catch (e, stackTrace) {
       debugPrint('Unknown register error: $e');
@@ -246,13 +273,24 @@ class FirebaseAuthService implements AuthService {
       } catch (e, stackTrace) {
         debugPrint('Firestore user fetch failed on login: $e');
         debugPrint(stackTrace.toString());
-        return AppUser(
-          userId: fbUser.uid,
-          name: fbUser.displayName?.trim() ?? '',
-          email: fbUser.email?.trim().toLowerCase() ?? '',
-          tokens: initialUserTokens,
-          emailVerified: _firebaseEmailVerified(fbUser),
-        );
+        try {
+          final profile = await TokenService.instance.ensureUserDocument(
+            uid: fbUser.uid,
+            name: fbUser.displayName?.trim() ?? '',
+            email: fbUser.email?.trim().toLowerCase() ?? '',
+          );
+          debugPrint('ENSURE_USER_DOC_RECOVERY_SUCCESS uid=${fbUser.uid}');
+          return _appUserFromFirebaseAndFirestore(fbUser, profile);
+        } catch (ensureError) {
+          debugPrint('ensureUserDocument failed on login: $ensureError');
+          return AppUser(
+            userId: fbUser.uid,
+            name: fbUser.displayName?.trim() ?? '',
+            email: fbUser.email?.trim().toLowerCase() ?? '',
+            tokens: initialUserTokens,
+            emailVerified: _firebaseEmailVerified(fbUser),
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       debugPrint('Firebase login error code: ${e.code}');
@@ -393,17 +431,12 @@ class FirebaseAuthService implements AuthService {
   }
 
   Future<AppUser> _loadUserProfile(User fbUser) async {
-    await TokenService.instance.ensureUserDefaults(fbUser.uid);
-    final doc = await _db.collection('users').doc(fbUser.uid).get();
-    if (doc.exists) {
-      return AppUser.fromFirestore(fbUser.uid, doc.data()!);
-    }
-
-    return AppUser(
-      userId: fbUser.uid,
-      name: fbUser.displayName?.trim() ?? '',
-      email: fbUser.email?.trim().toLowerCase() ?? '',
-      tokens: initialUserTokens,
+    final email = fbUser.email?.trim().toLowerCase() ?? '';
+    final name = fbUser.displayName?.trim() ?? '';
+    return TokenService.instance.ensureUserDocument(
+      uid: fbUser.uid,
+      name: name,
+      email: email,
     );
   }
 
@@ -413,7 +446,7 @@ class FirebaseAuthService implements AuthService {
   }) {
     switch (e.code) {
       case 'email-already-in-use':
-        return 'Bu e-posta zaten kayıtlı.';
+        return 'Bu e-posta zaten kayıtlı. Giriş yapmayı deneyin.';
       case 'invalid-email':
         return 'E-posta formatı hatalı.';
       case 'weak-password':

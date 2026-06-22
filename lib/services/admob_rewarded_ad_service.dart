@@ -7,6 +7,7 @@ import 'package:falora/services/ads/admob_config.dart';
 import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
 import 'package:falora/services/token_service.dart';
+import 'package:falora/token_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -94,6 +95,7 @@ class AdMobRewardedAdService implements RewardedAdService {
     AdMobLogger.log('REWARD SERVICE TYPE: $serviceTypeName');
     AdMobLogger.log('MOCK REWARD USED: no');
     AdMobLogger.log('ADMOB REWARD USED: yes');
+    AdMobLogger.log('DAILY_REWARD_LIMIT=$maxRewardedAdsPerDay');
     _logDailyRewardStatus(user);
 
     if (!AdServiceBootstrap.initSucceeded) {
@@ -103,10 +105,12 @@ class AdMobRewardedAdService implements RewardedAdService {
     }
 
     if (remainingDailyAds(user) <= 0) {
-      _lastErrorMessage = 'Bugünkü ücretsiz jeton hakkını kullandın.';
-      AdMobLogger.log('REWARDED CLAIM ERROR: daily limit reached');
+      _lastErrorMessage = rewardAdLimitReachedMessage;
+      AdMobLogger.log('REWARDED_CLAIM_LIMIT_REACHED');
       return RewardedAdResult.limitReached;
     }
+
+    AdMobLogger.log('REWARDED_CLAIM_ATTEMPT uid=$userId');
 
     var ad = _rewardedAd;
     if (ad == null) {
@@ -175,9 +179,8 @@ class AdMobRewardedAdService implements RewardedAdService {
     }
 
     try {
-      AdMobLogger.log('REWARDED CLAIM START');
       await TokenService.instance.claimRewardedAd(userId);
-      AdMobLogger.log('REWARDED CLAIM SUCCESS');
+      AdMobLogger.log('REWARDED_CLAIM_SUCCESS');
       _lastErrorMessage = null;
       return RewardedAdResult.rewarded;
     } on TokenException catch (e) {

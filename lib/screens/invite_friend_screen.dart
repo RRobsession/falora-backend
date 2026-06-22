@@ -151,8 +151,8 @@ class _InviteFriendScreenState extends State<InviteFriendScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Arkadaşın kayıt olurken bu kodu girsin. E-postasını doğruladığında '
-                          'sen $referralInviterRewardTokens, o $referralInviteeRewardTokens jeton kazanır.',
+                          'Arkadaşın referans kodunla kayıt olduğunda ikiniz de '
+                          '$referralInviterRewardTokens jeton kazanırsınız.',
                           style: FaloraTypography.bodyOnParchment,
                         ),
                         const SizedBox(height: 24),

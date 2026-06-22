@@ -8,6 +8,7 @@ import 'package:falora/picked_image.dart';
 
 import 'package:falora/theme/falora_theme.dart';
 
+import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
 
 import 'package:falora/widgets/premium_ui.dart';
@@ -54,6 +55,8 @@ class ManualFortuneFormPage extends StatefulWidget {
 
     required this.onSubmit,
 
+    required this.onOpenShop,
+
   });
 
 
@@ -65,6 +68,8 @@ class ManualFortuneFormPage extends StatefulWidget {
   final ManualFortuneOffer offer;
 
   final ManualFortuneSubmit onSubmit;
+
+  final VoidCallback onOpenShop;
 
 
 
@@ -249,6 +254,10 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
 
             children: [
+
+              FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
+
+              const SizedBox(height: 12),
 
               _ManualFormHeader(
 

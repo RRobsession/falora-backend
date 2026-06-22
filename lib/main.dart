@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:falora/ai_config.dart';
+import 'package:falora/config/app_branding.dart';
 import 'package:falora/ai_result_cache.dart';
 import 'package:falora/ai_service.dart';
 import 'package:falora/app/auth_gate.dart';
@@ -32,6 +33,7 @@ import 'package:falora/openai_backend_service.dart';
 import 'package:falora/picked_image.dart';
 import 'package:falora/screens/profile_screen.dart';
 import 'package:falora/services/ads/ad_service_bootstrap.dart';
+import 'package:falora/services/fortune_submit_support.dart';
 import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:falora/services/interstitial_ad_service.dart';
@@ -45,6 +47,7 @@ import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/screens/shop_screen.dart';
 import 'package:falora/token_config.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
+import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/reading_record_card.dart';
 import 'package:falora/widgets/reward_ad_helper.dart';
@@ -123,7 +126,7 @@ class _FaloraAppState extends State<FaloraApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Falora',
+      title: appDisplayName,
       debugShowCheckedModeBanner: false,
       theme: faloraTheme(),
       home: const AuthGate(),
@@ -136,10 +139,12 @@ class FaloraShell extends StatefulWidget {
     super.key,
     required this.user,
     required this.onLogout,
+    this.initialSnackBarMessage,
   });
 
   final AppUser user;
   final VoidCallback onLogout;
+  final String? initialSnackBarMessage;
 
   @override
   State<FaloraShell> createState() => _FaloraShellState();
@@ -168,6 +173,22 @@ class _FaloraShellState extends State<FaloraShell> {
     super.initState();
     _user = widget.user;
     TokenService.instance.bindLiveUser(_userId);
+    final referralNotice = widget.initialSnackBarMessage;
+    if (referralNotice != null && referralNotice.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(referralNotice)),
+        );
+      });
+    }
+    unawaited(
+      TokenService.instance.ensureUserDocument(
+        uid: _userId,
+        name: widget.user.name,
+        email: widget.user.email,
+      ),
+    );
     unawaited(PlayBillingService.instance.init());
     unawaited(TarotDeckService.instance.loadDeck());
     _loadUserFortunes();
@@ -301,6 +322,32 @@ class _FaloraShellState extends State<FaloraShell> {
     _readingNotifiers[current.id]?.value = refreshed;
   }
 
+  Future<void> _promptInsufficientTokensShop(String message) async {
+    if (!mounted) return;
+
+    final goShop = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yetersiz Jeton'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Mağazaya Git'),
+          ),
+        ],
+      ),
+    );
+
+    if (goShop == true && mounted) {
+      _openShop();
+    }
+  }
+
   bool _checkTokenBalance({
     required String logPrefix,
     required int tokenCost,
@@ -310,12 +357,10 @@ class _FaloraShellState extends State<FaloraShell> {
       return true;
     }
     if (!mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Yetersiz jeton. Bu işlem $tokenCost jeton gerektirir. '
-          'Bakiyeniz: ${_liveUser.tokens}',
-        ),
+    unawaited(
+      _promptInsufficientTokensShop(
+        'Yetersiz jeton. Bu işlem $tokenCost jeton gerektirir.\n'
+        'Bakiyeniz: ${_liveUser.tokens}',
       ),
     );
     return false;
@@ -329,31 +374,11 @@ class _FaloraShellState extends State<FaloraShell> {
     }
     if (!mounted) return false;
 
-    final goShop = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Yetersiz Jeton'),
-        content: const Text(
-          'Bu özel yorum için 1500 jeton gerekiyor.\n'
-          'Jeton bakiyeniz yetersiz.\n'
-          'Jeton mağazasından paket satın alabilirsiniz.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Vazgeç'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Jeton Yükle'),
-          ),
-        ],
-      ),
+    await _promptInsufficientTokensShop(
+      'Bu özel yorum için 1500 jeton gerekiyor.\n'
+      'Jeton bakiyeniz yetersiz.\n'
+      'Jeton mağazasından paket satın alabilirsiniz.',
     );
-
-    if (goShop == true && mounted) {
-      _openShop();
-    }
     return false;
   }
 
@@ -365,31 +390,11 @@ class _FaloraShellState extends State<FaloraShell> {
     }
     if (!mounted) return false;
 
-    final goShop = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Yetersiz Jeton'),
-        content: Text(
-          'Bu yorum için $tokenCost jeton gerekiyor.\n'
-          'Jeton bakiyeniz yetersiz.\n'
-          'Jeton mağazasından paket satın alabilirsiniz.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Vazgeç'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Jeton Yükle'),
-          ),
-        ],
-      ),
+    await _promptInsufficientTokensShop(
+      'Bu yorum için $tokenCost jeton gerekiyor.\n'
+      'Jeton bakiyeniz yetersiz.\n'
+      'Jeton mağazasından paket satın alabilirsiniz.',
     );
-
-    if (goShop == true && mounted) {
-      _openShop();
-    }
     return false;
   }
 
@@ -512,31 +517,10 @@ class _FaloraShellState extends State<FaloraShell> {
     if (cat == FortuneCategory.ciftUyumu) {
       Navigator.of(context).push(
         faloraPageRoute<void>(
-          CiftUyumuFormPage(onSubmit: _submitCiftUyumu),
-        ),
-      );
-      return;
-    }
-    if (cat == FortuneCategory.ruyaTabiri) {
-      Navigator.of(context).push(
-        faloraPageRoute<void>(
-          DreamInterpretationFormPage(onSubmit: _submitDreamInterpretation),
-        ),
-      );
-      return;
-    }
-    if (cat == FortuneCategory.numeroloji) {
-      Navigator.of(context).push(
-        faloraPageRoute<void>(
-          NumerologyFormPage(onSubmit: _submitNumerology),
-        ),
-      );
-      return;
-    }
-    if (cat == FortuneCategory.burcYorumu) {
-      Navigator.of(context).push(
-        faloraPageRoute<void>(
-          HoroscopeFormPage(onSubmit: _submitHoroscope),
+          CiftUyumuFormPage(
+            onSubmit: _submitCiftUyumu,
+            onOpenShop: _openShop,
+          ),
         ),
       );
       return;
@@ -545,38 +529,98 @@ class _FaloraShellState extends State<FaloraShell> {
       faloraPageRoute<void>(
         FortuneTellerSelectionPage(
           category: cat,
-          onTellerChosen: (ctx, teller) => _openFortuneForm(ctx, cat, teller),
+          onTellerChosen: (ctx, teller) {
+            if (isAutoOnlyCategory(cat)) {
+              _openAutoCategoryForm(ctx, cat, teller);
+            } else {
+              _openFortuneForm(ctx, cat, teller);
+            }
+          },
           onManualReaderChosen: (ctx, reader) =>
               _openManualFortuneForm(ctx, cat, reader),
+          onOpenShop: _openShop,
         ),
       ),
     );
   }
 
-  void _openFortuneForm(
+  void _openAutoCategoryForm(
     BuildContext context,
     FortuneCategory cat,
     FortuneTeller teller,
   ) {
     if (_liveUser.tokens < teller.tokenCost) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Yetersiz jeton. ${teller.name} ${teller.tokenCost} jeton gerektirir. '
-            'Bakiyeniz: ${_liveUser.tokens}',
-          ),
-        ),
+      _promptInsufficientTokensShop(
+        'Yetersiz jeton. ${teller.name} ${teller.tokenCost} jeton gerektirir.\n'
+        'Mağazadan jeton satın alabilirsiniz.',
       );
       return;
     }
+    switch (cat) {
+      case FortuneCategory.ruyaTabiri:
+        Navigator.of(context).push(
+          faloraPageRoute<void>(
+            DreamInterpretationFormPage(
+              tokenCost: teller.tokenCost,
+              onSubmit: (dream) =>
+                  _submitDreamInterpretation(dream, teller: teller),
+              onOpenShop: _openShop,
+            ),
+          ),
+        );
+      case FortuneCategory.numeroloji:
+        Navigator.of(context).push(
+          faloraPageRoute<void>(
+            NumerologyFormPage(
+              tokenCost: teller.tokenCost,
+              onSubmit: (name, birthDate) =>
+                  _submitNumerology(name, birthDate, teller: teller),
+              onOpenShop: _openShop,
+            ),
+          ),
+        );
+      case FortuneCategory.burcYorumu:
+        Navigator.of(context).push(
+          faloraPageRoute<void>(
+            HoroscopeFormPage(
+              tokenCost: teller.tokenCost,
+              onSubmit: (sun, moon, focus) =>
+                  _submitHoroscope(sun, moon, focus, teller: teller),
+              onOpenShop: _openShop,
+            ),
+          ),
+        );
+      default:
+        break;
+    }
+  }
+
+  Future<void> _openFortuneForm(
+    BuildContext context,
+    FortuneCategory cat,
+    FortuneTeller teller,
+  ) async {
+    if (_liveUser.tokens < teller.tokenCost) {
+      await _promptInsufficientTokensShop(
+        'Yetersiz jeton. ${teller.name} ${teller.tokenCost} jeton gerektirir.\n'
+        'Bakiyeniz: ${_liveUser.tokens}',
+      );
+      return;
+    }
+    if (!context.mounted) return;
     Navigator.of(context).push(
       faloraPageRoute<void>(
         cat == FortuneCategory.kahve
-            ? KahveFormPage(teller: teller, onSubmit: _submitNormal)
+            ? KahveFormPage(
+                teller: teller,
+                onSubmit: _submitNormal,
+                onOpenShop: _openShop,
+              )
             : NormalFalFormPage(
                 category: cat,
                 teller: teller,
                 onSubmit: _submitNormal,
+                onOpenShop: _openShop,
               ),
       ),
     );
@@ -598,6 +642,7 @@ class _FaloraShellState extends State<FaloraShell> {
           reader: reader,
           offer: offer,
           onSubmit: _submitManualFortune,
+          onOpenShop: _openShop,
         ),
       ),
     );
@@ -623,18 +668,30 @@ class _FaloraShellState extends State<FaloraShell> {
     required int amount,
   }) async {
     debugPrint('$logPrefix TOKEN DEDUCT START ($amount)');
-    try {
-      final ok = await TokenService.instance.spendTokens(_userId, amount);
-      if (!ok) {
-        throw FortuneSubmitException('Yetersiz jeton veya jeton düşülemedi.');
-      }
-      debugPrint('$logPrefix TOKEN DEDUCT OK');
-    } catch (e, stackTrace) {
-      debugPrint('$logPrefix REAL ERROR at TOKEN DEDUCT: $e');
-      debugPrint(stackTrace.toString());
-      if (e is FortuneSubmitException) rethrow;
-      throw FortuneSubmitException('Jeton düşme hatası: $e');
+    await TokenService.instance.spendTokens(_userId, amount);
+    debugPrint('$logPrefix TOKEN DEDUCT OK');
+  }
+
+  void _handleSubmitFailure(
+    Object error,
+    StackTrace? stackTrace, {
+    required String logPrefix,
+    String? requestId,
+    required bool tokensDeducted,
+    Future<void> Function()? rollback,
+  }) {
+    FortuneSubmitLogger.logError(error, stackTrace);
+    if (requestId != null && !tokensDeducted && rollback != null) {
+      unawaited(rollback());
     }
+    _showSubmitError(
+      mapFortuneSubmitError(
+        error,
+        logPrefix: logPrefix,
+        tokensDeducted: tokensDeducted,
+        requestCreated: requestId != null,
+      ),
+    );
   }
 
   void _updateReading(
@@ -984,12 +1041,13 @@ class _FaloraShellState extends State<FaloraShell> {
     var tokensDeducted = false;
 
     try {
-      if (!_checkTokenBalance(
+      await prepareFortuneSubmit(
+        uid: _userId,
+        name: widget.user.name,
+        email: _liveUser.email,
+        fortuneCost: teller.tokenCost,
         logPrefix: 'FORTUNE',
-        tokenCost: teller.tokenCost,
-      )) {
-        return;
-      }
+      );
       debugPrint('FORTUNE VALIDATION OK');
 
       requestId = storage.newFortuneId();
@@ -1014,6 +1072,7 @@ class _FaloraShellState extends State<FaloraShell> {
           readyAt: readyAt,
         );
         debugPrint('FORTUNE REQUEST CREATE OK');
+        debugPrint('FORTUNE_REQUEST_CREATE_SUCCESS id=$requestId');
       } catch (e, stackTrace) {
         debugPrint('FORTUNE REAL ERROR at REQUEST CREATE: $e');
         debugPrint(stackTrace.toString());
@@ -1031,6 +1090,14 @@ class _FaloraShellState extends State<FaloraShell> {
         debugPrint(stackTrace.toString());
         rethrow;
       }
+
+      unawaited(
+        TokenService.instance.mergeProfileFields(
+          uid: _userId,
+          age: age,
+          zodiac: burc,
+        ),
+      );
 
       final summary = cat == FortuneCategory.tarot &&
               (selectedTarotCards?.isNotEmpty ?? false)
@@ -1069,28 +1136,28 @@ class _FaloraShellState extends State<FaloraShell> {
           selectedTarotCards: selectedTarotCards,
         ),
       );
-    } on FortuneSubmitException catch (e) {
-      FortuneSubmitLogger.logError(e);
-      if (requestId != null && !tokensDeducted) {
-        await _rollbackFortuneRequest(requestId);
-      }
-      _showSubmitError('Fal oluşturulamadı, jetonun düşmedi.');
     } catch (e, stackTrace) {
-      FortuneSubmitLogger.logError(e, stackTrace);
-      if (requestId != null && !tokensDeducted) {
-        await _rollbackFortuneRequest(requestId);
-      }
-      _showSubmitError('Fal oluşturulamadı, jetonun düşmedi.');
+      _handleSubmitFailure(
+        e,
+        stackTrace,
+        logPrefix: 'FORTUNE',
+        requestId: requestId,
+        tokensDeducted: tokensDeducted,
+        rollback: requestId != null && !tokensDeducted
+            ? () => _rollbackFortuneRequest(requestId!)
+            : null,
+      );
     }
   }
 
   Future<void> _submitAutoCategory({
     required FortuneCategory category,
+    required FortuneTeller teller,
     required String logPrefix,
     required Map<String, dynamic> inputData,
   }) async {
     debugPrint('$logPrefix SUBMIT START');
-    final tokenCost = tokenCostForCategory(category);
+    final tokenCost = teller.tokenCost;
     final backendType = backendCategoryType(category);
     final title = categoryFortuneTitle(category);
     final summary = buildCategorySummary(category, inputData);
@@ -1100,7 +1167,13 @@ class _FaloraShellState extends State<FaloraShell> {
     var tokensDeducted = false;
 
     try {
-      if (!await _checkCategoryTokenBalance(tokenCost)) return;
+      await prepareFortuneSubmit(
+        uid: _userId,
+        name: widget.user.name,
+        email: _liveUser.email,
+        fortuneCost: tokenCost,
+        logPrefix: logPrefix,
+      );
 
       requestId = storage.newFortuneId();
       final now = DateTime.now();
@@ -1113,9 +1186,12 @@ class _FaloraShellState extends State<FaloraShell> {
         title: title,
         inputData: inputData,
         tokenCost: tokenCost,
+        tellerId: teller.id,
+        tellerName: teller.name,
         createdAt: now,
         readyAt: readyAt,
       );
+      debugPrint('FORTUNE_REQUEST_CREATE_SUCCESS id=$requestId');
 
       await _deductSubmitTokens(logPrefix: logPrefix, amount: tokenCost);
       tokensDeducted = true;
@@ -1146,32 +1222,40 @@ class _FaloraShellState extends State<FaloraShell> {
           logPrefix: logPrefix,
         ),
       );
-    } on FortuneSubmitException catch (e) {
-      FortuneSubmitLogger.logError(e);
-      if (requestId != null && !tokensDeducted) {
-        await _rollbackFortuneRequest(requestId);
-      }
-      _showSubmitError('Yorum oluşturulamadı, jetonun düşmedi.');
     } catch (e, stackTrace) {
-      FortuneSubmitLogger.logError(e, stackTrace);
-      if (requestId != null && !tokensDeducted) {
-        await _rollbackFortuneRequest(requestId);
-      }
-      _showSubmitError('Yorum oluşturulamadı, jetonun düşmedi.');
+      _handleSubmitFailure(
+        e,
+        stackTrace,
+        logPrefix: logPrefix,
+        requestId: requestId,
+        tokensDeducted: tokensDeducted,
+        rollback: requestId != null && !tokensDeducted
+            ? () => _rollbackFortuneRequest(requestId!)
+            : null,
+      );
     }
   }
 
-  Future<void> _submitDreamInterpretation(String dreamText) async {
+  Future<void> _submitDreamInterpretation(
+    String dreamText, {
+    required FortuneTeller teller,
+  }) async {
     await _submitAutoCategory(
       category: FortuneCategory.ruyaTabiri,
+      teller: teller,
       logPrefix: 'DREAM',
       inputData: {'dreamText': dreamText},
     );
   }
 
-  Future<void> _submitNumerology(String name, DateTime birthDate) async {
+  Future<void> _submitNumerology(
+    String name,
+    DateTime birthDate, {
+    required FortuneTeller teller,
+  }) async {
     await _submitAutoCategory(
       category: FortuneCategory.numeroloji,
+      teller: teller,
       logPrefix: 'NUMEROLOGY',
       inputData: {
         'name': name,
@@ -1183,10 +1267,12 @@ class _FaloraShellState extends State<FaloraShell> {
   Future<void> _submitHoroscope(
     String sunSign,
     String moonSign,
-    String focusArea,
-  ) async {
+    String focusArea, {
+    required FortuneTeller teller,
+  }) async {
     await _submitAutoCategory(
       category: FortuneCategory.burcYorumu,
+      teller: teller,
       logPrefix: 'HOROSCOPE',
       inputData: {
         'sunSign': sunSign,
@@ -1219,18 +1305,22 @@ class _FaloraShellState extends State<FaloraShell> {
       },
     );
 
-    if (!await _checkManualFortuneTokenBalance()) return;
-
     final storage = ManualFortuneStorageService.instance;
     final requestId = storage.newRequestId();
     final now = DateTime.now();
-    final readyAt = computeReadyAt(now);
     var tokensDeducted = false;
+    var requestCreated = false;
 
     try {
-      await _deductSubmitTokens(logPrefix: 'MANUAL', amount: tokenCost);
-      tokensDeducted = true;
+      await prepareFortuneSubmit(
+        uid: _userId,
+        name: widget.user.name,
+        email: _liveUser.email,
+        fortuneCost: tokenCost,
+        logPrefix: 'MANUAL',
+      );
 
+      debugPrint('FORTUNE_REQUEST_CREATE_START id=$requestId');
       await storage.createRequest(
         id: requestId,
         userId: _userId,
@@ -1247,6 +1337,11 @@ class _FaloraShellState extends State<FaloraShell> {
         questions: questions,
         images: images,
       );
+      requestCreated = true;
+      debugPrint('FORTUNE_REQUEST_CREATE_SUCCESS id=$requestId');
+
+      await _deductSubmitTokens(logPrefix: 'MANUAL', amount: tokenCost);
+      tokensDeducted = true;
 
       final summary =
           '${category.label} — ${reader.name} (Özel)\n$name, $age, $zodiac\nNiyet: $intention';
@@ -1270,17 +1365,33 @@ class _FaloraShellState extends State<FaloraShell> {
         popToRoot: true,
       );
     } on ManualFortuneException catch (e) {
-      FortuneSubmitLogger.logError(e);
       if (tokensDeducted) {
         await TokenService.instance.addTokens(_userId, tokenCost);
       }
-      _showSubmitError(e.message);
+      _handleSubmitFailure(
+        e,
+        null,
+        logPrefix: 'MANUAL',
+        requestId: requestCreated ? requestId : null,
+        tokensDeducted: tokensDeducted,
+        rollback: requestCreated && !tokensDeducted
+            ? () => storage.deleteRequest(requestId)
+            : null,
+      );
     } catch (e, stackTrace) {
-      FortuneSubmitLogger.logError(e, stackTrace);
       if (tokensDeducted) {
         await TokenService.instance.addTokens(_userId, tokenCost);
       }
-      _showSubmitError('Talep oluşturulamadı. Lütfen tekrar deneyin.');
+      _handleSubmitFailure(
+        e,
+        stackTrace,
+        logPrefix: 'MANUAL',
+        requestId: requestCreated ? requestId : null,
+        tokensDeducted: tokensDeducted,
+        rollback: requestCreated && !tokensDeducted
+            ? () => storage.deleteRequest(requestId)
+            : null,
+      );
     }
   }
 
@@ -1300,12 +1411,13 @@ class _FaloraShellState extends State<FaloraShell> {
     var tokensDeducted = false;
 
     try {
-      if (!_checkTokenBalance(
+      await prepareFortuneSubmit(
+        uid: _userId,
+        name: widget.user.name,
+        email: _liveUser.email,
+        fortuneCost: coupleTokenCost,
         logPrefix: 'COUPLE',
-        tokenCost: coupleTokenCost,
-      )) {
-        return;
-      }
+      );
       debugPrint('COUPLE VALIDATION OK');
 
       await _validateCoupleImages(
@@ -1337,6 +1449,7 @@ class _FaloraShellState extends State<FaloraShell> {
           readyAt: readyAt,
         );
         debugPrint('COUPLE REQUEST CREATE OK');
+        debugPrint('FORTUNE_REQUEST_CREATE_SUCCESS id=$requestId');
       } catch (e, stackTrace) {
         debugPrint('COUPLE REAL ERROR at REQUEST CREATE: $e');
         debugPrint(stackTrace.toString());
@@ -1385,21 +1498,17 @@ class _FaloraShellState extends State<FaloraShell> {
           erkekFoto: erkekFoto,
         ),
       );
-    } on FortuneSubmitException catch (e) {
-      debugPrint('COUPLE SUBMIT ERROR: ${e.message}');
-      debugPrint('COUPLE REAL ERROR: ${e.message}');
-      if (requestId != null && !tokensDeducted) {
-        await _rollbackCoupleRequest(requestId);
-      }
-      _showSubmitError('Çift uyumu oluşturulamadı, jetonun düşmedi.');
     } catch (e, stackTrace) {
-      debugPrint('COUPLE SUBMIT ERROR: $e');
-      debugPrint('COUPLE REAL ERROR: $e');
-      debugPrint(stackTrace.toString());
-      if (requestId != null && !tokensDeducted) {
-        await _rollbackCoupleRequest(requestId);
-      }
-      _showSubmitError('Çift uyumu oluşturulamadı, jetonun düşmedi.');
+      _handleSubmitFailure(
+        e,
+        stackTrace,
+        logPrefix: 'COUPLE',
+        requestId: requestId,
+        tokensDeducted: tokensDeducted,
+        rollback: requestId != null && !tokensDeducted
+            ? () => _rollbackCoupleRequest(requestId!)
+            : null,
+      );
     }
   }
 
@@ -1431,7 +1540,12 @@ class _FaloraShellState extends State<FaloraShell> {
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Center(
-                    child: FaloraTokenMedallion(tokens: user.tokens, compact: true),
+                    child: FaloraTappableTokenBalance(
+                      tokens: user.tokens,
+                      onTap: _openShop,
+                      compact: true,
+                      showHint: false,
+                    ),
                   ),
                 ),
               ],
@@ -1748,11 +1862,13 @@ class NormalFalFormPage extends StatefulWidget {
     required this.category,
     required this.teller,
     required this.onSubmit,
+    required this.onOpenShop,
   });
 
   final FortuneCategory category;
   final FortuneTeller teller;
   final NormalSubmit onSubmit;
+  final VoidCallback onOpenShop;
 
   @override
   State<NormalFalFormPage> createState() => _NormalFalFormPageState();
@@ -1832,6 +1948,8 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
+              const SizedBox(height: 12),
               _FormHeader(category: widget.category, teller: widget.teller),
               const SizedBox(height: 24),
               TextFormField(
@@ -1917,10 +2035,16 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
 // ─── Kahve Falı Formu ───────────────────────────────────────────────────────
 
 class KahveFormPage extends StatefulWidget {
-  const KahveFormPage({super.key, required this.teller, required this.onSubmit});
+  const KahveFormPage({
+    super.key,
+    required this.teller,
+    required this.onSubmit,
+    required this.onOpenShop,
+  });
 
   final FortuneTeller teller;
   final NormalSubmit onSubmit;
+  final VoidCallback onOpenShop;
 
   @override
   State<KahveFormPage> createState() => _KahveFormPageState();
@@ -1994,6 +2118,8 @@ class _KahveFormPageState extends State<KahveFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
+              const SizedBox(height: 12),
               _FormHeader(
                 category: FortuneCategory.kahve,
                 teller: widget.teller,
@@ -2109,9 +2235,14 @@ typedef CiftSubmit = Future<void> Function({
 });
 
 class CiftUyumuFormPage extends StatefulWidget {
-  const CiftUyumuFormPage({super.key, required this.onSubmit});
+  const CiftUyumuFormPage({
+    super.key,
+    required this.onSubmit,
+    required this.onOpenShop,
+  });
 
   final CiftSubmit onSubmit;
+  final VoidCallback onOpenShop;
 
   @override
   State<CiftUyumuFormPage> createState() => _CiftUyumuFormPageState();
@@ -2197,6 +2328,8 @@ class _CiftUyumuFormPageState extends State<CiftUyumuFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
+              const SizedBox(height: 12),
               const _FormHeader(category: FortuneCategory.ciftUyumu),
               const SizedBox(height: 24),
               _PersonSection(

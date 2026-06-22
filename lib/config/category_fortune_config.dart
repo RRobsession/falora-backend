@@ -1,5 +1,6 @@
 import 'package:falora/models/fortune_models.dart';
 
+/// Standart AI kategorilerinin 1. seviye ücreti (Rüya/Numeroloji/Burç dahil).
 const autoCategoryTokenCost = 50;
 
 const horoscopeFocusAreas = ['Genel', 'Aşk', 'Para', 'Kariyer'];
@@ -21,7 +22,20 @@ const horoscopeFocusUiOptions = <String, String>{
   '🌟 Genel': 'Genel',
 };
 
-/// Serdar/Hatice olmadan doğrudan form + otomatik yorum akışı.
+/// Serdar/Hatice teklif edilmeyen kategoriler.
+bool supportsManualFortuneReaders(FortuneCategory category) {
+  switch (category) {
+    case FortuneCategory.ciftUyumu:
+    case FortuneCategory.ruyaTabiri:
+    case FortuneCategory.numeroloji:
+    case FortuneCategory.burcYorumu:
+      return false;
+    default:
+      return true;
+  }
+}
+
+/// Rüya, Numeroloji ve Burç — backend otomatik yorum akışı.
 bool isAutoOnlyCategory(FortuneCategory category) {
   switch (category) {
     case FortuneCategory.ruyaTabiri:
@@ -33,8 +47,8 @@ bool isAutoOnlyCategory(FortuneCategory category) {
   }
 }
 
+/// Eski düz ücret fallback'i (yeni istekler falcı seçiminden gelir).
 int tokenCostForCategory(FortuneCategory category) {
-  if (isAutoOnlyCategory(category)) return autoCategoryTokenCost;
   return autoCategoryTokenCost;
 }
 

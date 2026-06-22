@@ -258,6 +258,12 @@ class ManualFortuneStorageService {
 
 
 
+  Future<void> deleteRequest(String id) async {
+    await _db.collection(_collection).doc(id).delete();
+  }
+
+
+
   Stream<List<ManualFortuneRequest>> watchAnsweredForAdmin() {
     return _db
         .collection(_collection)

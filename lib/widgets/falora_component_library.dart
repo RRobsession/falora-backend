@@ -543,11 +543,13 @@ class FaloraTokenMedallion extends StatelessWidget {
     required this.tokens,
     this.compact = false,
     this.showLabel = false,
+    this.emphasizeEmpty = false,
   });
 
   final int tokens;
   final bool compact;
   final bool showLabel;
+  final bool emphasizeEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -555,29 +557,44 @@ class FaloraTokenMedallion extends StatelessWidget {
     final fontSize = compact ? 19.0 : 28.0;
     final padH = compact ? 12.0 : 16.0;
     final padV = compact ? 7.0 : 10.0;
+    final isEmpty = emphasizeEmpty || tokens <= 0;
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
       decoration: BoxDecoration(
-        shape: compact ? BoxShape.rectangle : BoxShape.rectangle,
         borderRadius: BorderRadius.circular(compact ? 22 : 28),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFF0E4C4), Color(0xFFE8D5A0), Color(0xFFD4AF37)],
-          stops: [0.0, 0.45, 1.0],
+          colors: isEmpty
+              ? const [
+                  Color(0xFFF5E2C8),
+                  Color(0xFFE8C89A),
+                  Color(0xFFC98A3A),
+                ]
+              : const [
+                  Color(0xFFF0E4C4),
+                  Color(0xFFE8D5A0),
+                  Color(0xFFD4AF37),
+                ],
+          stops: const [0.0, 0.45, 1.0],
         ),
-        border: Border.all(color: faloraGoldDark, width: compact ? 1.6 : 2),
+        border: Border.all(
+          color: isEmpty ? const Color(0xFF9A4A2A) : faloraGoldDark,
+          width: compact ? (isEmpty ? 2.0 : 1.6) : (isEmpty ? 2.4 : 2),
+        ),
         boxShadow: [
           BoxShadow(
-            color: faloraBronzeDark.withValues(alpha: 0.35),
+            color: (isEmpty ? const Color(0xFF9A4A2A) : faloraBronzeDark)
+                .withValues(alpha: isEmpty ? 0.42 : 0.35),
             offset: const Offset(0, 2),
             blurRadius: 0,
           ),
           BoxShadow(
-            color: faloraGold.withValues(alpha: 0.35),
-            blurRadius: compact ? 6 : 10,
-            spreadRadius: 0.5,
+            color: (isEmpty ? const Color(0xFFE8A04A) : faloraGold)
+                .withValues(alpha: isEmpty ? 0.45 : 0.35),
+            blurRadius: compact ? (isEmpty ? 10 : 6) : (isEmpty ? 14 : 10),
+            spreadRadius: isEmpty ? 1 : 0.5,
           ),
         ],
       ),
@@ -587,7 +604,7 @@ class FaloraTokenMedallion extends StatelessWidget {
           FaIcon(
             FontAwesomeIcons.coins,
             size: iconSize,
-            color: faloraBronzeDark,
+            color: isEmpty ? const Color(0xFF7A3018) : faloraBronzeDark,
           ),
           SizedBox(width: compact ? 6 : 8),
           Text(
@@ -596,7 +613,7 @@ class FaloraTokenMedallion extends StatelessWidget {
               fontFamily: FaloraTypography.displayFamily,
               fontSize: fontSize,
               fontWeight: FontWeight.w800,
-              color: faloraInk,
+              color: isEmpty ? const Color(0xFF5C2410) : faloraInk,
               height: 1,
               letterSpacing: -0.3,
             ),
@@ -606,12 +623,124 @@ class FaloraTokenMedallion extends StatelessWidget {
             Text(
               'jeton',
               style: FaloraTypography.labelSmall.copyWith(
-                color: faloraBronzeDark,
+                color: isEmpty ? const Color(0xFF7A3018) : faloraBronzeDark,
                 fontSize: compact ? 10 : 11,
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Dokunulabilir jeton bakiyesi — mağazaya yönlendirme ve sıfır bakiye vurgusu.
+class FaloraTappableTokenBalance extends StatefulWidget {
+  const FaloraTappableTokenBalance({
+    super.key,
+    required this.tokens,
+    required this.onTap,
+    this.compact = false,
+    this.showLabel = false,
+    this.showHint = true,
+  });
+
+  final int tokens;
+  final VoidCallback onTap;
+  final bool compact;
+  final bool showLabel;
+  final bool showHint;
+
+  @override
+  State<FaloraTappableTokenBalance> createState() =>
+      _FaloraTappableTokenBalanceState();
+}
+
+class _FaloraTappableTokenBalanceState extends State<FaloraTappableTokenBalance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(covariant FaloraTappableTokenBalance oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncPulse();
+  }
+
+  void _syncPulse() {
+    if (widget.tokens <= 0) {
+      if (!_pulseCtrl.isAnimating) {
+        _pulseCtrl.repeat(reverse: true);
+      }
+    } else {
+      _pulseCtrl
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = widget.tokens <= 0;
+    final hint = isEmpty ? 'Jeton satın al' : 'Jeton yüklemek için dokunun';
+
+    return AnimatedBuilder(
+      animation: _pulseCtrl,
+      builder: (context, child) {
+        final pulse = isEmpty ? _pulseCtrl.value : 0.0;
+        return Transform.scale(
+          scale: _pressed ? 0.97 : 1 + (pulse * 0.02),
+          child: child,
+        );
+      },
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHighlightChanged: (pressed) => setState(() => _pressed = pressed),
+          borderRadius: BorderRadius.circular(widget.compact ? 22 : 28),
+          splashColor: faloraBronze.withValues(alpha: 0.18),
+          highlightColor: faloraGold.withValues(alpha: 0.12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaloraTokenMedallion(
+                tokens: widget.tokens,
+                compact: widget.compact,
+                showLabel: widget.showLabel,
+                emphasizeEmpty: isEmpty,
+              ),
+              if (widget.showHint) ...[
+                const SizedBox(height: 4),
+                Text(
+                  hint,
+                  style: FaloraTypography.labelSmall.copyWith(
+                    color: isEmpty ? const Color(0xFF8A3A1E) : faloraInkSoft,
+                    fontSize: 10,
+                    fontWeight: isEmpty ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

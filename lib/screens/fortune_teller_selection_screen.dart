@@ -1,3 +1,4 @@
+import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/config/manual_fortune_config.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/models/fortune_teller_models.dart';
@@ -8,6 +9,7 @@ import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 /// Fal türü seçildikten sonra falcı seçim ekranı.
 class FortuneTellerSelectionPage extends StatefulWidget {
@@ -16,12 +18,14 @@ class FortuneTellerSelectionPage extends StatefulWidget {
     required this.category,
     required this.onTellerChosen,
     required this.onManualReaderChosen,
+    required this.onOpenShop,
   });
 
   final FortuneCategory category;
   final void Function(BuildContext context, FortuneTeller teller) onTellerChosen;
   final void Function(BuildContext context, ManualFortuneReader reader)
       onManualReaderChosen;
+  final VoidCallback onOpenShop;
 
   @override
   State<FortuneTellerSelectionPage> createState() =>
@@ -29,13 +33,15 @@ class FortuneTellerSelectionPage extends StatefulWidget {
 }
 
 class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage> {
-  late final ManualFortuneOffer _manualOffer;
+  ManualFortuneOffer? _manualOffer;
 
   @override
   void initState() {
     super.initState();
-    _manualOffer = manualOfferFor(widget.category);
-    logManualReaderConfig(widget.category);
+    if (supportsManualFortuneReaders(widget.category)) {
+      _manualOffer = manualOfferFor(widget.category);
+      logManualReaderConfig(widget.category);
+    }
   }
 
   @override
@@ -78,15 +84,18 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Yorumcular jeton ile kişisel yorum hazırlar. '
-                          'Serdar ve Hatice birebir özel yorum sunar; '
-                          '${_manualOffer.questionLimit} soru ${_manualOffer.tokenCost} jeton.',
+                          _manualOffer != null
+                              ? 'Yorumcular jeton ile kişisel yorum hazırlar. '
+                                  'Serdar ve Hatice birebir özel yorum sunar; '
+                                  '${_manualOffer!.questionLimit} soru '
+                                  '${_manualOffer!.tokenCost} jeton.'
+                              : 'Yorumcular jeton ile kişisel yorum hazırlar.',
                           style: FaloraTypography.bodyMedium,
                         ),
                         const SizedBox(height: 12),
-                        FaloraTokenMedallion(
+                        FaloraTappableTokenBalance(
                           tokens: tokens,
-                          compact: false,
+                          onTap: widget.onOpenShop,
                           showLabel: true,
                         ),
                       ],
@@ -96,7 +105,7 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                 const SizedBox(height: 22),
                 const FaloraSectionHeading('Yorumcular'),
                 const SizedBox(height: 12),
-                ...fortuneTellers.map(
+                ...fortuneTellersForCategory(category).map(
                   (teller) => Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: _FortuneTellerCard(
@@ -106,20 +115,23 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                const FaloraSectionHeading('Özel Yorumcular'),
-                const SizedBox(height: 12),
-                ...manualFortuneReaders.map(
-                  (reader) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: _ManualFortuneReaderCard(
-                      reader: reader,
-                      category: category,
-                      offer: _manualOffer,
-                      onTap: () => widget.onManualReaderChosen(context, reader),
+                if (_manualOffer != null) ...[
+                  const SizedBox(height: 8),
+                  const FaloraSectionHeading('Özel Yorumcular'),
+                  const SizedBox(height: 12),
+                  ...manualFortuneReaders.map(
+                    (reader) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _ManualFortuneReaderCard(
+                        reader: reader,
+                        category: category,
+                        offer: _manualOffer!,
+                        onTap: () =>
+                            widget.onManualReaderChosen(context, reader),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             );
           },
@@ -142,107 +154,221 @@ class _ManualFortuneReaderCard extends StatelessWidget {
   final ManualFortuneOffer offer;
   final VoidCallback onTap;
 
+  static const _avatarSize = 64.0;
+
   @override
   Widget build(BuildContext context) {
     return ScaleTap(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
         decoration: faloraParchmentDecoration(
-          base: Color.lerp(faloraParchmentCard, reader.accentColor, 0.1)!,
-          radius: FaloraRadius.xl,
+          base: Color.lerp(faloraParchmentCard, reader.accentColor, 0.08)!,
+          radius: FaloraRadius.lg,
           raised: true,
-          borderWidth: 1.3,
+          borderWidth: 1.2,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                ManualFortuneReaderAvatar(reader: reader),
-                const SizedBox(width: 16),
+                ManualFortuneReaderAvatar(
+                  reader: reader,
+                  size: _avatarSize,
+                  borderWidth: 2,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: faloraParchmentInset.withValues(alpha: 0.7),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: faloraBronze.withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: Text(
-                          manualReaderBadgeLabel,
-                          style: FaloraTypography.labelSmall.copyWith(
-                            color: faloraBronzeDark,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
+                      _ManualReaderBadge(label: manualReaderBadgeLabel),
+                      const SizedBox(height: 5),
                       Text(
                         reader.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: faloraTextPrimary,
-                          fontSize: 20,
+                          color: faloraInk,
+                          fontSize: 17,
                           fontWeight: FontWeight.w800,
+                          height: 1.15,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         reader.title,
-                        style: TextStyle(
-                          color: reader.accentColor.withValues(alpha: 0.95),
-                          fontSize: 13,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: FaloraTypography.labelSmall.copyWith(
+                          color: faloraInkSoft,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-                FaloraAncientPriceBadge(
-                  amount: offer.tokenCost,
-                  suffix: 'jeton',
-                ),
+                const SizedBox(width: 8),
+                _CompactTokenPriceBadge(amount: offer.tokenCost),
               ],
-            ),
-            const SizedBox(height: 14),
-            Text(
-              reader.bio,
-              style: const TextStyle(
-                color: faloraTextSecondary,
-                fontSize: 14,
-                height: 1.45,
-              ),
             ),
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
+            Text(
+              reader.bio,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: FaloraTypography.bodyMedium.copyWith(
+                color: faloraTextSecondary,
+                fontSize: 12.5,
+                height: 1.32,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
               children: [
-                _InfoChip(
-                  label: offer.questionLabel,
-                  color: reader.accentColor,
+                Expanded(
+                  child: _InfoChip(
+                    label: offer.questionLabel,
+                    color: reader.accentColor,
+                  ),
                 ),
-                _InfoChip(
-                  label: offer.intentionLabel,
-                  color: faloraBronze,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _InfoChip(
+                    label: offer.intentionLabel,
+                    color: faloraBronze,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            FaloraPrimaryButton(
+            const SizedBox(height: 10),
+            _ManualReaderContinueButton(
               label: 'Devam Et · ${offer.priceLabel}',
               onPressed: onTap,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ManualReaderBadge extends StatelessWidget {
+  const _ManualReaderBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: faloraSealPreparingBg.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: faloraBronze.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        style: FaloraTypography.labelSmall.copyWith(
+          color: faloraInkHeading,
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.25,
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactTokenPriceBadge extends StatelessWidget {
+  const _CompactTokenPriceBadge({required this.amount});
+
+  final int amount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: faloraParchmentInset.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: faloraGoldDark.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const FaIcon(
+            FontAwesomeIcons.coins,
+            size: 10,
+            color: faloraBronzeDark,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$amount',
+            style: FaloraTypography.labelLarge.copyWith(
+              color: faloraInk,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          Text(
+            'jeton',
+            style: FaloraTypography.labelSmall.copyWith(
+              color: faloraInkSoft,
+              fontSize: 8,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManualReaderContinueButton extends StatelessWidget {
+  const _ManualReaderContinueButton({
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(FaloraRadius.md),
+        child: Ink(
+          height: 44,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(FaloraRadius.md),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [faloraBronze, faloraBronzeDark],
+            ),
+            border: Border.all(color: faloraGoldDark, width: 1),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: FaloraTypography.labelLarge.copyWith(
+                color: faloraParchmentRaised,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -258,17 +384,20 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
         style: FaloraTypography.labelSmall.copyWith(
           color: faloraInkHeading,
-          fontSize: 11,
+          fontSize: 10,
         ),
       ),
     );

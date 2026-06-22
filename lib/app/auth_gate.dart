@@ -30,6 +30,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   StreamSubscription<void>? _authSub;
   int _sessionGeneration = 0;
   bool _showVerificationSentMessage = false;
+  String? _referralNotice;
 
   @override
   void initState() {
@@ -77,9 +78,16 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
         await NotificationService.instance.registerForUser(user.userId);
       } catch (_) {}
       try {
-        await ReferralService.instance.tryGrantReferralRewards(user.userId);
-        await ReferralService.instance.claimPendingInviterCredits(user.userId);
-      } catch (_) {}
+        final notice =
+            await ReferralService.instance.claimPendingReferralIfNeeded(
+          user.userId,
+        );
+        if (notice != null && notice.isNotEmpty) {
+          _referralNotice = notice;
+        }
+      } catch (_) {
+        debugPrint('REFERRAL_IGNORED_REGISTRATION_CONTINUES');
+      }
     }
 
     if (!mounted || generation != _sessionGeneration) return;
@@ -148,9 +156,13 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       return AdminManualRequestsScreen(onLogout: _onLogout);
     }
 
+    final referralNotice = _referralNotice;
+    _referralNotice = null;
+
     return FaloraShell(
       user: _user!.copyWith(emailVerified: true),
       onLogout: _onLogout,
+      initialSnackBarMessage: referralNotice,
     );
   }
 }

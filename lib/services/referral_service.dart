@@ -1,8 +1,10 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:falora/config/app_branding.dart';
 import 'package:falora/config/app_links_config.dart';
 import 'package:falora/config/referral_config.dart';
+import 'package:falora/services/referral_backend_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -30,6 +32,7 @@ class ReferralService {
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final _random = Random.secure();
+  final Map<String, String> _pendingReferralCodesByUid = {};
 
   static const _codeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -43,8 +46,59 @@ class ReferralService {
   DocumentReference<Map<String, dynamic>> _userRef(String uid) =>
       _db.collection('users').doc(uid);
 
-  CollectionReference<Map<String, dynamic>> _creditsRef(String inviterUid) =>
-      _userRef(inviterUid).collection('referral_credits');
+  void storePendingReferralCode(String uid, String rawCode) {
+    final code = rawCode.trim().toUpperCase();
+    if (code.isEmpty) return;
+    debugPrint('REFERRAL_CODE_ENTERED uid=$uid code=$code');
+    _pendingReferralCodesByUid[uid] = code;
+  }
+
+  String? peekPendingReferralCode(String uid) =>
+      _pendingReferralCodesByUid[uid];
+
+  String? takePendingReferralCode(String uid) =>
+      _pendingReferralCodesByUid.remove(uid);
+
+  /// E-posta doğrulandıktan sonra bekleyen referans kodunu backend üzerinden işler.
+  /// Kullanıcıya gösterilecek mesaj varsa döner; hata kayıt akışını bozmaz.
+  Future<String?> claimPendingReferralIfNeeded(String uid) async {
+    final code = peekPendingReferralCode(uid);
+    if (code == null || code.isEmpty) return null;
+
+    try {
+      final result = await ReferralBackendService.instance.claimReferral(
+        referralCode: code,
+      );
+
+      takePendingReferralCode(uid);
+
+      if (result.code == ReferralClaimCode.success && result.rewardTokens > 0) {
+        final current = TokenService.instance.liveUser.value;
+        if (current != null && current.userId == uid) {
+          TokenService.instance.liveUser.value = current.copyWith(
+            tokens: current.tokens + result.rewardTokens,
+          );
+        }
+      }
+
+      return switch (result.code) {
+        ReferralClaimCode.success => referralSuccessInviteeMessage,
+        ReferralClaimCode.notFound => referralCodeNotFoundMessage,
+        ReferralClaimCode.selfReferral => null,
+        ReferralClaimCode.alreadyClaimed => null,
+        ReferralClaimCode.serverError => null,
+      };
+    } on ReferralBackendException catch (e) {
+      debugPrint('REFERRAL_TRANSACTION_FAILED: ${e.message}');
+      debugPrint('REFERRAL_IGNORED_REGISTRATION_CONTINUES');
+      return null;
+    } catch (e, stack) {
+      debugPrint('REFERRAL_TRANSACTION_FAILED: $e');
+      debugPrint(stack.toString());
+      debugPrint('REFERRAL_IGNORED_REGISTRATION_CONTINUES');
+      return null;
+    }
+  }
 
   Future<String> ensureReferralCode(String userId) async {
     debugPrint('REFERRAL_CODE_CREATE_START uid=$userId');
@@ -85,107 +139,12 @@ class ReferralService {
     throw ReferralException('Davet kodu oluşturulamadı.');
   }
 
-  Future<String?> resolveInviterUid(String rawCode) async {
-    final code = rawCode.trim().toUpperCase();
-    if (code.isEmpty) return null;
-    final snap = await _db.collection('referral_codes').doc(code).get();
-    if (!snap.exists) return null;
-    return snap.data()?['uid'] as String?;
-  }
-
-  Future<void> applyReferralOnRegister({
-    required String newUserId,
-    required String? referralCode,
-  }) async {
-    if (referralCode == null || referralCode.trim().isEmpty) return;
-
-    debugPrint('REFERRAL_APPLY_START newUser=$newUserId');
-    final inviterUid = await resolveInviterUid(referralCode);
-    if (inviterUid == null || inviterUid.isEmpty) {
-      debugPrint('REFERRAL_ERROR: invalid code');
-      throw ReferralException('Geçersiz davet kodu.');
-    }
-    if (inviterUid == newUserId) {
-      debugPrint('REFERRAL_ERROR: self referral');
-      throw ReferralException('Kendi davet kodunu kullanamazsın.');
-    }
-
-    await _userRef(newUserId).set(
-      {'referredBy': inviterUid},
-      SetOptions(merge: true),
-    );
-    debugPrint('REFERRAL_APPLY_SUCCESS inviter=$inviterUid');
-  }
-
-  Future<void> tryGrantReferralRewards(String userId) async {
-    final snap = await _userRef(userId).get();
-    if (!snap.exists) return;
-
-    final data = snap.data()!;
-    final referredBy = data['referredBy'] as String?;
-    final claimed = data['referralRewardClaimed'] as bool? ?? false;
-    if (referredBy == null || referredBy.isEmpty || claimed) return;
-
-    try {
-      await _db.runTransaction((tx) async {
-        final userSnap = await tx.get(_userRef(userId));
-        if (!userSnap.exists) return;
-        final userData = userSnap.data()!;
-        if (userData['referralRewardClaimed'] == true) return;
-        final inviter = userData['referredBy'] as String?;
-        if (inviter == null || inviter.isEmpty || inviter == userId) return;
-
-        final tokens = (userData['tokens'] as num?)?.toInt() ?? 0;
-        tx.update(_userRef(userId), {
-          'referralRewardClaimed': true,
-          'tokens': tokens + referralInviteeRewardTokens,
-        });
-
-        final creditRef = _creditsRef(inviter).doc(userId);
-        tx.set(creditRef, {
-          'fromUid': userId,
-          'amount': referralInviterRewardTokens,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      });
-
-      await TokenService.instance.fetchUser(userId);
-      debugPrint('REFERRAL_REWARD_GRANTED invitee=$userId');
-    } catch (e, stack) {
-      debugPrint('REFERRAL_ERROR grant invitee: $e');
-      debugPrint(stack.toString());
-    }
-  }
-
-  Future<void> claimPendingInviterCredits(String inviterUid) async {
-    final credits = await _creditsRef(inviterUid).get();
-    if (credits.docs.isEmpty) return;
-
-    for (final doc in credits.docs) {
-      try {
-        await _db.runTransaction((tx) async {
-          final creditSnap = await tx.get(doc.reference);
-          if (!creditSnap.exists) return;
-
-          final userSnap = await tx.get(_userRef(inviterUid));
-          if (!userSnap.exists) return;
-
-          final amount =
-              (creditSnap.data()?['amount'] as num?)?.toInt() ??
-              referralInviterRewardTokens;
-          final tokens = (userSnap.data()?['tokens'] as num?)?.toInt() ?? 0;
-          tx.update(_userRef(inviterUid), {'tokens': tokens + amount});
-          tx.delete(doc.reference);
-        });
-        debugPrint('REFERRAL_REWARD_GRANTED inviter=$inviterUid credit=${doc.id}');
-      } catch (e) {
-        debugPrint('REFERRAL_ERROR claim credit: $e');
-      }
-    }
-  }
-
   String buildShareMessage(String code) {
-    final buffer = StringBuffer("Falora'ya katıl!\nDavet kodum: $code");
+    final buffer = StringBuffer(
+      "$appDisplayName'ye katıl!\n"
+      'Davet kodum: $code\n\n'
+      'Kayıt olurken kodu gir; ikiniz de $referralInviterRewardTokens jeton kazanın.',
+    );
     if (playStoreUrl.trim().isNotEmpty) {
       buffer.write('\n\n$playStoreUrl');
     }
@@ -207,8 +166,8 @@ class ReferralService {
       final result = await SharePlus.instance.share(
         ShareParams(
           text: message,
-          subject: "Falora'ya katıl!",
-          title: "Falora'ya katıl!",
+          subject: "$appDisplayName'ye katıl!",
+          title: "$appDisplayName'ye katıl!",
           sharePositionOrigin: sharePositionOrigin,
         ),
       );
@@ -223,7 +182,6 @@ class ReferralService {
         return ReferralShareOutcome.nativeShare;
       }
 
-      // Web Share API başarılı olunca share_plus unavailable dönebilir.
       if (kIsWeb) {
         debugPrint('REFERRAL_SHARE_NATIVE_SUCCESS web');
         return ReferralShareOutcome.webShare;

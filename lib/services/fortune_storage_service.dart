@@ -103,6 +103,8 @@ class FortuneStorageService {
     required String title,
     required Map<String, dynamic> inputData,
     required int tokenCost,
+    String? tellerId,
+    String? tellerName,
     DateTime? createdAt,
     DateTime? readyAt,
   }) async {
@@ -116,6 +118,8 @@ class FortuneStorageService {
       'result': '',
       'status': 'pending',
       'tokenCost': tokenCost,
+      if (tellerId != null) 'tellerId': tellerId,
+      if (tellerName != null) 'tellerName': tellerName,
       'createdAt': Timestamp.fromDate(created),
       'readyAt': Timestamp.fromDate(ready),
     });

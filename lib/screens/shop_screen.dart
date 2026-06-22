@@ -134,6 +134,25 @@ class _ShopScreenState extends State<ShopScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    if (_activeProductId != null) {
+      debugPrint(
+        'PURCHASE_LOADING_RESET reason=dispose productId=$_activeProductId',
+      );
+      _activeProductId = null;
+    }
+    super.dispose();
+  }
+
+  void _clearActivePurchaseLoading(String reason) {
+    if (_activeProductId == null) return;
+    debugPrint(
+      'PURCHASE_LOADING_RESET reason=$reason productId=$_activeProductId',
+    );
+    _activeProductId = null;
+  }
+
   Future<void> _buy(TokenProductDefinition product) async {
     if (_activeProductId != null || _restoring) return;
     setState(() => _activeProductId = product.productId);
@@ -178,22 +197,36 @@ class _ShopScreenState extends State<ShopScreen> {
           ? 'Bu satın alma daha önce işlenmiş.'
           : '${result.tokensGranted} jeton hesabına eklendi.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    } on PlayBillingException catch (_) {
+    } on PlayBillingCancelledException {
+      debugPrint('PURCHASE_CANCELLED productId=${product.productId}');
+      // İptal — sessiz; loading finally'de kapanır.
+    } on PlayBillingException catch (e) {
       if (!mounted) return;
+      if (e.code == 'timeout') {
+        debugPrint('PURCHASE_TIMEOUT productId=${product.productId}');
+      } else {
+        debugPrint('PURCHASE_FAILED productId=${product.productId} message=${e.message}');
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Satın alma tamamlanamadı. Lütfen tekrar deneyin.'),
+        SnackBar(
+          content: Text(
+            e.code == 'timeout'
+                ? 'Satın alma zaman aşımına uğradı. Tekrar deneyebilirsiniz.'
+                : 'Satın alma tamamlanamadı. Lütfen tekrar deneyin.',
+          ),
         ),
       );
     } on BillingBackendException catch (_) {
       if (!mounted) return;
+      debugPrint('PURCHASE_FAILED productId=${product.productId} stage=backend');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Satın alma doğrulanamadı. Lütfen tekrar deneyin.'),
         ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      debugPrint('PURCHASE_FAILED productId=${product.productId} error=$e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Satın alma tamamlanamadı. Lütfen tekrar deneyin.'),
@@ -201,7 +234,9 @@ class _ShopScreenState extends State<ShopScreen> {
       );
     } finally {
       if (mounted) {
-        setState(() => _activeProductId = null);
+        setState(() => _clearActivePurchaseLoading('finally'));
+      } else {
+        _clearActivePurchaseLoading('finally_unmounted');
       }
     }
   }

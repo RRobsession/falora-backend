@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
+import 'package:falora/services/token_service.dart';
 import 'package:falora/token_config.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ Future<void> showRewardAdSheet(
 }) {
   final adService = RewardedAdService.instance;
   _logRewardService(adService);
+  final rewardAdsUsed = TokenService.instance.rewardedAdsUsedToday(user);
   final hasReward = adService.hasDailyRewardAvailable(user);
 
   return showGeneralDialog<void>(
@@ -43,6 +45,7 @@ Future<void> showRewardAdSheet(
             Center(
               child: GiftRewardModal(
                 hasReward: hasReward,
+                rewardAdsUsed: rewardAdsUsed,
                 onClose: () => Navigator.pop(ctx),
                 onWatch: hasReward
                     ? () async {
@@ -86,12 +89,12 @@ Future<void> watchRewardAdFlow(
   if (!adService.hasDailyRewardAvailable(user)) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Bugünkü ücretsiz jeton hakkını kullandın.'),
-      ),
+      const SnackBar(content: Text(rewardAdLimitReachedMessage)),
     );
     return;
   }
+
+  AdMobLogger.log('REWARDED_CLAIM_ATTEMPT uid=${user.userId}');
 
   final result = await adService.watchAndClaim(
     context: context,
@@ -107,9 +110,7 @@ Future<void> watchRewardAdFlow(
       );
     case RewardedAdResult.limitReached:
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bugünkü ücretsiz jeton hakkını kullandın.'),
-        ),
+        const SnackBar(content: Text(rewardAdLimitReachedMessage)),
       );
     case RewardedAdResult.cancelled:
       break;

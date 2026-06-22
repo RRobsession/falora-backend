@@ -10,7 +10,7 @@ class FortuneSubmitLogger {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
     try {
-      final token = await user.getIdToken();
+      final token = await user.getIdToken(true);
       return token != null && token.isNotEmpty;
     } catch (_) {
       return false;

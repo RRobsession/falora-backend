@@ -1,4 +1,11 @@
+import 'package:falora/models/fortune_models.dart';
 import 'package:flutter/material.dart';
+
+/// Yalnızca Tarot Falı falcı tier fiyatları (değiştirilmez).
+const premiumTellerTokenCosts = <int>[100, 150, 200];
+
+/// Kahve, Su, İskambil, Bakla ve diğer standart AI fal kategorileri.
+const standardTellerTokenCosts = <int>[50, 100, 150];
 
 /// Kullanıcının seçtiği falcı — jeton ücreti ve yorum uzunluğu tier'ına göre değişir.
 class FortuneTeller {
@@ -66,9 +73,41 @@ const fortuneTellers = <FortuneTeller>[
   ),
 ];
 
-FortuneTeller? fortuneTellerById(String? id) {
+bool categoryUsesPremiumTellerPricing(FortuneCategory category) {
+  return category == FortuneCategory.tarot;
+}
+
+List<int> tellerTokenCostsForCategory(FortuneCategory category) {
+  return categoryUsesPremiumTellerPricing(category)
+      ? premiumTellerTokenCosts
+      : standardTellerTokenCosts;
+}
+
+List<FortuneTeller> fortuneTellersForCategory(FortuneCategory category) {
+  final costs = tellerTokenCostsForCategory(category);
+  return List.generate(fortuneTellers.length, (i) {
+    final teller = fortuneTellers[i];
+    return FortuneTeller(
+      id: teller.id,
+      name: teller.name,
+      title: teller.title,
+      bio: teller.bio,
+      tokenCost: costs[i],
+      lengthLabel: teller.lengthLabel,
+      accentColor: teller.accentColor,
+      avatarAsset: teller.avatarAsset,
+      highlight: teller.highlight,
+      badge: teller.badge,
+    );
+  });
+}
+
+FortuneTeller? fortuneTellerById(String? id, {FortuneCategory? category}) {
   if (id == null || id.isEmpty) return null;
-  for (final t in fortuneTellers) {
+  final list = category != null
+      ? fortuneTellersForCategory(category)
+      : fortuneTellers;
+  for (final t in list) {
     if (t.id == id) return t;
   }
   return null;

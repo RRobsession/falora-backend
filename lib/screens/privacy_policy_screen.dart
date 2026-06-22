@@ -1,3 +1,4 @@
+import 'package:falora/config/app_branding.dart';
 import 'package:falora/config/app_links_config.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/premium_ui.dart';
@@ -11,7 +12,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
     _PolicySection(
       title: '1. Giriş',
       body:
-          'Falora uygulamasını kullanarak bu gizlilik politikasını kabul etmiş olursunuz. '
+          '$appDisplayName uygulamasını kullanarak bu gizlilik politikasını kabul etmiş olursunuz. '
           'Kişisel verilerinizin güvenliği bizim için önemlidir.',
     ),
     _PolicySection(
@@ -50,7 +51,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
     _PolicySection(
       title: '7. Çocukların Gizliliği',
       body:
-          'Falora 18 yaş altı kullanıcılar için tasarlanmamıştır. Bilerek çocuklardan '
+          '$appDisplayName 18 yaş altı kullanıcılar için tasarlanmamıştır. Bilerek çocuklardan '
           'kişisel veri toplanmaz.',
     ),
     _PolicySection(

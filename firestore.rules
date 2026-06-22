@@ -62,9 +62,9 @@ service cloud.firestore {
 
     function validTokenEconomyUpdate() {
 
-      let oldTokens = resource.data.tokens;
+      let oldTokens = resource.data.get('tokens', 0);
 
-      let newTokens = request.resource.data.tokens;
+      let newTokens = request.resource.data.get('tokens', 0);
 
       let oldAds = resource.data.get('rewardedAdsToday', 0);
 
@@ -74,7 +74,7 @@ service cloud.firestore {
 
         || (newTokens < oldTokens && newTokens >= 0)
 
-        || (newTokens == oldTokens + 50 && newAds == oldAds + 1 && newAds <= 1);
+        || (newTokens == oldTokens + 50 && newAds == oldAds + 1 && newAds <= 2);
 
     }
 
@@ -96,7 +96,7 @@ service cloud.firestore {
 
         && referredBy.size() > 0
 
-        && request.resource.data.tokens == resource.data.tokens + 25;
+        && request.resource.data.get('tokens', 0) == resource.data.get('tokens', 0) + 100;
 
     }
 
@@ -104,13 +104,13 @@ service cloud.firestore {
 
     function validInviterReferralClaimUpdate() {
 
-      let oldTokens = resource.data.tokens;
+      let oldTokens = resource.data.get('tokens', 0);
 
-      let newTokens = request.resource.data.tokens;
+      let newTokens = request.resource.data.get('tokens', 0);
 
       let delta = newTokens - oldTokens;
 
-      return delta == 50;
+      return delta == 100;
 
     }
 
@@ -124,7 +124,7 @@ service cloud.firestore {
 
         && request.resource.data.referralCode.size() >= 6
 
-        && request.resource.data.tokens == resource.data.tokens;
+        && request.resource.data.get('tokens', 0) == resource.data.get('tokens', 0);
 
     }
 
@@ -146,41 +146,62 @@ service cloud.firestore {
 
     match /users/{userId} {
 
+      // Başlangıç jetonu — token_config.dart `initialUserTokens` ile senkron (50).
+      function allowedCreateTokenBalance() {
+        return ('tokens' in request.resource.data)
+          && request.resource.data.tokens is number
+          && (request.resource.data.tokens == 50
+            || request.resource.data.tokens == 0);
+      }
+
+      function validReferredByOnCreate() {
+        return !('referredBy' in request.resource.data)
+          || (request.resource.data.referredBy is string
+              && request.resource.data.referredBy.size() > 0
+              && request.resource.data.referredBy != userId);
+      }
+
+      function validUserCreate() {
+        return request.resource.data.uid == userId
+          && request.resource.data.email is string
+          && request.resource.data.email.size() >= 3
+          && allowedCreateTokenBalance()
+          && validReferredByOnCreate();
+      }
+
+      function validProfileOnlyUpdate() {
+        return request.resource.data.get('tokens', 0) == resource.data.get('tokens', 0)
+          && request.resource.data.get('rewardedAdsToday', 0)
+            == resource.data.get('rewardedAdsToday', 0)
+          && request.resource.data.get('referralRewardClaimed', false)
+            == resource.data.get('referralRewardClaimed', false);
+      }
+
+      function validMissingTokensBackfill() {
+        return (!('tokens' in resource.data) || resource.data.tokens == null)
+          && allowedCreateTokenBalance()
+          && protectedUserFieldsUnchanged();
+      }
+
       allow read: if isOwner(userId);
 
-
-
-      allow create: if isOwner(userId)
-
-        && request.resource.data.uid == userId
-
-        && request.resource.data.email == request.auth.token.email
-
-        && request.resource.data.tokens == 50
-
-        && (!('referredBy' in request.resource.data)
-
-          || (request.resource.data.referredBy is string
-
-              && request.resource.data.referredBy != userId
-
-              && request.resource.data.referredBy.size() > 0));
-
-
+      allow create: if isOwner(userId) && validUserCreate();
 
       allow update: if isOwner(userId)
 
         && protectedUserFieldsUnchanged()
 
-        && (validTokenEconomyUpdate()
+        && (validProfileOnlyUpdate()
+
+          || validMissingTokensBackfill()
+
+          || validTokenEconomyUpdate()
 
           || validReferralSelfRewardUpdate()
 
           || validInviterReferralClaimUpdate()
 
           || validReferralCodeSetUpdate());
-
-
 
       allow delete: if isOwner(userId);
 
@@ -196,7 +217,7 @@ service cloud.firestore {
 
           && request.resource.data.fromUid == request.auth.uid
 
-          && request.resource.data.amount == 50
+          && request.resource.data.amount == 100
 
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.referredBy == userId;
 

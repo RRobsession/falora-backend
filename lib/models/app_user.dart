@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:falora/services/token_service.dart';
 
 class AppUser {
   const AppUser({
@@ -9,6 +10,8 @@ class AppUser {
     this.rewardedAdsToday = 0,
     this.lastRewardAt,
     this.emailVerified = false,
+    this.age,
+    this.zodiac,
   });
 
   final String userId;
@@ -18,6 +21,11 @@ class AppUser {
   final int rewardedAdsToday;
   final DateTime? lastRewardAt;
   final bool emailVerified;
+  final int? age;
+  final String? zodiac;
+
+  bool get hasProfileDetails =>
+      (age != null && age! > 0) || (zodiac != null && zodiac!.isNotEmpty);
 
   AppUser copyWith({
     String? name,
@@ -26,6 +34,8 @@ class AppUser {
     int? rewardedAdsToday,
     DateTime? lastRewardAt,
     bool? emailVerified,
+    int? age,
+    String? zodiac,
   }) {
     return AppUser(
       userId: userId,
@@ -35,6 +45,8 @@ class AppUser {
       rewardedAdsToday: rewardedAdsToday ?? this.rewardedAdsToday,
       lastRewardAt: lastRewardAt ?? this.lastRewardAt,
       emailVerified: emailVerified ?? this.emailVerified,
+      age: age ?? this.age,
+      zodiac: zodiac ?? this.zodiac,
     );
   }
 
@@ -61,10 +73,18 @@ class AppUser {
       userId: uid,
       name: (json['name'] as String?)?.trim() ?? '',
       email: (json['email'] as String?)?.trim().toLowerCase() ?? '',
-      tokens: (json['tokens'] as num?)?.toInt() ?? 0,
+      tokens: TokenService.parseTokenBalance(json['tokens'], uid: uid),
       rewardedAdsToday: (json['rewardedAdsToday'] as num?)?.toInt() ?? 0,
       lastRewardAt: lastReward,
+      age: (json['age'] as num?)?.toInt(),
+      zodiac: _parseZodiac(json['zodiac']),
       // emailVerified yalnızca Firebase Auth'tan okunur; Firestore alanı kullanılmaz.
     );
+  }
+
+  static String? _parseZodiac(dynamic raw) {
+    if (raw is! String) return null;
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 }

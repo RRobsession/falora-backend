@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:falora/config/app_branding.dart';
 import 'package:falora/theme/falora_theme.dart';
 
 class FaloraLogoHeader extends StatelessWidget {
@@ -41,7 +42,7 @@ class FaloraLogoHeader extends StatelessWidget {
         ),
         SizedBox(height: compact ? 12 : 18),
         Text(
-          'Falora',
+          appDisplayName,
           style: TextStyle(
             fontSize: compact ? 28 : 36,
             fontWeight: FontWeight.bold,
