@@ -185,8 +185,11 @@ class FortuneReading {
   bool get showsCountdown =>
       readyAt != null && !isReadyAtElapsed && !isReadyDisplay;
 
+  bool get isFailedDisplay => firestoreStatus == 'error';
+
   String get statusBadgeLabel {
     if (isReadyDisplay) return 'Hazır';
+    if (isFailedDisplay) return 'Oluşturulamadı';
     if (isManualPremium && !isReadyAtElapsed && readyAt != null) {
       return 'Beklemede · ${formatReadingCountdown(remainingUntilReady)}';
     }
@@ -210,6 +213,7 @@ class FortuneReading {
   }
 
   bool get isPreparingDisplay {
+    if (isFailedDisplay) return false;
     if (isManualPremium) {
       return !isReadyDisplay;
     }
@@ -217,7 +221,7 @@ class FortuneReading {
     return firestoreStatus == 'pending' || !hasResult;
   }
 
-  bool get isViewable => isReadyDisplay;
+  bool get isViewable => isReadyDisplay || isFailedDisplay;
 
   FortuneStatus get displayStatus =>
       isReadyDisplay ? FortuneStatus.hazir : FortuneStatus.hazirlaniyor;

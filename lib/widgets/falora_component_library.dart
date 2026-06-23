@@ -483,7 +483,7 @@ ButtonStyle faloraOutlinedOnParchmentStyle({
 }
 
 
-enum FaloraReadingStatus { ready, preparing, pending }
+enum FaloraReadingStatus { ready, preparing, pending, error }
 
 /// Soluk mühür — Hazır / Hazırlanıyor / Beklemede (dikkat dağıtmaz).
 class FaloraStatusSeal extends StatelessWidget {
@@ -500,18 +500,21 @@ class FaloraStatusSeal extends StatelessWidget {
         FaloraReadingStatus.ready => 'Hazır',
         FaloraReadingStatus.preparing => 'Hazırlanıyor',
         FaloraReadingStatus.pending => 'Beklemede',
+        FaloraReadingStatus.error => 'Oluşturulamadı',
       };
 
   Color get _bg => switch (status) {
         FaloraReadingStatus.ready => faloraSealReadyBg,
         FaloraReadingStatus.preparing => faloraSealPreparingBg,
         FaloraReadingStatus.pending => faloraSealPendingBg,
+        FaloraReadingStatus.error => faloraSealErrorBg,
       };
 
   Color get _ink => switch (status) {
         FaloraReadingStatus.ready => faloraSealReadyInk,
         FaloraReadingStatus.preparing => faloraSealPreparingInk,
         FaloraReadingStatus.pending => faloraSealPendingInk,
+        FaloraReadingStatus.error => faloraSealErrorInk,
       };
 
   @override
@@ -1051,12 +1054,14 @@ class FaloraZodiacHero extends StatelessWidget {
     required this.subtitle,
     required this.onStart,
     this.accent = faloraBronze,
+    this.tokenCost,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback onStart;
   final Color accent;
+  final int? tokenCost;
 
   @override
   Widget build(BuildContext context) {
@@ -1093,6 +1098,10 @@ class FaloraZodiacHero extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: FaloraTypography.bodyLarge,
               ),
+              if (tokenCost != null) ...[
+                const SizedBox(height: 12),
+                FaloraTokenBadge(amount: tokenCost!, compact: true),
+              ],
               const SizedBox(height: 22),
               FaloraPrimaryButton(
                 label: 'Yeni Analiz Başlat',

@@ -72,6 +72,7 @@ class _ReadingRecordCardState extends State<ReadingRecordCard> {
 
   FaloraReadingStatus get _status {
     if (_reading.isReadyDisplay) return FaloraReadingStatus.ready;
+    if (_reading.isFailedDisplay) return FaloraReadingStatus.error;
     if (_reading.isManualPremium) return FaloraReadingStatus.pending;
     return FaloraReadingStatus.preparing;
   }

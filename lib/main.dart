@@ -471,12 +471,6 @@ class _FaloraShellState extends State<FaloraShell> {
     } else {
       await FortuneStorageService.instance.markFortuneReady(reading.id);
     }
-    unawaited(
-      NotificationBackendService.instance.notifyFortuneReady(
-        userId: _userId,
-        isCouple: isCouple,
-      ),
-    );
     if (!mounted) return;
     final idx = list.indexWhere((r) => r.id == reading.id);
     if (idx == -1) return;
@@ -486,6 +480,21 @@ class _FaloraShellState extends State<FaloraShell> {
     );
     setState(() => list[idx] = updated);
     _readingNotifiers[reading.id]?.value = updated;
+  }
+
+  void _scheduleReadyPushNotification({
+    required String readingId,
+    required DateTime readyAt,
+    required bool isCouple,
+  }) {
+    unawaited(
+      NotificationBackendService.instance.scheduleNotify(
+        userId: _userId,
+        isCouple: isCouple,
+        notifyAt: readyAt,
+        readingId: readingId,
+      ),
+    );
   }
 
   void _addFortuneRequest(FortuneReading reading) {
@@ -899,21 +908,36 @@ class _FaloraShellState extends State<FaloraShell> {
     }
   }
 
-  void _showCoupleBackendFailure(String requestId) {
-    if (mounted) {
-      _updateReading(
-        _coupleCompatibilityRequests,
-        requestId,
-        result: coupleErrorMessage,
-        firestoreStatus: 'error',
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(coupleErrorMessage)),
-      );
+  Future<void> _failCoupleRequest(String requestId) async {
+    final storage = FortuneStorageService.instance;
+    try {
+      await storage.markCoupleError(requestId, message: coupleErrorMessage);
+    } catch (markError) {
+      debugPrint('COUPLE ERROR STATUS SAVE FAILED: $markError');
     }
+    try {
+      await TokenService.instance.addTokens(_userId, coupleTokenCost);
+      debugPrint('COUPLE TOKEN REFUND: $coupleTokenCost');
+    } catch (refundError) {
+      debugPrint('COUPLE TOKEN REFUND FAILED: $refundError');
+    }
+    if (!mounted) return;
+    _updateReading(
+      _coupleCompatibilityRequests,
+      requestId,
+      result: coupleErrorMessage,
+      firestoreStatus: 'error',
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$coupleErrorMessage $coupleTokenCost jeton hesabınıza iade edildi.',
+        ),
+      ),
+    );
   }
 
-  static const _coupleBackendTimeout = Duration(seconds: 15);
+  static const _coupleBackendTimeout = Duration(seconds: 120);
 
   Future<void> _resolveCoupleInBackground({
     required String requestId,
@@ -968,32 +992,11 @@ class _FaloraShellState extends State<FaloraShell> {
     } on TimeoutException catch (e, stackTrace) {
       debugPrint('COUPLE ERROR: $e');
       debugPrint(stackTrace.toString());
-      try {
-        await storage.markCoupleError(requestId);
-      } catch (markError) {
-        debugPrint('COUPLE ERROR STATUS SAVE FAILED: $markError');
-      }
-      _showCoupleBackendFailure(requestId);
+      await _failCoupleRequest(requestId);
     } catch (e, stackTrace) {
       debugPrint('COUPLE ERROR: $e');
       debugPrint(stackTrace.toString());
-      try {
-        await storage.markCoupleError(requestId);
-      } catch (markError) {
-        debugPrint('COUPLE ERROR STATUS SAVE FAILED: $markError');
-      }
-      if (!mounted) return;
-      _updateReading(
-        _coupleCompatibilityRequests,
-        requestId,
-        result: coupleErrorMessage,
-        firestoreStatus: 'error',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(coupleErrorMessage)),
-        );
-      }
+      await _failCoupleRequest(requestId);
     }
   }
 
@@ -1152,6 +1155,11 @@ class _FaloraShellState extends State<FaloraShell> {
       _registerReading(reading);
       _addFortuneRequest(reading);
       _scheduleReadyAtUnlock(reading, _fortuneRequests);
+      _scheduleReadyPushNotification(
+        readingId: requestId,
+        readyAt: readyAt,
+        isCouple: false,
+      );
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'FORTUNE',
@@ -1243,6 +1251,11 @@ class _FaloraShellState extends State<FaloraShell> {
       _registerReading(reading);
       _addFortuneRequest(reading);
       _scheduleReadyAtUnlock(reading, _fortuneRequests);
+      _scheduleReadyPushNotification(
+        readingId: requestId,
+        readyAt: readyAt,
+        isCouple: false,
+      );
 
       _navigateAfterFortuneSubmit(
         logPrefix: logPrefix,
@@ -1515,6 +1528,11 @@ class _FaloraShellState extends State<FaloraShell> {
       _registerReading(reading);
       _addCoupleRequest(reading);
       _scheduleReadyAtUnlock(reading, _coupleCompatibilityRequests);
+      _scheduleReadyPushNotification(
+        readingId: requestId,
+        readyAt: readyAt,
+        isCouple: true,
+      );
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'COUPLE',
@@ -1800,6 +1818,7 @@ class CiftUyumuTab extends StatelessWidget {
                   subtitle:
                       'Burç uyumu, çekim, iletişim ve ilişki potansiyelinizi keşfedin.',
                   accent: FortuneCategory.ciftUyumu.color,
+                  tokenCost: coupleTokenCost,
                   onStart: onStart,
                 ),
                 const SizedBox(height: 24),
@@ -2398,7 +2417,10 @@ class _CiftUyumuFormPageState extends State<CiftUyumuFormPage> {
             children: [
               FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
               const SizedBox(height: 12),
-              const _FormHeader(category: FortuneCategory.ciftUyumu),
+              const _FormHeader(
+                category: FortuneCategory.ciftUyumu,
+                tokenCost: coupleTokenCost,
+              ),
               const SizedBox(height: 24),
               _PersonSection(
                 title: 'Kadın',
@@ -2433,7 +2455,7 @@ class _CiftUyumuFormPageState extends State<CiftUyumuFormPage> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('Analizi Gönder'),
+                    : Text('Analizi Gönder · $coupleTokenCost jeton'),
               ),
             ],
           ),
@@ -2534,10 +2556,15 @@ class _PersonSection extends StatelessWidget {
 // ─── Ortak Widget'lar ───────────────────────────────────────────────────────
 
 class _FormHeader extends StatelessWidget {
-  const _FormHeader({required this.category, this.teller});
+  const _FormHeader({
+    required this.category,
+    this.teller,
+    this.tokenCost,
+  });
 
   final FortuneCategory category;
   final FortuneTeller? teller;
+  final int? tokenCost;
 
   @override
   Widget build(BuildContext context) {
@@ -2568,6 +2595,15 @@ class _FormHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '${teller!.name} · ${resolveTellerTokenCost(category, teller!.id)} jeton',
+                  style: FaloraTypography.bodyMedium.copyWith(
+                    color: faloraInkSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ] else if (tokenCost != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '$tokenCost jeton',
                   style: FaloraTypography.bodyMedium.copyWith(
                     color: faloraInkSoft,
                     fontWeight: FontWeight.w600,
@@ -2696,7 +2732,8 @@ class _SonucContentState extends State<_SonucContent>
   @override
   Widget build(BuildContext context) {
     final reading = widget.reading;
-    final isError = isFortuneResultError(reading.result);
+    final isError =
+        isFortuneResultError(reading.result) || reading.isFailedDisplay;
     final isCouple = reading.category == FortuneCategory.ciftUyumu;
     final isAutoCategory = isAutoOnlyCategory(reading.category);
     final hasTarotCards = reading.category == FortuneCategory.tarot &&
@@ -2705,7 +2742,7 @@ class _SonucContentState extends State<_SonucContent>
         ? parseCompatibilityPercent(reading.result)
         : null;
     final bodyText = isError
-        ? reading.result
+        ? (reading.result.isNotEmpty ? reading.result : coupleErrorMessage)
         : isCouple
             ? stripCompatibilityHeader(reading.result)
             : reading.result;

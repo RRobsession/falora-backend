@@ -495,7 +495,7 @@ app.post(
   }
 
   try {
-    const result = scheduleFortuneNotify(userId, type, notifyAt, readingId);
+    const result = await scheduleFortuneNotify(userId, type, notifyAt, readingId);
     return res.json(result);
   } catch (err) {
     console.error('FCM SCHEDULE ERROR:', err.message);

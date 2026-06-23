@@ -340,6 +340,12 @@ service cloud.firestore {
 
     }
 
+    match /notification_schedules/{scheduleId} {
+
+      allow read, write: if false;
+
+    }
+
   }
 
 }

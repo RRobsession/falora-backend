@@ -347,8 +347,13 @@ class FortuneStorageService {
     await _db.collection(_couples).doc(id).update({'status': 'ready'});
   }
 
-  Future<void> markCoupleError(String id) async {
-    await _db.collection(_couples).doc(id).update({'status': 'error'});
+  Future<void> markCoupleError(String id, {String? message}) async {
+    final data = <String, dynamic>{'status': 'error'};
+    final trimmed = message?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      data['result'] = trimmed;
+    }
+    await _db.collection(_couples).doc(id).update(data);
   }
 
   FortuneReading _readingFromFields({

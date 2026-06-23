@@ -188,6 +188,8 @@ const faloraSealPreparingBg = Color(0xFFDDD0B0);
 const faloraSealPreparingInk = Color(0xFF75624A);
 const faloraSealPendingBg = Color(0xFFD6C8A8);
 const faloraSealPendingInk = Color(0xFF6B5340);
+const faloraSealErrorBg = Color(0xFFE8C8C0);
+const faloraSealErrorInk = Color(0xFF8B4A40);
 
 // ─── Tarot masası (sıcak ahşap — mor ton yok) ───────────────────────────────
 

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
@@ -8,12 +9,20 @@ class NotificationService {
 
   static final NotificationService instance = NotificationService._();
 
+  static const _androidChannelId = 'falora_ready';
+  static const _androidChannelName = 'Falora Bildirimleri';
+
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+
   String? _currentUserId;
+  bool _localNotificationsReady = false;
 
   Future<void> init() async {
     try {
+      await _initLocalNotifications();
       if (kIsWeb) {
         await _initWeb();
         return;
@@ -27,6 +36,35 @@ class NotificationService {
     } catch (e) {
       debugPrint('FCM INIT ERROR: $e');
     }
+  }
+
+  Future<void> _initLocalNotifications() async {
+    if (kIsWeb) return;
+
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    await _localNotifications.initialize(
+      const InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      ),
+    );
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _androidChannelId,
+          _androidChannelName,
+          description: 'Fal ve çift uyumu hazır bildirimleri',
+          importance: Importance.high,
+        ),
+      );
+    }
+
+    _localNotificationsReady = true;
   }
 
   Future<void> _initWeb() async {
@@ -66,13 +104,14 @@ class NotificationService {
 
   void _setupForegroundListener() {
     FirebaseMessaging.onMessage.listen(
-      (message) {
+      (message) async {
         debugPrint(
           'FCM FOREGROUND MESSAGE: id=${message.messageId} '
           'title=${message.notification?.title} '
           'body=${message.notification?.body} '
           'data=${message.data}',
         );
+        await _showForegroundNotification(message);
       },
       onError: (Object e) {
         if (kIsWeb) {
@@ -81,6 +120,37 @@ class NotificationService {
           debugPrint('FCM foreground listener error: $e');
         }
       },
+    );
+  }
+
+  Future<void> _showForegroundNotification(RemoteMessage message) async {
+    if (!_localNotificationsReady || kIsWeb) return;
+
+    final notification = message.notification;
+    final title = notification?.title ?? message.data['title']?.toString();
+    final body = notification?.body ?? message.data['body']?.toString();
+    if (title == null || title.isEmpty || body == null || body.isEmpty) {
+      return;
+    }
+
+    await _localNotifications.show(
+      message.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _androidChannelId,
+          _androidChannelName,
+          channelDescription: 'Fal ve çift uyumu hazır bildirimleri',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
     );
   }
 

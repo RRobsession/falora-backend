@@ -167,12 +167,6 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
                   fontSize: widget.compact ? 22 : 28,
                   fontWeight: FontWeight.w700,
                   height: 1.1,
-                  shadows: [
-                    Shadow(
-                      color: faloraBronzeDark.withValues(alpha: 0.15),
-                      blurRadius: 4,
-                    ),
-                  ],
                 ),
               ),
             ],
@@ -382,7 +376,9 @@ class PremiumCategoryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      category.description,
+                      category == FortuneCategory.ciftUyumu
+                          ? '${category.description} · $coupleTokenCost jeton'
+                          : category.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: FaloraTypography.bodyMedium.copyWith(
