@@ -60,21 +60,36 @@ service cloud.firestore {
 
 
 
+    function rewardPeriodElapsed() {
+      let last = resource.data.get('lastRewardAt', null);
+      return last == null
+        || request.time > last + duration.value(24, 'h');
+    }
+
+    function validRewardedAdGrant() {
+      let oldTokens = resource.data.get('tokens', 0);
+      let newTokens = request.resource.data.get('tokens', 0);
+      let oldAds = resource.data.get('rewardedAdsToday', 0);
+      let newAds = request.resource.data.get('rewardedAdsToday', 0);
+      return newTokens == oldTokens + 50
+        && newAds <= 2
+        && (
+          newAds == oldAds + 1
+          || (rewardPeriodElapsed() && newAds == 1 && oldAds >= 1)
+        );
+    }
+
     function validTokenEconomyUpdate() {
 
       let oldTokens = resource.data.get('tokens', 0);
 
       let newTokens = request.resource.data.get('tokens', 0);
 
-      let oldAds = resource.data.get('rewardedAdsToday', 0);
-
-      let newAds = request.resource.data.get('rewardedAdsToday', 0);
-
       return newTokens == oldTokens
 
         || (newTokens < oldTokens && newTokens >= 0)
 
-        || (newTokens == oldTokens + 50 && newAds == oldAds + 1 && newAds <= 2);
+        || validRewardedAdGrant();
 
     }
 

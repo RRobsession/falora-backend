@@ -1,5 +1,7 @@
 import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/models/fortune_models.dart';
+import 'package:falora/services/fortune_form_prefill.dart';
+import 'package:falora/widgets/turkish_birth_date_field.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
@@ -146,11 +148,13 @@ class NumerologyFormPage extends StatefulWidget {
     required this.tokenCost,
     required this.onSubmit,
     required this.onOpenShop,
+    this.prefill,
   });
 
   final int tokenCost;
   final Future<void> Function(String name, DateTime birthDate) onSubmit;
   final VoidCallback onOpenShop;
+  final FortuneFormPrefill? prefill;
 
   @override
   State<NumerologyFormPage> createState() => _NumerologyFormPageState();
@@ -160,11 +164,27 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
+  final _birthDateFieldKey = GlobalKey<TurkishBirthDateFieldState>();
   DateTime? _birthDate;
   String _analysisType = numerologyAnalysisTypes.first;
   var _submitting = false;
 
   static const _accent = Color(0xFFB8860B);
+
+  @override
+  void initState() {
+    super.initState();
+    final prefill = widget.prefill;
+    if (prefill != null && prefill.hasAny) {
+      prefill.applyNameParts(
+        firstName: _firstNameCtrl,
+        lastName: _lastNameCtrl,
+      );
+      if (prefill.birthDate != null) {
+        _birthDate = prefill.birthDate;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -173,36 +193,18 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
     super.dispose();
   }
 
-  Future<void> _pickBirthDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _birthDate ?? DateTime(now.year - 25),
-      firstDate: DateTime(1920),
-      lastDate: now,
-      helpText: 'Doğum tarihi seçin',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: faloraBronze,
-              onPrimary: faloraParchmentRaised,
-              surface: faloraParchmentCard,
-              onSurface: faloraInk,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) setState(() => _birthDate = picked);
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_birthDate == null) {
+    if (!(_birthDateFieldKey.currentState?.isValid ?? false)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Doğum tarihi seçin')),
+        const SnackBar(content: Text('Geçerli bir doğum tarihi girin')),
+      );
+      return;
+    }
+    final birthDate = _birthDateFieldKey.currentState?.selectedDate;
+    if (birthDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Geçerli bir doğum tarihi girin')),
       );
       return;
     }
@@ -212,7 +214,7 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
       final last = _lastNameCtrl.text.trim();
       final baseName = last.isEmpty ? first : '$first $last';
       final fullName = '$baseName — $_analysisType';
-      await widget.onSubmit(fullName, _birthDate!);
+      await widget.onSubmit(fullName, birthDate);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -256,13 +258,10 @@ class _NumerologyFormPageState extends State<NumerologyFormPage> {
                     textCapitalization: TextCapitalization.words,
                   ),
                   const SizedBox(height: 16),
-                  _DatePickerTile(
-                    accent: _accent,
-                    label: 'Doğum tarihi',
-                    value: _birthDate == null
-                        ? null
-                        : formatBirthDate(_birthDate!),
-                    onTap: _pickBirthDate,
+                  TurkishBirthDateField(
+                    key: _birthDateFieldKey,
+                    initialDate: _birthDate,
+                    onChanged: (date) => _birthDate = date,
                   ),
                 ],
               ),
@@ -300,6 +299,7 @@ class HoroscopeFormPage extends StatefulWidget {
     required this.tokenCost,
     required this.onSubmit,
     required this.onOpenShop,
+    this.prefill,
   });
 
   final int tokenCost;
@@ -309,6 +309,7 @@ class HoroscopeFormPage extends StatefulWidget {
     String focusArea,
   ) onSubmit;
   final VoidCallback onOpenShop;
+  final FortuneFormPrefill? prefill;
 
   @override
   State<HoroscopeFormPage> createState() => _HoroscopeFormPageState();
@@ -322,6 +323,15 @@ class _HoroscopeFormPageState extends State<HoroscopeFormPage> {
   var _submitting = false;
 
   static const _accent = Color(0xFF7A5C3E);
+
+  @override
+  void initState() {
+    super.initState();
+    final prefill = widget.prefill;
+    if (prefill != null && prefill.hasAny) {
+      _sunSign = prefill.applyToZodiac(_sunSign);
+    }
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -673,30 +683,42 @@ class _PremiumTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      textCapitalization: textCapitalization,
-      style: const TextStyle(color: faloraTextPrimary, fontSize: 16),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: faloraTextSecondary.withValues(alpha: 0.85)),
-        filled: true,
-        fillColor: faloraParchmentRaised,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(FaloraRadius.md),
-          borderSide: BorderSide(color: faloraBronze.withValues(alpha: 0.3)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: faloraInkHeading,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(FaloraRadius.md),
-          borderSide: BorderSide(color: faloraBronze.withValues(alpha: 0.3)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          textCapitalization: textCapitalization,
+          style: const TextStyle(color: faloraTextPrimary, fontSize: 15),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: faloraParchmentRaised,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(FaloraRadius.md),
+              borderSide: BorderSide(color: faloraBronze.withValues(alpha: 0.3)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(FaloraRadius.md),
+              borderSide: BorderSide(color: faloraBronze.withValues(alpha: 0.3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(FaloraRadius.md),
+              borderSide: const BorderSide(color: faloraGoldDark, width: 1.2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          validator: validator,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(FaloraRadius.md),
-          borderSide: const BorderSide(color: faloraGoldDark, width: 1.2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      ),
-      validator: validator,
+      ],
     );
   }
 }

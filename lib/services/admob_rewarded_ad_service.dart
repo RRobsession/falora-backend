@@ -169,7 +169,7 @@ class AdMobRewardedAdService implements RewardedAdService {
     if (showFailed) return RewardedAdResult.failed;
 
     final earned = await rewardEarned.future.timeout(
-      const Duration(seconds: 2),
+      const Duration(seconds: 8),
       onTimeout: () => false,
     );
     if (!earned) {

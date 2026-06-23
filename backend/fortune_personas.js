@@ -387,7 +387,7 @@ function formatSelectedTarotCards(selectedCards) {
 
   const lines = cards.map((card, index) => {
     const pos = card.positionIndex ?? index + 1;
-    const label = card.id || card.nameTr || card.nameEn || 'Kart';
+    const label = resolveTarotCardLabel(card);
     const orientation = card.isReversed ? 'Ters' : 'Düz';
     return `${pos}. ${label} (${orientation})`;
   });
@@ -396,6 +396,7 @@ function formatSelectedTarotCards(selectedCards) {
 ${lines.join('\n')}
 
 TAROT YORUM KURALLARI:
+- Kartları dosya adıyla (p03, c03, w12 gibi) ASLA anma; yalnızca yukarıdaki Türkçe kart isimlerini kullan.
 - Önce her kartın anlamını tek tek yorumla (sırayla, kart başına 1-2 cümle).
 - Tüm kartları yorumladıktan sonra bütünsel genel yorum oluştur.
 - Kartları danışanın niyeti/sorusu ile ilişkilendir.
@@ -403,6 +404,97 @@ TAROT YORUM KURALLARI:
 - Premium, sezgisel ve doğal bir dil kullan.
 
 `;
+}
+
+const MAJOR_ARCANA_NAMES_TR = {
+  m00: 'Deli',
+  m01: 'Büyücü',
+  m02: 'Yüksek Rahibe',
+  m03: 'İmparatoriçe',
+  m04: 'İmparator',
+  m05: 'Aziz',
+  m06: 'Aşıklar',
+  m07: 'Savaş Arabası',
+  m08: 'Güç',
+  m09: 'Ermiş',
+  m10: 'Kader Çarkı',
+  m11: 'Adalet',
+  m12: 'Asılmış Adam',
+  m13: 'Ölüm',
+  m14: 'Denge',
+  m15: 'Şeytan',
+  m16: 'Yıkılan Kule',
+  m17: 'Yıldız',
+  m18: 'Ay',
+  m19: 'Güneş',
+  m20: 'Mahkeme',
+  m21: 'Dünya',
+};
+
+const MINOR_SUIT_NAMES_TR = {
+  w: 'Asa',
+  c: 'Kupa',
+  s: 'Kılıç',
+  p: 'Tılsım',
+};
+
+const MINOR_RANK_NAMES_TR = {
+  1: 'Ası',
+  2: 'İki',
+  3: 'Üç',
+  4: 'Dört',
+  5: 'Beş',
+  6: 'Altı',
+  7: 'Yedi',
+  8: 'Sekiz',
+  9: 'Dokuz',
+  10: 'On',
+  11: 'Sayfa',
+  12: 'Şövalye',
+  13: 'Kraliçe',
+  14: 'Kral',
+};
+
+function isTarotAssetId(value) {
+  return /^[mcwsp]\d{2}$/i.test(String(value || '').trim());
+}
+
+function courtCardSuffix(suit) {
+  if (suit === 'Kılıç' || suit === 'Tılsım') return 'ı';
+  return 'sı';
+}
+
+function tarotCardNameFromId(id) {
+  const trimmed = String(id || '').trim().toLowerCase();
+  if (!trimmed) return null;
+
+  if (MAJOR_ARCANA_NAMES_TR[trimmed]) {
+    return MAJOR_ARCANA_NAMES_TR[trimmed];
+  }
+
+  if (trimmed.length < 2) return null;
+  const suit = MINOR_SUIT_NAMES_TR[trimmed[0]];
+  const rank = Number.parseInt(trimmed.slice(1), 10);
+  const rankName = MINOR_RANK_NAMES_TR[rank];
+  if (!suit || !rankName) return null;
+
+  if (rank === 1) return `${suit} ${rankName}`;
+  if (rank >= 11) return `${rankName} ${suit}${courtCardSuffix(suit)}`;
+  return `${rankName} ${suit}`;
+}
+
+function resolveTarotCardLabel(card) {
+  const id = String(card?.id || '').trim();
+  const nameTr = String(card?.nameTr || '').trim();
+  const nameEn = String(card?.nameEn || '').trim();
+
+  if (nameTr && !isTarotAssetId(nameTr)) return nameTr;
+  if (nameEn && !isTarotAssetId(nameEn)) return nameEn;
+
+  const fromId = tarotCardNameFromId(id);
+  if (fromId) return fromId;
+
+  return nameTr || nameEn || 'Kart';
 }
 
 function buildCoupleUserPrompt(

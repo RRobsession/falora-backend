@@ -6,6 +6,8 @@ import 'package:falora/models/manual_fortune_reader.dart';
 
 import 'package:falora/picked_image.dart';
 
+import 'package:falora/services/fortune_form_prefill.dart';
+import 'package:falora/widgets/falora_labeled_form_field.dart';
 import 'package:falora/theme/falora_theme.dart';
 
 import 'package:falora/widgets/live_token_builder.dart';
@@ -57,6 +59,8 @@ class ManualFortuneFormPage extends StatefulWidget {
 
     required this.onOpenShop,
 
+    this.prefill,
+
   });
 
 
@@ -70,6 +74,8 @@ class ManualFortuneFormPage extends StatefulWidget {
   final ManualFortuneSubmit onSubmit;
 
   final VoidCallback onOpenShop;
+
+  final FortuneFormPrefill? prefill;
 
 
 
@@ -120,6 +126,13 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
     _questionCtrls =
 
         List.generate(_offer.questionLimit, (_) => TextEditingController());
+
+    final prefill = widget.prefill;
+    if (prefill != null && prefill.hasAny) {
+      prefill.applyToNameController(_nameCtrl);
+      prefill.applyToAgeController(_ageCtrl);
+      _burc = prefill.applyToZodiac(_burc);
+    }
 
     debugPrint('MANUAL QUESTION_LIMIT: ${_offer.questionLimit}');
 
@@ -311,94 +324,53 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
 
               const SizedBox(height: 24),
 
-              TextFormField(
-
+              FaloraLabeledFormField(
+                label: 'İsim',
                 controller: _nameCtrl,
-
-                decoration: const InputDecoration(labelText: 'İsim'),
-
                 validator: (v) =>
-
                     (v == null || v.trim().isEmpty) ? 'İsim gerekli' : null,
-
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
-              TextFormField(
-
+              FaloraLabeledFormField(
+                label: 'Yaş',
                 controller: _ageCtrl,
-
-                decoration: const InputDecoration(labelText: 'Yaş'),
-
                 keyboardType: TextInputType.number,
-
                 validator: (v) {
-
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
-
                   final age = int.tryParse(v.trim());
-
                   if (age == null || age < 1 || age > 120) {
-
                     return 'Geçerli bir yaş girin';
-
                   }
-
                   return null;
-
                 },
-
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
-              DropdownButtonFormField<String>(
-
-                initialValue: _burc,
-
-                decoration: const InputDecoration(labelText: 'Burç'),
-
-                dropdownColor: const Color(0xFF1C1430),
-
+              FaloraLabeledDropdown<String>(
+                label: 'Burç',
+                value: _burc,
                 items: burclar
-
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-
                     .toList(),
-
-                onChanged: (v) => setState(() => _burc = v!),
-
+                onChanged: (v) => setState(() => _burc = v ?? _burc),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
-              TextFormField(
-
+              FaloraLabeledFormField(
+                label: offer.requiresIntention
+                    ? 'Niyet / Konu *'
+                    : 'Niyet / Konu (isteğe bağlı)',
                 controller: _niyetCtrl,
-
-                decoration: InputDecoration(
-
-                  labelText: offer.requiresIntention
-
-                      ? 'Niyet / Konu *'
-
-                      : 'Niyet / Konu (isteğe bağlı)',
-
-                ),
-
                 maxLines: 3,
-
                 validator: (v) {
-
                   if (!offer.requiresIntention) return null;
-
                   if (v == null || v.trim().isEmpty) return 'Niyet gerekli';
-
                   return null;
-
                 },
-
               ),
 
               const SizedBox(height: 24),

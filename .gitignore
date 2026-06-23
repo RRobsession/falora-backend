@@ -13,6 +13,19 @@
 migrate_working_dir/
 Thumbs.db
 
+# Environment / secrets (never commit)
+.env
+.env.*
+!.env.example
+firebase-service-account.json
+serviceAccountKey.json
+secrets.*
+credentials.*
+*.p12
+*.keystore
+*.jks
+android/key.properties
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -23,13 +36,19 @@ Thumbs.db
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
 /coverage/
+node_modules/
 android/build/
 android/.gradle/
+
+# Legacy avatar generation intermediates (canonical: avatar_male_* / avatar_female_*)
+assets/avatars/male_*.png
+assets/avatars/female_*.png
 
 # Symbolication related
 app.*.symbols

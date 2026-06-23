@@ -7,9 +7,11 @@ import 'package:falora/main.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/screens/admin_manual_fortune_screen.dart';
 import 'package:falora/screens/login_screen.dart';
+import 'package:falora/screens/onboarding/profile_onboarding_screen.dart';
 import 'package:falora/screens/verification_screen.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/referral_service.dart';
+import 'package:falora/services/user_profile_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -154,6 +156,14 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
     if (isAdminUser(_user!.userId)) {
       return AdminManualRequestsScreen(onLogout: _onLogout);
+    }
+
+    if (UserProfileService.needsProfileCompletion(_user!)) {
+      return ProfileOnboardingScreen(
+        key: ValueKey('onboarding-${_user!.userId}'),
+        user: _user!,
+        onCompleted: _onAuthenticated,
+      );
     }
 
     final referralNotice = _referralNotice;

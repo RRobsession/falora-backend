@@ -1,4 +1,5 @@
 import 'package:falora/models/fortune_models.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Yalnızca Tarot Falı falcı tier fiyatları (değiştirilmez).
@@ -32,6 +33,21 @@ class FortuneTeller {
   final String avatarAsset;
   final bool highlight;
   final String? badge;
+
+  FortuneTeller withTokenCost(int tokenCost) {
+    return FortuneTeller(
+      id: id,
+      name: name,
+      title: title,
+      bio: bio,
+      tokenCost: tokenCost,
+      lengthLabel: lengthLabel,
+      accentColor: accentColor,
+      avatarAsset: avatarAsset,
+      highlight: highlight,
+      badge: badge,
+    );
+  }
 }
 
 const fortuneTellers = <FortuneTeller>[
@@ -87,19 +103,55 @@ List<FortuneTeller> fortuneTellersForCategory(FortuneCategory category) {
   final costs = tellerTokenCostsForCategory(category);
   return List.generate(fortuneTellers.length, (i) {
     final teller = fortuneTellers[i];
-    return FortuneTeller(
-      id: teller.id,
-      name: teller.name,
-      title: teller.title,
-      bio: teller.bio,
-      tokenCost: costs[i],
-      lengthLabel: teller.lengthLabel,
-      accentColor: teller.accentColor,
-      avatarAsset: teller.avatarAsset,
-      highlight: teller.highlight,
-      badge: teller.badge,
-    );
+    return teller.withTokenCost(costs[i]);
   });
+}
+
+/// Tek kaynak: kategori + falcı kimliğine göre jeton maliyeti.
+int resolveTellerTokenCost(FortuneCategory category, String tellerId) {
+  final tellers = fortuneTellersForCategory(category);
+  for (final teller in tellers) {
+    if (teller.id == tellerId) {
+      return teller.tokenCost;
+    }
+  }
+  return tellers.first.tokenCost;
+}
+
+FortuneTeller resolveFortuneTeller(
+  FortuneCategory category,
+  String tellerId,
+) {
+  final cost = resolveTellerTokenCost(category, tellerId);
+  final tellers = fortuneTellersForCategory(category);
+  for (final teller in tellers) {
+    if (teller.id == tellerId) {
+      return teller.withTokenCost(cost);
+    }
+  }
+  return tellers.first.withTokenCost(
+    resolveTellerTokenCost(category, tellers.first.id),
+  );
+}
+
+void logFortuneSelectedCost(FortuneCategory category, String tellerId) {
+  debugPrint(
+    'FORTUNE_SELECTED_COST category=${category.name} teller=$tellerId '
+    'cost=${resolveTellerTokenCost(category, tellerId)}',
+  );
+}
+
+void logFortuneVisibleCost(FortuneCategory category, String tellerId) {
+  debugPrint(
+    'FORTUNE_VISIBLE_COST category=${category.name} teller=$tellerId '
+    'cost=${resolveTellerTokenCost(category, tellerId)}',
+  );
+}
+
+void logFortuneSubmitCost(FortuneCategory category, String tellerId, int cost) {
+  debugPrint(
+    'FORTUNE_SUBMIT_COST category=${category.name} teller=$tellerId cost=$cost',
+  );
 }
 
 FortuneTeller? fortuneTellerById(String? id, {FortuneCategory? category}) {

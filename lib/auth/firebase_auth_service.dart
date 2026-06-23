@@ -156,13 +156,12 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<AppUser> register({
-    required String name,
     required String email,
     required String password,
     String? referralCode,
   }) async {
     final normalizedEmail = _normalizeEmail(email);
-    debugPrint('REGISTER START');
+    debugPrint('REGISTER_BASIC_START');
     if (kDebugMode) {
       debugPrint('REGISTER email hash: ${normalizedEmail.hashCode}');
     }
@@ -186,16 +185,17 @@ class FirebaseAuthService implements AuthService {
         debugPrint('REGISTER_USER_DOC_CREATE_START uid: $uid');
         await TokenService.instance.ensureUserDocument(
           uid: uid,
-          name: name.trim(),
           email: normalizedEmail,
         );
         debugPrint('REGISTER_USER_DOC_CREATE_SUCCESS uid: $uid');
+        debugPrint('REGISTER_BASIC_SUCCESS');
 
         if (referralCode != null && referralCode.trim().isNotEmpty) {
           ReferralService.instance.storePendingReferralCode(uid, referralCode);
         }
 
         await _sendVerificationEmailToCurrentUser();
+        debugPrint('EMAIL_VERIFICATION_REQUIRED');
       } on AuthException {
         await _rollbackNewAuthAccount(newUser);
         rethrow;
@@ -216,7 +216,8 @@ class FirebaseAuthService implements AuthService {
 
       return AppUser(
         userId: uid,
-        name: name.trim(),
+        name: '',
+        displayName: '',
         email: normalizedEmail,
         tokens: initialUserTokens,
         emailVerified: false,
@@ -318,7 +319,7 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<bool> reloadEmailVerificationStatus() async {
-    debugPrint('CHECK VERIFY START');
+    debugPrint('EMAIL_VERIFICATION_RELOAD');
 
     final before = FirebaseAuth.instance.currentUser;
     if (before == null) {
@@ -329,6 +330,7 @@ class FirebaseAuthService implements AuthService {
     debugPrint('BEFORE RELOAD emailVerified: ${before.emailVerified}');
 
     await FirebaseAuth.instance.currentUser?.reload();
+    await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -345,7 +347,7 @@ class FirebaseAuthService implements AuthService {
 
     await _syncEmailVerifiedToFirestore(user.uid);
 
-    debugPrint('VERIFY SUCCESS');
+    debugPrint('EMAIL_VERIFICATION_CONFIRMED');
     return true;
   }
 

@@ -16,6 +16,11 @@ class TokenProductDefinition {
 
 const tokenProductCatalog = <TokenProductDefinition>[
   TokenProductDefinition(
+    productId: 'tokens_50',
+    tokens: 50,
+    subtitle: 'Hızlı Başlangıç',
+  ),
+  TokenProductDefinition(
     productId: 'tokens_100',
     tokens: 100,
     subtitle: 'Başlangıç Paketi',
@@ -41,6 +46,7 @@ const tokenProductCatalog = <TokenProductDefinition>[
 ];
 
 const tokenProductIds = <String>{
+  'tokens_50',
   'tokens_100',
   'tokens_150',
   'tokens_200',
@@ -51,6 +57,7 @@ const allBillingProductIds = tokenProductIds;
 
 /// Web / geliştirme önizlemesi için sabit fiyatlar (Play Billing yok).
 const tokenProductMockPrices = <String, String>{
+  'tokens_50': '₺49,99',
   'tokens_100': '₺95,99',
   'tokens_150': '₺119,99',
   'tokens_200': '₺159,99',

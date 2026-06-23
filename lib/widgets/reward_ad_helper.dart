@@ -113,7 +113,11 @@ Future<void> watchRewardAdFlow(
         const SnackBar(content: Text(rewardAdLimitReachedMessage)),
       );
     case RewardedAdResult.cancelled:
-      break;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reklam tam izlenmedi, jeton verilmedi.'),
+        ),
+      );
     case RewardedAdResult.failed:
       final detail =
           adService.lastErrorMessage ?? rewardedAdLoadFailedMessage;

@@ -6,7 +6,6 @@ abstract class AuthService {
 
   /// Kayıt sonrası oturum açık kalır; e-posta doğrulaması gerekir.
   Future<AppUser> register({
-    required String name,
     required String email,
     required String password,
     String? referralCode,

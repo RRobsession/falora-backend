@@ -88,7 +88,7 @@ class OpenAiBackendService implements AiService {
 
         if (selectedTarotCards.isNotEmpty)
           'selectedCards':
-              selectedTarotCards.map((c) => c.toMap()).toList(),
+              selectedTarotCards.map((c) => c.toApiMap()).toList(),
 
       },
 

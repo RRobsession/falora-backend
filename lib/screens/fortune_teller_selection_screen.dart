@@ -111,7 +111,10 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                     child: _FortuneTellerCard(
                       teller: teller,
                       userTokens: tokens,
-                      onTap: () => widget.onTellerChosen(context, teller),
+                      onTap: () {
+                        logFortuneSelectedCost(category, teller.id);
+                        widget.onTellerChosen(context, teller);
+                      },
                     ),
                   ),
                 ),

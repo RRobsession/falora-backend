@@ -2,15 +2,18 @@ import 'package:falora/auth/auth_service.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/screens/invite_friend_screen.dart';
 import 'package:falora/screens/shop_screen.dart';
+import 'package:falora/widgets/compact_birth_date_dialog.dart';
+import 'package:falora/widgets/preset_avatar_picker.dart';
+import 'package:falora/models/fortune_models.dart';
+import 'package:falora/services/user_profile_service.dart';
 import 'package:falora/services/privacy_policy_service.dart';
-import 'package:falora/services/profile_photo_service.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/widgets/user_avatar_image.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/reward_ad_helper.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -36,26 +39,14 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final AuthService _authService =
       widget.authService ?? createAuthService();
-  final _imagePicker = ImagePicker();
 
   bool _deletingAccount = false;
-  bool _updatingPhoto = false;
-  Uint8List? _profilePhotoBytes;
+  bool _updatingAvatar = false;
 
   @override
   void initState() {
     super.initState();
     debugPrint('PROFILE SCREEN LOADED userId=${widget.user.userId}');
-    _loadProfilePhoto();
-  }
-
-  Future<void> _loadProfilePhoto() async {
-    final bytes =
-        await ProfilePhotoService.instance.loadPhotoBytes(widget.user.userId);
-    if (!mounted) return;
-    if (bytes != null) {
-      setState(() => _profilePhotoBytes = bytes);
-    }
   }
 
   Future<void> _watchRewardAd(BuildContext context) async {
@@ -233,51 +224,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _pickProfilePhoto(ImageSource source) async {
-    if (_updatingPhoto) return;
-
-    setState(() => _updatingPhoto = true);
+  Future<void> _pickGalleryAvatar(AppUser liveUser) async {
+    if (_updatingAvatar) return;
     try {
-      final picked = await _imagePicker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 82,
       );
-      if (picked == null) return;
-
-      final bytes = await picked.readAsBytes();
-      if (!kIsWeb) {
-        await ProfilePhotoService.instance.savePhoto(widget.user.userId, bytes);
-      }
-      if (!mounted) return;
-      setState(() => _profilePhotoBytes = bytes);
+      if (file == null) return;
+      setState(() => _updatingAvatar = true);
+      final bytes = await file.readAsBytes();
+      await UserProfileService.instance
+          .saveGalleryAvatar(liveUser.userId, bytes);
     } catch (e) {
-      debugPrint('PROFILE PHOTO PICK ERROR: $e');
-      _showError('Fotoğraf seçilemedi. Lütfen tekrar deneyin.');
+      _showError('Fotoğraf seçilemedi');
     } finally {
-      if (mounted) setState(() => _updatingPhoto = false);
+      if (mounted) setState(() => _updatingAvatar = false);
     }
   }
 
-  Future<void> _removeProfilePhoto() async {
-    if (_updatingPhoto) return;
+  Future<void> _openPresetAvatarPicker(AppUser liveUser) async {
+    final asset = await PresetAvatarPickerPage.open(
+      context,
+      initialAsset: liveUser.avatarAsset,
+    );
+    if (asset == null) return;
+    await _selectPresetAvatar(asset);
+  }
 
-    setState(() => _updatingPhoto = true);
+  Future<void> _selectPresetAvatar(String assetPath) async {
+    if (_updatingAvatar) return;
+    setState(() => _updatingAvatar = true);
     try {
-      if (!kIsWeb) {
-        await ProfilePhotoService.instance.deletePhoto(widget.user.userId);
-      }
-      if (!mounted) return;
-      setState(() => _profilePhotoBytes = null);
-    } catch (_) {
-      _showError('Fotoğraf kaldırılamadı.');
+      await UserProfileService.instance
+          .saveAvatarAsset(widget.user.userId, assetPath);
+    } catch (e) {
+      _showError('Avatar seçilemedi');
     } finally {
-      if (mounted) setState(() => _updatingPhoto = false);
+      if (mounted) setState(() => _updatingAvatar = false);
     }
   }
 
-  Future<void> _showPhotoOptions() async {
+  Future<void> _editName(AppUser liveUser) async {
+    final controller = TextEditingController(text: liveUser.effectiveDisplayName);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('İsim'),
+        content: TextField(
+          controller: controller,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'İsim'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+        ],
+      ),
+    );
+    if (saved != true) return;
+    final name = controller.text.trim();
+    if (name.isEmpty) {
+      _showError('İsim boş olamaz');
+      return;
+    }
+    await UserProfileService.instance.saveDisplayName(liveUser.userId, name);
+  }
+
+  Future<void> _editBirthDate(AppUser liveUser) async {
+    final picked = await showCompactBirthDateDialog(
+      context,
+      initialDate: liveUser.birthDate,
+    );
+    if (picked == null) return;
+    await UserProfileService.instance.saveBirthDate(liveUser.userId, picked);
+  }
+
+  Future<void> _editZodiac(AppUser liveUser) async {
+    var selected = liveUser.zodiac ?? burclar.first;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Burç'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: burclar.map((burc) {
+                return RadioListTile<String>(
+                  value: burc,
+                  groupValue: selected,
+                  title: Text(burc),
+                  onChanged: (v) {
+                    if (v != null) setLocal(() => selected = v);
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('İptal')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    await UserProfileService.instance.saveZodiac(liveUser.userId, selected);
+  }
+
+  Future<void> _showAvatarOptions(AppUser liveUser) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -290,79 +350,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: SafeArea(
             top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: faloraBronze.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Fotoğraf değiştir',
-                  style: FaloraTypography.titleMedium.copyWith(
-                    color: faloraInkHeading,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    'Profil fotoğrafını güncellemek için bir seçenek belirle.',
-                    textAlign: TextAlign.center,
-                    style: FaloraTypography.bodyMedium.copyWith(
-                      color: faloraInkSoft,
-                      fontSize: 13,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: faloraBronze.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _PhotoSheetTile(
-                  icon: Icons.photo_camera_outlined,
-                  label: 'Kameradan çek',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickProfilePhoto(ImageSource.camera);
-                  },
-                ),
-                Divider(
-                  height: 1,
-                  indent: 20,
-                  endIndent: 20,
-                  color: faloraBronze.withValues(alpha: 0.15),
-                ),
-                _PhotoSheetTile(
-                  icon: Icons.photo_library_outlined,
-                  label: 'Galeriden seç',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickProfilePhoto(ImageSource.gallery);
-                  },
-                ),
-                if (_profilePhotoBytes != null) ...[
-                  Divider(
-                    height: 1,
-                    indent: 20,
-                    endIndent: 20,
-                    color: faloraBronze.withValues(alpha: 0.15),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Profil fotoğrafı',
+                    style: FaloraTypography.titleMedium.copyWith(
+                      color: faloraInkHeading,
+                    ),
                   ),
+                  const SizedBox(height: 16),
                   _PhotoSheetTile(
-                    icon: Icons.delete_outline_rounded,
-                    label: 'Fotoğrafı kaldır',
-                    labelColor: _profileDangerColor,
+                    icon: Icons.photo_library_outlined,
+                    label: 'Galeriden seç',
                     onTap: () {
                       Navigator.pop(ctx);
-                      _removeProfilePhoto();
+                      _pickGalleryAvatar(liveUser);
                     },
                   ),
+                  _PhotoSheetTile(
+                    icon: Icons.face_retouching_natural_outlined,
+                    label: 'Hazır avatar seç',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openPresetAvatarPicker(liveUser);
+                    },
+                  ),
+                  const SizedBox(height: 8),
                 ],
-                const SizedBox(height: 8),
-              ],
+              ),
             ),
           ),
         );
@@ -371,7 +398,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String get _initial {
-    final name = widget.user.name.trim();
+    final name = widget.user.effectiveDisplayName;
     if (name.isNotEmpty) return name[0].toUpperCase();
     final email = widget.user.email.trim();
     if (email.isNotEmpty) return email[0].toUpperCase();
@@ -415,21 +442,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           _ProfileUserCard(
                             initial: _initial,
-                            name: liveUser.name,
+                            name: liveUser.effectiveDisplayName,
                             email: liveUser.email,
+                            age: liveUser.computedAge,
+                            zodiac: liveUser.zodiac,
                             fallbackTokens: liveUser.tokens,
-                            photoBytes: _profilePhotoBytes,
-                            updatingPhoto: _updatingPhoto,
-                            onAvatarTap: _showPhotoOptions,
+                            avatarAsset: liveUser.avatarAsset,
+                            updatingAvatar: _updatingAvatar,
+                            onAvatarTap: () => _showAvatarOptions(liveUser),
                             onOpenShop: () => _openShop(context),
                           ),
-                          if (liveUser.hasProfileDetails) ...[
-                            const SizedBox(height: 8),
-                            _ProfileInfoBadges(
-                              age: liveUser.age,
-                              zodiac: liveUser.zodiac,
-                            ),
-                          ],
                           const SizedBox(height: 10),
                           GiftRewardCard(
                             hasReward: hasReward,
@@ -445,6 +467,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 12),
                   _ProfileMenuSection(
                     children: [
+                      _ProfileMenuTile(
+                        icon: Icons.badge_outlined,
+                        iconColor: faloraBronze,
+                        title: 'İsim',
+                        subtitle: 'Görünen adını düzenle',
+                        onTap: () => _editName(
+                          TokenService.instance.liveUser.value ?? widget.user,
+                        ),
+                      ),
+                      _ProfileMenuTile(
+                        icon: Icons.cake_outlined,
+                        iconColor: faloraGoldDark,
+                        title: 'Doğum Tarihi',
+                        subtitle: 'Yaş otomatik hesaplanır',
+                        onTap: () => _editBirthDate(
+                          TokenService.instance.liveUser.value ?? widget.user,
+                        ),
+                      ),
+                      _ProfileMenuTile(
+                        icon: Icons.auto_awesome_outlined,
+                        iconColor: faloraBronzeDark,
+                        title: 'Burç',
+                        subtitle: 'Burcunu güncelle',
+                        onTap: () => _editZodiac(
+                          TokenService.instance.liveUser.value ?? widget.user,
+                        ),
+                      ),
                       _ProfileMenuTile(
                         icon: Icons.storefront_rounded,
                         iconColor: faloraBronzeDark,
@@ -517,9 +566,11 @@ class _ProfileUserCard extends StatelessWidget {
     required this.initial,
     required this.name,
     required this.email,
+    required this.age,
+    required this.zodiac,
     required this.fallbackTokens,
-    required this.photoBytes,
-    required this.updatingPhoto,
+    required this.avatarAsset,
+    required this.updatingAvatar,
     required this.onAvatarTap,
     required this.onOpenShop,
   });
@@ -527,23 +578,25 @@ class _ProfileUserCard extends StatelessWidget {
   final String initial;
   final String name;
   final String email;
+  final int? age;
+  final String? zodiac;
   final int fallbackTokens;
-  final Uint8List? photoBytes;
-  final bool updatingPhoto;
+  final String? avatarAsset;
+  final bool updatingAvatar;
   final VoidCallback onAvatarTap;
   final VoidCallback onOpenShop;
 
   @override
   Widget build(BuildContext context) {
-    const avatarSize = 56.0;
+    const avatarSize = 48.0;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: faloraParchmentDecoration(
-        base: Color.lerp(faloraParchmentCard, faloraGold, 0.06)!,
+        base: Color.lerp(faloraParchmentCard, faloraGold, 0.05)!,
         radius: FaloraRadius.lg,
         raised: true,
-        borderWidth: 1.2,
+        borderWidth: 1.1,
       ),
       child: Stack(
         clipBehavior: Clip.none,
@@ -558,39 +611,26 @@ class _ProfileUserCard extends StatelessWidget {
                   onTap: onOpenShop,
                   child: Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFFF0E4C4),
-                          Color(0xFFE8D5A0),
-                          Color(0xFFD4AF37),
-                        ],
-                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      color: faloraParchmentRaised,
                       border: Border.all(color: faloraGoldDark, width: 1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: faloraBronzeDark.withValues(alpha: 0.16),
-                          offset: const Offset(0, 1),
-                          blurRadius: 0,
-                        ),
-                      ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const FaIcon(
                           FontAwesomeIcons.coins,
-                          size: 10,
+                          size: 9,
                           color: faloraBronzeDark,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 3),
                         Text(
-                          '$tokens Jeton',
+                          '$tokens',
                           style: const TextStyle(
                             color: faloraInk,
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.w800,
                             height: 1,
                           ),
@@ -606,7 +646,7 @@ class _ProfileUserCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               ScaleTap(
-                onTap: updatingPhoto ? null : onAvatarTap,
+                onTap: updatingAvatar ? null : onAvatarTap,
                 child: Stack(
                   alignment: Alignment.bottomRight,
                   children: [
@@ -615,44 +655,15 @@ class _ProfileUserCard extends StatelessWidget {
                       height: avatarSize,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            faloraGold.withValues(alpha: 0.35),
-                            faloraBronze.withValues(alpha: 0.45),
-                          ],
-                        ),
-                        border: Border.all(color: faloraGoldDark, width: 1.8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: faloraBronzeDark.withValues(alpha: 0.18),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                        border: Border.all(color: faloraGoldDark, width: 1.5),
                       ),
-                      child: ClipOval(
-                        child: photoBytes != null
-                            ? Image.memory(
-                                photoBytes!,
-                                fit: BoxFit.cover,
-                                width: avatarSize,
-                                height: avatarSize,
-                              )
-                            : Center(
-                                child: Text(
-                                  initial,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: faloraInkHeading,
-                                  ),
-                                ),
-                              ),
+                      child: UserAvatarImage(
+                        avatarAsset: avatarAsset,
+                        size: avatarSize,
+                        fallbackInitial: initial,
                       ),
                     ),
-                    if (updatingPhoto)
+                    if (updatingAvatar)
                       Positioned.fill(
                         child: Container(
                           decoration: BoxDecoration(
@@ -661,8 +672,8 @@ class _ProfileUserCard extends StatelessWidget {
                           ),
                           child: const Center(
                             child: SizedBox(
-                              width: 18,
-                              height: 18,
+                              width: 16,
+                              height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: faloraParchmentRaised,
@@ -673,26 +684,26 @@ class _ProfileUserCard extends StatelessWidget {
                       )
                     else
                       Container(
-                        width: 22,
-                        height: 22,
+                        width: 18,
+                        height: 18,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: faloraParchmentRaised,
                           border: Border.all(color: faloraGoldDark, width: 1),
                         ),
                         child: const Icon(
-                          Icons.camera_alt_rounded,
-                          size: 11,
+                          Icons.edit_rounded,
+                          size: 10,
                           color: faloraBronzeDark,
                         ),
                       ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 72),
+                  padding: const EdgeInsets.only(right: 52),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -700,26 +711,39 @@ class _ProfileUserCard extends StatelessWidget {
                       Text(
                         name.isNotEmpty ? name : 'Kullanıcı',
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
                           color: faloraInk,
-                          height: 1.15,
-                          letterSpacing: -0.2,
+                          height: 1.1,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         email,
                         style: FaloraTypography.bodyMedium.copyWith(
                           color: faloraInkSoft,
-                          fontSize: 11.5,
-                          height: 1.2,
+                          fontSize: 11,
+                          height: 1.15,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if ((age != null && age! > 0) ||
+                          (zodiac != null && zodiac!.isNotEmpty)) ...[
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (age != null && age! > 0)
+                              _ProfileMiniBadge(label: 'Yaş $age'),
+                            if (zodiac != null && zodiac!.isNotEmpty)
+                              _ProfileMiniBadge(label: zodiac!),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -727,6 +751,32 @@ class _ProfileUserCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileMiniBadge extends StatelessWidget {
+  const _ProfileMiniBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: faloraParchmentRaised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: faloraBronze.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: faloraInk,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

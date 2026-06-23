@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:falora/ai_config.dart';
 import 'package:falora/config/app_branding.dart';
@@ -34,6 +35,7 @@ import 'package:falora/picked_image.dart';
 import 'package:falora/screens/profile_screen.dart';
 import 'package:falora/services/ads/ad_service_bootstrap.dart';
 import 'package:falora/services/fortune_submit_support.dart';
+import 'package:falora/services/fortune_form_prefill.dart';
 import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:falora/services/interstitial_ad_service.dart';
@@ -46,6 +48,7 @@ import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/screens/shop_screen.dart';
 import 'package:falora/token_config.dart';
+import 'package:falora/widgets/falora_labeled_form_field.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
@@ -129,6 +132,13 @@ class _FaloraAppState extends State<FaloraApp> with WidgetsBindingObserver {
       title: appDisplayName,
       debugShowCheckedModeBanner: false,
       theme: faloraTheme(),
+      locale: const Locale('tr', 'TR'),
+      supportedLocales: const [Locale('tr', 'TR')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: const AuthGate(),
     );
   }
@@ -515,6 +525,7 @@ class _FaloraShellState extends State<FaloraShell> {
 
   void _openCategory(FortuneCategory cat) {
     if (cat == FortuneCategory.ciftUyumu) {
+      FortuneFormPrefill.logSkippedCouple();
       Navigator.of(context).push(
         faloraPageRoute<void>(
           CiftUyumuFormPage(
@@ -544,14 +555,24 @@ class _FaloraShellState extends State<FaloraShell> {
     );
   }
 
+  FortuneFormPrefill? _fortuneFormPrefill() {
+    final prefill = FortuneFormPrefill.fromUser(_liveUser);
+    if (prefill != null && prefill.hasAny) {
+      FortuneFormPrefill.logApplied();
+    }
+    return prefill;
+  }
+
   void _openAutoCategoryForm(
     BuildContext context,
     FortuneCategory cat,
     FortuneTeller teller,
   ) {
-    if (_liveUser.tokens < teller.tokenCost) {
+    final resolved = resolveFortuneTeller(cat, teller.id);
+    logFortuneSelectedCost(cat, teller.id);
+    if (_liveUser.tokens < resolved.tokenCost) {
       _promptInsufficientTokensShop(
-        'Yetersiz jeton. ${teller.name} ${teller.tokenCost} jeton gerektirir.\n'
+        'Yetersiz jeton. ${resolved.name} ${resolved.tokenCost} jeton gerektirir.\n'
         'Mağazadan jeton satın alabilirsiniz.',
       );
       return;
@@ -561,9 +582,9 @@ class _FaloraShellState extends State<FaloraShell> {
         Navigator.of(context).push(
           faloraPageRoute<void>(
             DreamInterpretationFormPage(
-              tokenCost: teller.tokenCost,
+              tokenCost: resolved.tokenCost,
               onSubmit: (dream) =>
-                  _submitDreamInterpretation(dream, teller: teller),
+                  _submitDreamInterpretation(dream, teller: resolved),
               onOpenShop: _openShop,
             ),
           ),
@@ -572,9 +593,10 @@ class _FaloraShellState extends State<FaloraShell> {
         Navigator.of(context).push(
           faloraPageRoute<void>(
             NumerologyFormPage(
-              tokenCost: teller.tokenCost,
+              tokenCost: resolved.tokenCost,
+              prefill: _fortuneFormPrefill(),
               onSubmit: (name, birthDate) =>
-                  _submitNumerology(name, birthDate, teller: teller),
+                  _submitNumerology(name, birthDate, teller: resolved),
               onOpenShop: _openShop,
             ),
           ),
@@ -583,9 +605,10 @@ class _FaloraShellState extends State<FaloraShell> {
         Navigator.of(context).push(
           faloraPageRoute<void>(
             HoroscopeFormPage(
-              tokenCost: teller.tokenCost,
+              tokenCost: resolved.tokenCost,
+              prefill: _fortuneFormPrefill(),
               onSubmit: (sun, moon, focus) =>
-                  _submitHoroscope(sun, moon, focus, teller: teller),
+                  _submitHoroscope(sun, moon, focus, teller: resolved),
               onOpenShop: _openShop,
             ),
           ),
@@ -600,9 +623,11 @@ class _FaloraShellState extends State<FaloraShell> {
     FortuneCategory cat,
     FortuneTeller teller,
   ) async {
-    if (_liveUser.tokens < teller.tokenCost) {
+    final resolved = resolveFortuneTeller(cat, teller.id);
+    logFortuneSelectedCost(cat, teller.id);
+    if (_liveUser.tokens < resolved.tokenCost) {
       await _promptInsufficientTokensShop(
-        'Yetersiz jeton. ${teller.name} ${teller.tokenCost} jeton gerektirir.\n'
+        'Yetersiz jeton. ${resolved.name} ${resolved.tokenCost} jeton gerektirir.\n'
         'Bakiyeniz: ${_liveUser.tokens}',
       );
       return;
@@ -612,13 +637,15 @@ class _FaloraShellState extends State<FaloraShell> {
       faloraPageRoute<void>(
         cat == FortuneCategory.kahve
             ? KahveFormPage(
-                teller: teller,
+                teller: resolved,
+                prefill: _fortuneFormPrefill(),
                 onSubmit: _submitNormal,
                 onOpenShop: _openShop,
               )
             : NormalFalFormPage(
                 category: cat,
-                teller: teller,
+                teller: resolved,
+                prefill: _fortuneFormPrefill(),
                 onSubmit: _submitNormal,
                 onOpenShop: _openShop,
               ),
@@ -641,6 +668,7 @@ class _FaloraShellState extends State<FaloraShell> {
           category: cat,
           reader: reader,
           offer: offer,
+          prefill: _fortuneFormPrefill(),
           onSubmit: _submitManualFortune,
           onOpenShop: _openShop,
         ),
@@ -667,8 +695,14 @@ class _FaloraShellState extends State<FaloraShell> {
     required String logPrefix,
     required int amount,
   }) async {
+    final before = TokenService.instance.liveUser.value?.tokens ??
+        await TokenService.instance.readTokenBalance(_userId);
+    debugPrint('TOKEN_DEDUCT_BEFORE balance=$before amount=$amount');
     debugPrint('$logPrefix TOKEN DEDUCT START ($amount)');
     await TokenService.instance.spendTokens(_userId, amount);
+    final after = TokenService.instance.liveUser.value?.tokens ??
+        await TokenService.instance.readTokenBalance(_userId);
+    debugPrint('TOKEN_DEDUCT_AFTER balance=$after');
     debugPrint('$logPrefix TOKEN DEDUCT OK');
   }
 
@@ -1023,6 +1057,9 @@ class _FaloraShellState extends State<FaloraShell> {
       }
     }
 
+    final submitCost = resolveTellerTokenCost(cat, teller.id);
+    logFortuneSubmitCost(cat, teller.id, submitCost);
+
     await FortuneSubmitLogger.logSubmitStart(
       fortuneType: cat.label,
       selectedReader: '${teller.id} (${teller.name})',
@@ -1031,7 +1068,7 @@ class _FaloraShellState extends State<FaloraShell> {
       requestBody: {
         'flow': 'ai_token',
         'tellerId': teller.id,
-        'tokenCost': teller.tokenCost,
+        'tokenCost': submitCost,
         'billingUsed': false,
       },
     );
@@ -1045,7 +1082,7 @@ class _FaloraShellState extends State<FaloraShell> {
         uid: _userId,
         name: widget.user.name,
         email: _liveUser.email,
-        fortuneCost: teller.tokenCost,
+        fortuneCost: submitCost,
         logPrefix: 'FORTUNE',
       );
       debugPrint('FORTUNE VALIDATION OK');
@@ -1082,7 +1119,7 @@ class _FaloraShellState extends State<FaloraShell> {
       try {
         await _deductSubmitTokens(
           logPrefix: 'FORTUNE',
-          amount: teller.tokenCost,
+          amount: submitCost,
         );
         tokensDeducted = true;
       } catch (e, stackTrace) {
@@ -1157,7 +1194,8 @@ class _FaloraShellState extends State<FaloraShell> {
     required Map<String, dynamic> inputData,
   }) async {
     debugPrint('$logPrefix SUBMIT START');
-    final tokenCost = teller.tokenCost;
+    final tokenCost = resolveTellerTokenCost(category, teller.id);
+    logFortuneSubmitCost(category, teller.id, tokenCost);
     final backendType = backendCategoryType(category);
     final title = categoryFortuneTitle(category);
     final summary = buildCategorySummary(category, inputData);
@@ -1863,12 +1901,14 @@ class NormalFalFormPage extends StatefulWidget {
     required this.teller,
     required this.onSubmit,
     required this.onOpenShop,
+    this.prefill,
   });
 
   final FortuneCategory category;
   final FortuneTeller teller;
   final NormalSubmit onSubmit;
   final VoidCallback onOpenShop;
+  final FortuneFormPrefill? prefill;
 
   @override
   State<NormalFalFormPage> createState() => _NormalFalFormPageState();
@@ -1884,6 +1924,18 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
   List<TarotCardSelection> _selectedTarotCards = const [];
 
   bool get _isTarot => widget.category == FortuneCategory.tarot;
+
+  @override
+  void initState() {
+    super.initState();
+    logFortuneVisibleCost(widget.category, widget.teller.id);
+    final prefill = widget.prefill;
+    if (prefill != null && prefill.hasAny) {
+      prefill.applyToNameController(_nameCtrl);
+      prefill.applyToAgeController(_ageCtrl);
+      _burc = prefill.applyToZodiac(_burc);
+    }
+  }
 
   @override
   void dispose() {
@@ -1951,39 +2003,40 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
               FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
               const SizedBox(height: 12),
               _FormHeader(category: widget.category, teller: widget.teller),
-              const SizedBox(height: 24),
-              TextFormField(
+              const SizedBox(height: 20),
+              FaloraLabeledFormField(
+                label: 'İsim',
                 controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'İsim'),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'İsim gerekli' : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Yaş',
                 controller: _ageCtrl,
-                decoration: const InputDecoration(labelText: 'Yaş'),
                 keyboardType: TextInputType.number,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                   final age = int.tryParse(v.trim());
-                  if (age == null || age < 1 || age > 120) return 'Geçerli bir yaş girin';
+                  if (age == null || age < 1 || age > 120) {
+                    return 'Geçerli bir yaş girin';
+                  }
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _burc,
-                decoration: const InputDecoration(labelText: 'Burç'),
-                dropdownColor: _card,
+              const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Burç',
+                value: _burc,
                 items: burclar
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
-                onChanged: (v) => setState(() => _burc = v!),
+                onChanged: (v) => setState(() => _burc = v ?? _burc),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Niyet',
                 controller: _niyetCtrl,
-                decoration: const InputDecoration(labelText: 'Niyet'),
                 maxLines: 3,
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Niyet gerekli' : null,
@@ -2040,11 +2093,13 @@ class KahveFormPage extends StatefulWidget {
     required this.teller,
     required this.onSubmit,
     required this.onOpenShop,
+    this.prefill,
   });
 
   final FortuneTeller teller;
   final NormalSubmit onSubmit;
   final VoidCallback onOpenShop;
+  final FortuneFormPrefill? prefill;
 
   @override
   State<KahveFormPage> createState() => _KahveFormPageState();
@@ -2060,6 +2115,18 @@ class _KahveFormPageState extends State<KahveFormPage> {
   PickedImage? _fincan2;
   PickedImage? _tabak;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    logFortuneVisibleCost(FortuneCategory.kahve, widget.teller.id);
+    final prefill = widget.prefill;
+    if (prefill != null && prefill.hasAny) {
+      prefill.applyToNameController(_nameCtrl);
+      prefill.applyToAgeController(_ageCtrl);
+      _burc = prefill.applyToZodiac(_burc);
+    }
+  }
 
   @override
   void dispose() {
@@ -2124,39 +2191,40 @@ class _KahveFormPageState extends State<KahveFormPage> {
                 category: FortuneCategory.kahve,
                 teller: widget.teller,
               ),
-              const SizedBox(height: 24),
-              TextFormField(
+              const SizedBox(height: 20),
+              FaloraLabeledFormField(
+                label: 'İsim',
                 controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'İsim'),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'İsim gerekli' : null,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Yaş',
                 controller: _ageCtrl,
-                decoration: const InputDecoration(labelText: 'Yaş'),
                 keyboardType: TextInputType.number,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                   final age = int.tryParse(v.trim());
-                  if (age == null || age < 1 || age > 120) return 'Geçerli bir yaş girin';
+                  if (age == null || age < 1 || age > 120) {
+                    return 'Geçerli bir yaş girin';
+                  }
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _burc,
-                decoration: const InputDecoration(labelText: 'Burç'),
-                dropdownColor: _card,
+              const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Burç',
+                value: _burc,
                 items: burclar
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
-                onChanged: (v) => setState(() => _burc = v!),
+                onChanged: (v) => setState(() => _burc = v ?? _burc),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Niyet',
                 controller: _niyetCtrl,
-                decoration: const InputDecoration(labelText: 'Niyet'),
                 maxLines: 3,
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Niyet gerekli' : null,
@@ -2419,35 +2487,36 @@ class _PersonSection extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            TextFormField(
+            FaloraLabeledFormField(
+              label: 'İsim',
               controller: isimCtrl,
-              decoration: InputDecoration(labelText: 'İsim'),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'İsim gerekli' : null,
             ),
-            const SizedBox(height: 12),
-            TextFormField(
+            const SizedBox(height: 18),
+            FaloraLabeledFormField(
+              label: 'Yaş',
               controller: yasCtrl,
-              decoration: const InputDecoration(labelText: 'Yaş'),
               keyboardType: TextInputType.number,
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                 final age = int.tryParse(v.trim());
-                if (age == null || age < 1 || age > 120) return 'Geçerli bir yaş girin';
+                if (age == null || age < 1 || age > 120) {
+                  return 'Geçerli bir yaş girin';
+                }
                 return null;
               },
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: burc,
-              decoration: const InputDecoration(labelText: 'Burç'),
-              dropdownColor: _card,
+            const SizedBox(height: 18),
+            FaloraLabeledDropdown<String>(
+              label: 'Burç',
+              value: burc,
               items: burclar
                   .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                   .toList(),
-              onChanged: (v) => onBurcChanged(v!),
+              onChanged: (v) => onBurcChanged(v ?? burc),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
             ImageUploadCard(
               label: '$title Fotoğrafı',
               image: photo,
@@ -2498,7 +2567,7 @@ class _FormHeader extends StatelessWidget {
               if (teller != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '${teller!.name} · ${teller!.tokenCost} jeton',
+                  '${teller!.name} · ${resolveTellerTokenCost(category, teller!.id)} jeton',
                   style: FaloraTypography.bodyMedium.copyWith(
                     color: faloraInkSoft,
                     fontWeight: FontWeight.w600,

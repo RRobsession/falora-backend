@@ -1,4 +1,6 @@
-/// Tarot kartı — yalnızca asset dosya adından türetilir (m00, c01, …).
+import 'package:falora/config/tarot_card_names.dart';
+
+/// Tarot kartı — asset dosya adından gerçek kart ismiyle eşlenir.
 class TarotCardDefinition {
   const TarotCardDefinition({
     required this.id,
@@ -6,12 +8,12 @@ class TarotCardDefinition {
     required this.deckIndex,
   });
 
-  /// Dosya adı uzantısız: `m00`, `c01`, …
+  /// Dosya adı uzantısız: `m00`, `w12`, …
   final String id;
   final String assetPath;
   final int deckIndex;
 
-  String get displayLabel => id;
+  String get displayLabel => tarotCardNameTr(id);
 }
 
 /// Kullanıcının seçtiği kart (açılım pozisyonu + ters/düz).
@@ -28,9 +30,9 @@ class TarotCardSelection {
   final int positionIndex;
   final bool isReversed;
 
-  /// Backend uyumluluğu — anlam çıkarılmaz, dosya adı kullanılır.
-  String get nameTr => id;
-  String get nameEn => id;
+  /// Backend ve fal yorumu için gerçek kart adı.
+  String get nameTr => tarotCardNameTr(id);
+  String get nameEn => nameTr;
   String get arcana => 'deck';
   String? get suit => null;
 
@@ -64,14 +66,24 @@ class TarotCardSelection {
   Map<String, dynamic> toMap() => {
         'id': id,
         'assetPath': assetPath,
-        'nameTr': id,
-        'nameEn': id,
+        'nameTr': nameTr,
+        'nameEn': nameEn,
         'arcana': arcana,
         'positionIndex': positionIndex,
         'isReversed': isReversed,
       };
 
-  String get displayLabel => isReversed ? '$id · Ters' : id;
+  /// AI backend isteği — eski sunucular `id` alanını okuyabildiği için isim gönderilir.
+  Map<String, dynamic> toApiMap() => {
+        'id': nameTr,
+        'nameTr': nameTr,
+        'nameEn': nameEn,
+        'positionIndex': positionIndex,
+        'isReversed': isReversed,
+      };
+
+  String get displayLabel =>
+      isReversed ? '${nameTr} · Ters' : nameTr;
 }
 
 const tarotSpreadCardCount = 8;

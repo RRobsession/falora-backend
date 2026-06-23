@@ -22,6 +22,7 @@ Alternatif olarak JSON içeriğini tek satır `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
 
 Managed product kimlikleri (yalnızca jeton paketleri):
 
+- `tokens_50`
 - `tokens_100`
 - `tokens_150`
 - `tokens_200`

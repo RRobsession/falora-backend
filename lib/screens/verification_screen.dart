@@ -192,7 +192,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text('Doğruladım, Kontrol Et'),
+                                : const Text('Doğruladım, Devam Et'),
                           ),
                           const SizedBox(height: 12),
                           OutlinedButton(

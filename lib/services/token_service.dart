@@ -195,6 +195,7 @@ class TokenService {
       final user = AppUser(
         userId: uid,
         name: displayName,
+        displayName: displayName,
         email: normalizedEmail,
         tokens: initialUserTokens,
       );
@@ -323,12 +324,14 @@ class TokenService {
         .clamp(0, maxRewardedAdsPerDay);
   }
 
+  static bool isRewardPeriodElapsed(DateTime? lastRewardAt) {
+    if (lastRewardAt == null) return false;
+    return DateTime.now().difference(lastRewardAt) >= rewardResetDuration;
+  }
+
   int _effectiveRewardCount(AppUser user) {
-    var count = user.rewardedAdsToday;
-    if (user.lastRewardAt != null) {
-      final elapsed = DateTime.now().difference(user.lastRewardAt!);
-      if (elapsed >= rewardResetDuration) return 0;
-    }
+    if (isRewardPeriodElapsed(user.lastRewardAt)) return 0;
+    final count = user.rewardedAdsToday;
     if (count >= maxRewardedAdsPerDay) return maxRewardedAdsPerDay;
     return count;
   }
@@ -359,8 +362,7 @@ class TokenService {
         DateTime? lastReward;
         if (lastRaw is Timestamp) lastReward = lastRaw.toDate();
 
-        if (lastReward != null &&
-            DateTime.now().difference(lastReward) >= rewardResetDuration) {
+        if (isRewardPeriodElapsed(lastReward)) {
           adsToday = 0;
         }
 
