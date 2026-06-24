@@ -38,7 +38,7 @@ class OpenAiBackendService implements AiService {
 
 
 
-  static const _timeout = Duration(seconds: 120);
+  static const _timeout = Duration(seconds: 180);
 
 
 
@@ -57,6 +57,8 @@ class OpenAiBackendService implements AiService {
     required String intention,
 
     required String tellerId,
+
+    String? requestId,
 
     List<String> imageNames = const [],
 
@@ -83,6 +85,8 @@ class OpenAiBackendService implements AiService {
         'intention': intention,
 
         'tellerId': tellerId,
+
+        if (requestId != null && requestId.isNotEmpty) 'requestId': requestId,
 
         'imageNames': imageNames,
 
@@ -114,6 +118,8 @@ class OpenAiBackendService implements AiService {
 
     required String manZodiac,
 
+    String? requestId,
+
     PickedImage? womanImage,
 
     PickedImage? manImage,
@@ -136,7 +142,9 @@ class OpenAiBackendService implements AiService {
 
     };
 
-
+    if (requestId != null && requestId.isNotEmpty) {
+      body['requestId'] = requestId;
+    }
 
     if (womanImage != null) {
 
@@ -188,6 +196,8 @@ class OpenAiBackendService implements AiService {
 
     required Map<String, dynamic> inputData,
 
+    String? requestId,
+
   }) async {
 
     BackendAuthClient.logRequest('/generate-fortune');
@@ -201,6 +211,8 @@ class OpenAiBackendService implements AiService {
         'categoryType': categoryType,
 
         'inputData': inputData,
+
+        if (requestId != null && requestId.isNotEmpty) 'requestId': requestId,
 
       },
 

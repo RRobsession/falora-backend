@@ -236,6 +236,7 @@ class MockAiService implements AiService {
     required String zodiac,
     required String intention,
     required String tellerId,
+    String? requestId,
     List<String> imageNames = const [],
     List<TarotCardSelection> selectedTarotCards = const [],
   }) async {
@@ -260,6 +261,7 @@ class MockAiService implements AiService {
     required String manName,
     required int manAge,
     required String manZodiac,
+    String? requestId,
     PickedImage? womanImage,
     PickedImage? manImage,
   }) async {
@@ -282,6 +284,7 @@ class MockAiService implements AiService {
   Future<String> generateCategoryReading({
     required String categoryType,
     required Map<String, dynamic> inputData,
+    String? requestId,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 900));
     switch (categoryType) {

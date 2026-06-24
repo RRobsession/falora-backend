@@ -35,6 +35,7 @@ import 'package:falora/picked_image.dart';
 import 'package:falora/screens/profile_screen.dart';
 import 'package:falora/services/ads/ad_service_bootstrap.dart';
 import 'package:falora/services/fortune_submit_support.dart';
+import 'package:falora/services/fortune_backend_service.dart';
 import 'package:falora/services/fortune_form_prefill.dart';
 import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
@@ -160,13 +161,16 @@ class FaloraShell extends StatefulWidget {
   State<FaloraShell> createState() => _FaloraShellState();
 }
 
-class _FaloraShellState extends State<FaloraShell> {
+class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
   int _tabIndex = 0;
   late AppUser _user;
   final List<FortuneReading> _fortuneRequests = [];
   final List<FortuneReading> _coupleCompatibilityRequests = [];
   final Map<String, ValueNotifier<FortuneReading>> _readingNotifiers = {};
   final Map<String, Timer> _readyTimers = {};
+  final Map<String, Timer> _pollTimers = {};
+  final Set<String> _resolvingReadingIds = {};
+  final Map<String, DateTime> _lastResolutionAttempt = {};
   final AiService _aiService =
       useRealAi ? OpenAiBackendService() : createAiService();
 
@@ -181,6 +185,7 @@ class _FaloraShellState extends State<FaloraShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _user = widget.user;
     TokenService.instance.bindLiveUser(_userId);
     final referralNotice = widget.initialSnackBarMessage;
@@ -206,12 +211,41 @@ class _FaloraShellState extends State<FaloraShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     for (final timer in _readyTimers.values) {
       timer.cancel();
     }
     _readyTimers.clear();
+    for (final timer in _pollTimers.values) {
+      timer.cancel();
+    }
+    _pollTimers.clear();
     PlayBillingService.instance.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshPendingReadings());
+    }
+  }
+
+  Future<void> _refreshPendingReadings() async {
+    for (final list in [_fortuneRequests, _coupleCompatibilityRequests]) {
+      for (final reading in List<FortuneReading>.from(list)) {
+        if (reading.isReadyDisplay || reading.isFailedDisplay) continue;
+        await _syncReadingFromFirestore(reading.id, list);
+        final idx = list.indexWhere((r) => r.id == reading.id);
+        if (idx == -1) continue;
+        final current = list[idx];
+        if (!current.isReadyDisplay &&
+            !current.isFailedDisplay &&
+            current.isReadyAtElapsed) {
+          unawaited(_syncAndEnsureReadingResolved(current, list));
+        }
+      }
+    }
   }
 
   Future<void> _loadUserFortunes() async {
@@ -280,9 +314,217 @@ class _FaloraShellState extends State<FaloraShell> {
           }
         } else if (!reading.isReadyAtElapsed) {
           _scheduleReadyAtUnlock(reading, list);
+        } else {
+          unawaited(_syncAndEnsureReadingResolved(reading, list));
         }
       }
     }
+  }
+
+  Future<bool> _tryRecoverReadingFromFirestore(
+    String requestId,
+    List<FortuneReading> list,
+  ) async {
+    await _syncReadingFromFirestore(requestId, list);
+    final idx = list.indexWhere((r) => r.id == requestId);
+    if (idx == -1) return false;
+    final current = list[idx];
+    if (!current.hasResult || isFortuneResultError(current.result)) {
+      return false;
+    }
+    if (current.isReadyDisplay) {
+      _applyReadyUnlock(current, list);
+    }
+    return true;
+  }
+
+  void _stopPollingReading(String id) {
+    _pollTimers.remove(id)?.cancel();
+  }
+
+  void _startPollingReading(FortuneReading reading, List<FortuneReading> list) {
+    if (_pollTimers.containsKey(reading.id)) return;
+    final startedAt = DateTime.now();
+    _pollTimers[reading.id] = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted) return;
+      if (DateTime.now().difference(startedAt) > const Duration(minutes: 30)) {
+        _stopPollingReading(reading.id);
+        return;
+      }
+      final idx = list.indexWhere((r) => r.id == reading.id);
+      if (idx == -1) {
+        _stopPollingReading(reading.id);
+        return;
+      }
+      final current = list[idx];
+      if (current.isReadyDisplay) {
+        _stopPollingReading(reading.id);
+        return;
+      }
+      if (current.isFailedDisplay && current.hasResult) {
+        _stopPollingReading(reading.id);
+        return;
+      }
+      unawaited(_syncAndEnsureReadingResolved(current, list));
+    });
+  }
+
+  Future<void> _syncReadingFromFirestore(
+    String id,
+    List<FortuneReading> list,
+  ) async {
+    final storage = FortuneStorageService.instance;
+    final isCouple = identical(list, _coupleCompatibilityRequests);
+    final fresh = isCouple
+        ? await storage.fetchCoupleById(_userId, id)
+        : await storage.fetchFortuneById(_userId, id);
+    if (fresh == null) return;
+
+    final idx = list.indexWhere((r) => r.id == id);
+    if (idx == -1) return;
+
+    list[idx] = fresh;
+    _readingNotifiers[id]?.value = fresh;
+    if (mounted) setState(() {});
+
+    if (fresh.isReadyDisplay) {
+      _stopPollingReading(id);
+      if (!fresh.isManualPremium && fresh.firestoreStatus != 'ready') {
+        unawaited(_markReadingReady(fresh, list));
+      }
+    } else if (fresh.isFailedDisplay) {
+      _stopPollingReading(id);
+      unawaited(
+        _refundFailedReading(
+          requestId: id,
+          isCouple: isCouple,
+          markError: false,
+        ),
+      );
+    }
+  }
+
+  Future<void> _syncAndEnsureReadingResolved(
+    FortuneReading reading,
+    List<FortuneReading> list,
+  ) async {
+    await _syncReadingFromFirestore(reading.id, list);
+    final idx = list.indexWhere((r) => r.id == reading.id);
+    if (idx == -1) return;
+    final current = list[idx];
+    if (current.isReadyDisplay) {
+      _applyReadyUnlock(current, list);
+      return;
+    }
+    if (current.isFailedDisplay) {
+      final isCouple = identical(list, _coupleCompatibilityRequests);
+      unawaited(
+        _refundFailedReading(
+          requestId: reading.id,
+          isCouple: isCouple,
+          markError: false,
+        ),
+      );
+      return;
+    }
+
+    await _retryReadingResolution(current, list);
+    _startPollingReading(current, list);
+  }
+
+  Future<void> _retryReadingResolution(
+    FortuneReading reading,
+    List<FortuneReading> list,
+  ) async {
+    if (_resolvingReadingIds.contains(reading.id)) return;
+
+    final last = _lastResolutionAttempt[reading.id];
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 60)) {
+      return;
+    }
+    _lastResolutionAttempt[reading.id] = DateTime.now();
+
+    final isCouple = identical(list, _coupleCompatibilityRequests);
+    if (isCouple) return;
+
+    _resolvingReadingIds.add(reading.id);
+    try {
+      final storage = FortuneStorageService.instance;
+      final data = await storage.fetchFortuneRawData(_userId, reading.id);
+      if (data == null) return;
+
+      final existing = (data['result'] as String?)?.trim() ?? '';
+      if (existing.isNotEmpty) {
+        await _syncReadingFromFirestore(reading.id, list);
+        return;
+      }
+
+      final inputData = data['inputData'];
+      if (inputData is Map) {
+        final categoryName = data['category'] as String? ?? 'tarot';
+        final category = FortuneCategory.values.firstWhere(
+          (c) => c.name == categoryName,
+          orElse: () => FortuneCategory.tarot,
+        );
+        await _resolveAutoCategoryInBackground(
+          requestId: reading.id,
+          category: category,
+          backendType: backendCategoryType(category),
+          inputData: Map<String, dynamic>.from(inputData),
+          logPrefix: 'FORTUNE_RETRY',
+        );
+        return;
+      }
+
+      final categoryName = data['category'] as String? ?? 'tarot';
+      final category = FortuneCategory.values.firstWhere(
+        (c) => c.name == categoryName,
+        orElse: () => FortuneCategory.tarot,
+      );
+      final imageNames = (data['imageNames'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const <String>[];
+      final selectedCards = storage.parseSelectedCardsFromData(data);
+
+      await _resolveFortuneInBackground(
+        requestId: reading.id,
+        cat: category,
+        tellerId: data['tellerId'] as String? ?? 'gizem_ana',
+        name: data['name'] as String? ?? '',
+        age: (data['age'] as num?)?.toInt() ?? 0,
+        burc: data['zodiac'] as String? ?? '',
+        niyet: data['intention'] as String? ?? '',
+        photoNames: imageNames,
+        selectedTarotCards: selectedCards,
+      );
+    } finally {
+      _resolvingReadingIds.remove(reading.id);
+    }
+  }
+
+  void _applyReadyUnlock(FortuneReading reading, List<FortuneReading> list) {
+    final idx = list.indexWhere((r) => r.id == reading.id);
+    if (idx == -1) return;
+    final current = list[idx];
+    if (!current.hasResult || isFortuneResultError(current.result)) return;
+    if (!current.isReadyDisplay) return;
+
+    _stopPollingReading(reading.id);
+    if (!current.isManualPremium && current.firestoreStatus != 'ready') {
+      unawaited(_markReadingReady(current, list));
+    }
+    final refreshed = current.copyWith(
+      status: FortuneStatus.hazir,
+      firestoreStatus: current.isManualPremium ? 'answered' : 'ready',
+    );
+    if (mounted) {
+      setState(() => list[idx] = refreshed);
+    } else {
+      list[idx] = refreshed;
+    }
+    _readingNotifiers[current.id]?.value = refreshed;
   }
 
   void _scheduleReadyAtUnlock(FortuneReading reading, List<FortuneReading> list) {
@@ -311,25 +553,10 @@ class _FaloraShellState extends State<FaloraShell> {
     final current = list[idx];
     if (!current.hasResult || isFortuneResultError(current.result)) {
       if (mounted) setState(() {});
+      unawaited(_syncAndEnsureReadingResolved(current, list));
       return;
     }
-    if (!current.isReadyDisplay) {
-      if (mounted) setState(() {});
-      return;
-    }
-    if (!current.isManualPremium && current.firestoreStatus != 'ready') {
-      unawaited(_markReadingReady(current, list));
-    }
-    final refreshed = current.copyWith(
-      status: FortuneStatus.hazir,
-      firestoreStatus: current.isManualPremium ? 'answered' : 'ready',
-    );
-    if (mounted) {
-      setState(() => list[idx] = refreshed);
-    } else {
-      list[idx] = refreshed;
-    }
-    _readingNotifiers[current.id]?.value = refreshed;
+    _applyReadyUnlock(current, list);
   }
 
   Future<void> _promptInsufficientTokensShop(String message) async {
@@ -721,11 +948,21 @@ class _FaloraShellState extends State<FaloraShell> {
     required String logPrefix,
     String? requestId,
     required bool tokensDeducted,
+    bool isCouple = false,
     Future<void> Function()? rollback,
   }) {
     FortuneSubmitLogger.logError(error, stackTrace);
     if (requestId != null && !tokensDeducted && rollback != null) {
       unawaited(rollback());
+    }
+    if (requestId != null && tokensDeducted) {
+      unawaited(
+        _refundFailedReading(
+          requestId: requestId,
+          isCouple: isCouple,
+          notifyUser: true,
+        ),
+      );
     }
     _showSubmitError(
       mapFortuneSubmitError(
@@ -733,6 +970,54 @@ class _FaloraShellState extends State<FaloraShell> {
         logPrefix: logPrefix,
         tokensDeducted: tokensDeducted,
         requestCreated: requestId != null,
+      ),
+    );
+  }
+
+  Future<FortuneRefundResult?> _refundFailedReading({
+    required String requestId,
+    required bool isCouple,
+    bool markError = true,
+    bool notifyUser = false,
+  }) async {
+    final storage = FortuneStorageService.instance;
+    if (markError) {
+      try {
+        if (isCouple) {
+          await storage.markCoupleError(requestId);
+        } else {
+          await storage.markFortuneError(requestId);
+        }
+      } catch (e) {
+        debugPrint('REFUND MARK ERROR FAILED: $e');
+      }
+    }
+
+    try {
+      final result = await FortuneBackendService.instance.refundFailedRequest(
+        requestId: requestId,
+        isCouple: isCouple,
+      );
+      if (result.wasRefunded) {
+        debugPrint('TOKEN REFUND OK: ${result.amount}');
+      } else {
+        debugPrint('TOKEN REFUND SKIP: ${result.reason}');
+      }
+      if (notifyUser && result.wasRefunded && mounted) {
+        _showTokenRefundSnackBar(result.amount);
+      }
+      return result;
+    } catch (e) {
+      debugPrint('TOKEN REFUND FAILED: $e');
+      return null;
+    }
+  }
+
+  void _showTokenRefundSnackBar(int amount) {
+    if (!mounted || amount <= 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$amount jeton hesabınıza iade edildi.'),
       ),
     );
   }
@@ -757,6 +1042,7 @@ class _FaloraShellState extends State<FaloraShell> {
         result.isNotEmpty &&
         !isFortuneResultError(result)) {
       if (updated.isReadyDisplay) {
+        _stopPollingReading(id);
         if (!updated.isManualPremium) {
           unawaited(_markReadingReady(updated, list));
         }
@@ -764,6 +1050,10 @@ class _FaloraShellState extends State<FaloraShell> {
         ReadingReadyLogger.resultReadyLockedUntilReadyAt(id);
         _scheduleReadyAtUnlock(updated, list);
       }
+    }
+
+    if (updated.isFailedDisplay) {
+      _stopPollingReading(id);
     }
 
     if (!mounted) {
@@ -808,6 +1098,7 @@ class _FaloraShellState extends State<FaloraShell> {
         zodiac: burc,
         intention: niyet,
         tellerId: tellerId,
+        requestId: requestId,
         imageNames: photoNames ?? const [],
         selectedTarotCards: selectedTarotCards ?? const [],
       );
@@ -820,11 +1111,25 @@ class _FaloraShellState extends State<FaloraShell> {
     } catch (e, stackTrace) {
       debugPrint('FORTUNE BACKEND ERROR: $e');
       debugPrint(stackTrace.toString());
+      if (await _tryRecoverReadingFromFirestore(
+        requestId,
+        _fortuneRequests,
+      )) {
+        return;
+      }
       try {
         await storage.markFortuneError(requestId);
       } catch (markError) {
         debugPrint('FORTUNE ERROR STATUS SAVE FAILED: $markError');
       }
+      unawaited(
+        _refundFailedReading(
+          requestId: requestId,
+          isCouple: false,
+          markError: false,
+          notifyUser: true,
+        ),
+      );
       if (!mounted) return;
       _updateReading(
         _fortuneRequests,
@@ -858,6 +1163,7 @@ class _FaloraShellState extends State<FaloraShell> {
       final result = await _aiService.generateCategoryReading(
         categoryType: backendType,
         inputData: inputData,
+        requestId: requestId,
       );
       debugPrint('CATEGORY RESPONSE SUCCESS');
       await storage.updateFortuneResult(requestId, result);
@@ -867,11 +1173,25 @@ class _FaloraShellState extends State<FaloraShell> {
     } catch (e, stackTrace) {
       debugPrint('CATEGORY RESPONSE ERROR: $e');
       debugPrint(stackTrace.toString());
+      if (await _tryRecoverReadingFromFirestore(
+        requestId,
+        _fortuneRequests,
+      )) {
+        return;
+      }
       try {
         await storage.markFortuneError(requestId);
       } catch (markError) {
         debugPrint('CATEGORY ERROR STATUS SAVE FAILED: $markError');
       }
+      unawaited(
+        _refundFailedReading(
+          requestId: requestId,
+          isCouple: false,
+          markError: false,
+          notifyUser: true,
+        ),
+      );
       if (!mounted) return;
       _updateReading(
         _fortuneRequests,
@@ -909,18 +1229,23 @@ class _FaloraShellState extends State<FaloraShell> {
   }
 
   Future<void> _failCoupleRequest(String requestId) async {
+    if (await _tryRecoverReadingFromFirestore(
+      requestId,
+      _coupleCompatibilityRequests,
+    )) {
+      return;
+    }
     final storage = FortuneStorageService.instance;
     try {
-      await storage.markCoupleError(requestId, message: coupleErrorMessage);
+      await storage.markCoupleError(requestId);
     } catch (markError) {
       debugPrint('COUPLE ERROR STATUS SAVE FAILED: $markError');
     }
-    try {
-      await TokenService.instance.addTokens(_userId, coupleTokenCost);
-      debugPrint('COUPLE TOKEN REFUND: $coupleTokenCost');
-    } catch (refundError) {
-      debugPrint('COUPLE TOKEN REFUND FAILED: $refundError');
-    }
+    final refund = await _refundFailedReading(
+      requestId: requestId,
+      isCouple: true,
+      markError: false,
+    );
     if (!mounted) return;
     _updateReading(
       _coupleCompatibilityRequests,
@@ -928,13 +1253,9 @@ class _FaloraShellState extends State<FaloraShell> {
       result: coupleErrorMessage,
       firestoreStatus: 'error',
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$coupleErrorMessage $coupleTokenCost jeton hesabınıza iade edildi.',
-        ),
-      ),
-    );
+    if (refund?.wasRefunded == true) {
+      _showTokenRefundSnackBar(refund!.amount);
+    }
   }
 
   static const _coupleBackendTimeout = Duration(seconds: 120);
@@ -972,6 +1293,7 @@ class _FaloraShellState extends State<FaloraShell> {
             manName: erkekIsim,
             manAge: erkekYas,
             manZodiac: erkekBurc,
+            requestId: requestId,
             womanImage: kadinFoto,
             manImage: erkekFoto,
           )
@@ -1104,6 +1426,7 @@ class _FaloraShellState extends State<FaloraShell> {
           age: age,
           zodiac: burc,
           intention: niyet,
+          tokenCost: submitCost,
           imageNames: photoNames ?? const [],
           tellerId: teller.id,
           tellerName: teller.name,
@@ -1160,14 +1483,6 @@ class _FaloraShellState extends State<FaloraShell> {
         readyAt: readyAt,
         isCouple: false,
       );
-
-      _navigateAfterFortuneSubmit(
-        logPrefix: 'FORTUNE',
-        tabIndex: 1,
-        successMessage: 'Falınız hazırlanıyor...',
-        popToRoot: true,
-      );
-      unawaited(_onFortuneSubmitted());
       unawaited(
         _resolveFortuneInBackground(
           requestId: requestId,
@@ -1181,6 +1496,14 @@ class _FaloraShellState extends State<FaloraShell> {
           selectedTarotCards: selectedTarotCards,
         ),
       );
+
+      _navigateAfterFortuneSubmit(
+        logPrefix: 'FORTUNE',
+        tabIndex: 1,
+        successMessage: 'Falınız hazırlanıyor...',
+        popToRoot: true,
+      );
+      unawaited(_onFortuneSubmitted());
     } catch (e, stackTrace) {
       _handleSubmitFailure(
         e,
@@ -1256,14 +1579,6 @@ class _FaloraShellState extends State<FaloraShell> {
         readyAt: readyAt,
         isCouple: false,
       );
-
-      _navigateAfterFortuneSubmit(
-        logPrefix: logPrefix,
-        tabIndex: 1,
-        successMessage: '${category.label} hazırlanıyor...',
-        popToRoot: true,
-      );
-      unawaited(_onFortuneSubmitted());
       unawaited(
         _resolveAutoCategoryInBackground(
           requestId: requestId,
@@ -1273,6 +1588,14 @@ class _FaloraShellState extends State<FaloraShell> {
           logPrefix: logPrefix,
         ),
       );
+
+      _navigateAfterFortuneSubmit(
+        logPrefix: logPrefix,
+        tabIndex: 1,
+        successMessage: '${category.label} hazırlanıyor...',
+        popToRoot: true,
+      );
+      unawaited(_onFortuneSubmitted());
     } catch (e, stackTrace) {
       _handleSubmitFailure(
         e,
@@ -1494,6 +1817,7 @@ class _FaloraShellState extends State<FaloraShell> {
           maleZodiac: erkekBurc,
           femaleAge: kadinYas,
           maleAge: erkekYas,
+          tokenCost: coupleTokenCost,
           womanImageName: kadinFoto.name,
           manImageName: erkekFoto.name,
           createdAt: now,
@@ -1533,14 +1857,6 @@ class _FaloraShellState extends State<FaloraShell> {
         readyAt: readyAt,
         isCouple: true,
       );
-
-      _navigateAfterFortuneSubmit(
-        logPrefix: 'COUPLE',
-        tabIndex: 2,
-        successMessage: 'Uyum raporunuz hazırlanıyor...',
-        popToRoot: true,
-      );
-      unawaited(_onFortuneSubmitted());
       unawaited(
         _resolveCoupleInBackground(
           requestId: requestId,
@@ -1554,6 +1870,14 @@ class _FaloraShellState extends State<FaloraShell> {
           erkekFoto: erkekFoto,
         ),
       );
+
+      _navigateAfterFortuneSubmit(
+        logPrefix: 'COUPLE',
+        tabIndex: 2,
+        successMessage: 'Uyum raporunuz hazırlanıyor...',
+        popToRoot: true,
+      );
+      unawaited(_onFortuneSubmitted());
     } catch (e, stackTrace) {
       _handleSubmitFailure(
         e,
@@ -1561,6 +1885,7 @@ class _FaloraShellState extends State<FaloraShell> {
         logPrefix: 'COUPLE',
         requestId: requestId,
         tokensDeducted: tokensDeducted,
+        isCouple: true,
         rollback: requestId != null && !tokensDeducted
             ? () => _rollbackCoupleRequest(requestId!)
             : null,

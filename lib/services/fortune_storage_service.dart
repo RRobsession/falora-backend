@@ -133,6 +133,7 @@ class FortuneStorageService {
     required int age,
     required String zodiac,
     required String intention,
+    required int tokenCost,
     List<String> imageNames = const [],
     String? tellerId,
     String? tellerName,
@@ -156,6 +157,7 @@ class FortuneStorageService {
         'selectedCards': selectedTarotCards.map((c) => c.toMap()).toList(),
       'result': '',
       'status': 'pending',
+      'tokenCost': tokenCost,
       'createdAt': Timestamp.fromDate(created),
       'readyAt': Timestamp.fromDate(ready),
     });
@@ -231,6 +233,7 @@ class FortuneStorageService {
     required String maleName,
     required String femaleZodiac,
     required String maleZodiac,
+    required int tokenCost,
     int? femaleAge,
     int? maleAge,
     String? womanImageName,
@@ -252,6 +255,7 @@ class FortuneStorageService {
       if (manImageName != null) 'manImageName': manImageName,
       'result': '',
       'status': 'pending',
+      'tokenCost': tokenCost,
       'createdAt': Timestamp.fromDate(created),
       'readyAt': Timestamp.fromDate(ready),
     });
@@ -410,12 +414,23 @@ class FortuneStorageService {
     return rawStatus ?? 'pending';
   }
 
-  Future<FortuneReading?> fetchFortuneById(String userId, String id) async {
+  Future<Map<String, dynamic>?> fetchFortuneRawData(String userId, String id) async {
     try {
       final doc = await _db.collection(_fortunes).doc(id).get();
       if (!doc.exists) return null;
       final data = doc.data();
       if (data == null || data['userId'] != userId) return null;
+      return data;
+    } catch (e) {
+      debugPrint('FIRESTORE fetchFortuneRawData error: $e');
+      return null;
+    }
+  }
+
+  Future<FortuneReading?> fetchFortuneById(String userId, String id) async {
+    try {
+      final data = await fetchFortuneRawData(userId, id);
+      if (data == null) return null;
       return _fortuneFromData(id, data);
     } catch (e) {
       debugPrint('FIRESTORE fetchFortuneById error: $e');
@@ -435,6 +450,9 @@ class FortuneStorageService {
       return null;
     }
   }
+
+  List<TarotCardSelection> parseSelectedCardsFromData(Map<String, dynamic> d) =>
+      _parseSelectedCards(d);
 
   List<TarotCardSelection> _parseSelectedCards(Map<String, dynamic> d) {
     final raw = d['selectedCards'] ?? d['selectedTarotCards'];

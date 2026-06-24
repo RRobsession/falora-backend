@@ -23,6 +23,7 @@ abstract class AiService {
     required String zodiac,
     required String intention,
     required String tellerId,
+    String? requestId,
     List<String> imageNames = const [],
     List<TarotCardSelection> selectedTarotCards = const [],
   });
@@ -34,6 +35,7 @@ abstract class AiService {
     required String manName,
     required int manAge,
     required String manZodiac,
+    String? requestId,
     PickedImage? womanImage,
     PickedImage? manImage,
   });
@@ -42,6 +44,7 @@ abstract class AiService {
   Future<String> generateCategoryReading({
     required String categoryType,
     required Map<String, dynamic> inputData,
+    String? requestId,
   });
 }
 

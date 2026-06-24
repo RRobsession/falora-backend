@@ -421,6 +421,28 @@ const {
   requireMatchingUserId,
 } = require('./auth_middleware');
 const { safeLog, safeError, logFortuneRequest, logCoupleRequest } = require('./safe_log');
+const {
+  FORTUNE_COLLECTION,
+  COUPLE_COLLECTION,
+  persistFortuneResult,
+} = require('./fortune_result_persist');
+const { refundFortuneRequest } = require('./fortune_refund');
+
+async function saveGeneratedResult(req, result, collection) {
+  const requestId = req.body?.requestId;
+  if (!requestId) return;
+  try {
+    await persistFortuneResult({
+      uid: req.auth.uid,
+      requestId,
+      result,
+      collection,
+    });
+  } catch (err) {
+    console.error('FORTUNE PERSIST ERROR:', err.message);
+  }
+}
+
 const app = express();
 
 const corsOptions = {
@@ -613,6 +635,7 @@ app.post(
         buildAutoCategoryUserPrompt(categoryType, inputData, persona, structure),
         1800,
       );
+      await saveGeneratedResult(req, result);
       return res.json({ result });
     } catch (err) {
       console.error(`generate-fortune auto category error (${categoryType}):`, err.message);
@@ -640,12 +663,46 @@ app.post(
       buildFortuneUserPrompt(req.body, teller, structure),
       teller.maxCompletionTokens,
     );
+    await saveGeneratedResult(req, result);
     return res.json({ result });
   } catch (err) {
     console.error('generate-fortune error:', err.message);
     return res.status(500).json({ error: 'AI yanıtı üretilemedi' });
   }
 },
+);
+
+app.post(
+  '/fortune/refund',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+    const { requestId, type } = req.body ?? {};
+    if (!requestId) {
+      return res.status(400).json({ error: 'requestId gerekli' });
+    }
+
+    const collection =
+      type === 'couple' ? COUPLE_COLLECTION : FORTUNE_COLLECTION;
+
+    try {
+      const result = await refundFortuneRequest({
+        uid: req.auth.uid,
+        requestId,
+        collection,
+      });
+      if (!result.ok && result.reason === 'forbidden') {
+        return res.status(403).json({ error: 'Yetkisiz işlem' });
+      }
+      if (!result.ok && result.reason === 'not_found') {
+        return res.status(404).json({ error: 'Kayıt bulunamadı' });
+      }
+      return res.json(result);
+    } catch (err) {
+      console.error('fortune refund error:', err.message);
+      return res.status(500).json({ error: 'Jeton iadesi yapılamadı' });
+    }
+  },
 );
 
 app.post(
@@ -723,6 +780,7 @@ app.post(
       { woman: womanImage, man: manImage },
     );
     const result = ensureCompatibilityHeader(raw, compatibilityPercent);
+    await saveGeneratedResult(req, result, COUPLE_COLLECTION);
     return res.json({ result });
   } catch (err) {
     console.error('generate-couple error:', err.message);
