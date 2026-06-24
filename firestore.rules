@@ -330,6 +330,32 @@ service cloud.firestore {
 
     }
 
+    match /manual_reader_daily_quota/{dayKey} {
+
+      allow read: if isSignedIn();
+
+      allow create: if isEmailVerified()
+        && (
+          (request.resource.data.get('serdar', 0) == 1
+            && request.resource.data.get('hatice', 0) == 0)
+          || (request.resource.data.get('hatice', 0) == 1
+            && request.resource.data.get('serdar', 0) == 0)
+        );
+
+      allow update: if isEmailVerified()
+        && (
+          (request.resource.data.serdar == resource.data.get('serdar', 0) + 1
+            && request.resource.data.serdar <= 20
+            && request.resource.data.hatice == resource.data.get('hatice', 0))
+          || (request.resource.data.hatice == resource.data.get('hatice', 0) + 1
+            && request.resource.data.hatice <= 20
+            && request.resource.data.serdar == resource.data.get('serdar', 0))
+        );
+
+      allow delete: if false;
+
+    }
+
     match /play_purchases/{purchaseToken} {
 
       allow read: if isAdmin()

@@ -285,6 +285,7 @@ class MockAiService implements AiService {
     required String categoryType,
     required Map<String, dynamic> inputData,
     String? requestId,
+    List<PickedImage> chatImages = const [],
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 900));
     switch (categoryType) {
@@ -301,9 +302,37 @@ class MockAiService implements AiService {
           inputData['moonSign'] as String? ?? '',
           inputData['focusArea'] as String? ?? '',
         );
+      case 'relationship_advice':
+        return _mockRelationshipAdviceReading(
+          inputData['partnerName'] as String? ?? '',
+          inputData['problemText'] as String? ?? '',
+          chatImages.length,
+        );
       default:
         return 'Yorum hazırlanıyor…';
     }
+  }
+
+  static String _mockRelationshipAdviceReading(
+    String partnerName,
+    String problem,
+    int imageCount,
+  ) {
+    final excerpt =
+        problem.length > 80 ? '${problem.substring(0, 80)}…' : problem;
+    final visualNote = imageCount > 0
+        ? ' Yüklediğiniz $imageCount sohbet görüntüsü de dikkate alındı.'
+        : '';
+    return '$partnerName ile yaşadığınız durumu ($excerpt) objektif olarak '
+        'değerlendirdiğimde iletişimde netlik ve beklenti uyumsuzluğu öne '
+        'çıkıyor.$visualNote\n\n'
+        'Karşı tarafın mesajlara geç veya kısa yanıt vermesi sizde hayal '
+        'kırıklığı yaratabilir; bu his geçerli. Yine de tek taraflı yorum '
+        'yapmak yerine kendi iletişim tonunuzu da gözden geçirmeniz faydalı '
+        'olur.\n\n'
+        'Somut öneri: Duyguyu suçlama diliyle değil, "hissettiğim" cümleleriyle '
+        'paylaşın; karşı tarafa küçük bir geri dönüş penceresi tanıyın. '
+        'Bu yorum eğlence ve farkındalık amaçlıdır; kesin sonuç vaadi değildir.';
   }
 
   static String _mockDreamReading(String dream) {

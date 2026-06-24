@@ -12,6 +12,7 @@ import 'package:falora/theme/falora_theme.dart';
 
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
+import 'package:falora/services/manual_reader_quota_service.dart';
 
 import 'package:falora/widgets/premium_ui.dart';
 
@@ -168,6 +169,22 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
 
     if (_submitting || !_formKey.currentState!.validate()) return;
 
+    if (!isManualReaderActiveNow) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(manualReaderInactiveInfo)),
+      );
+      return;
+    }
+
+    final quota = await ManualReaderQuotaService.instance.fetchToday();
+    if (!mounted) return;
+    if (!isManualReaderQuotaAvailable(quota.countFor(widget.reader.id))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(manualReaderQuotaFullInfo(widget.reader.name))),
+      );
+      return;
+    }
+
 
 
     if (_isKahve && (_fincan1 == null || _fincan2 == null || _tabak == null)) {
@@ -305,6 +322,8 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
                 child: Text(
 
                   '${offer.priceLabel} · ${offer.questionLabel}\n'
+
+                  '$manualReaderActiveHoursInfo\n'
 
                   'Özel yorumun en kısa sürede hazırlanacak.',
 

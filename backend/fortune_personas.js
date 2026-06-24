@@ -542,7 +542,58 @@ const AUTO_CATEGORY_TYPES = new Set([
   'dream_interpretation',
   'numerology',
   'horoscope',
+  'relationship_advice',
 ]);
+
+const RELATIONSHIP_ADVICE_SAFETY = `GÜVENLİK VE ETİK:
+- Tıbbi teşhis, psikolojik tanı koyma, şiddet durumlarında mutlaka profesyonel yardım öner.
+- Kesin gelecek vaadi, "kesin barışırsınız/ayrılırsınız" gibi ifadeler kullanma.
+- Türkçe yaz; sakin, profesyonel ilişki danışmanı tonu kullan.`;
+
+function buildRelationshipAdviceSystemPrompt(hasChatImages) {
+  return `Sen deneyimli, tarafsız bir ilişki danışmanısın. Gerçek bir danışmanlık oturumundasın.
+
+YAKLAŞIM:
+- Tamamen objektif ol; taraf tutma.
+- Aşırı iyimser olma; gerçekçi ve dengeli konuş.
+- Sadece karşı tarafı suçlama; danışanın da sorumluluk alanlarını nazikçe belirt.
+- Duyguları küçümseme ama pembe tablo çizme.
+- Somut, uygulanabilir öneriler ver; klişe motivasyon cümlelerinden kaçın.
+${hasChatImages ? '- Yüklenen sohbet ekran görüntülerindeki ton, mesaj içeriği ve iletişim dinamiklerini metinle birlikte değerlendir.' : ''}
+
+${RELATIONSHIP_ADVICE_SAFETY}
+
+350-500 kelime arasında, paragraflar halinde, tamamlanmış cümleyle bitir.`;
+}
+
+function buildRelationshipAdviceUserPrompt(inputData, hasChatImages) {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const partnerName = String(inputData.partnerName ?? '').trim();
+  const partnerGender = String(inputData.partnerGender ?? '').trim();
+  const partnerZodiac = String(inputData.partnerZodiac ?? '').trim();
+  const partnerAge = String(inputData.partnerAge ?? '').trim();
+  const problemText = String(inputData.problemText ?? '').trim();
+
+  return `GÖREV: İlişki tavsiyesi yaz.
+
+Danışan, aşağıdaki kişi hakkında sorun yaşıyor:
+- İsim: ${partnerName}
+- Cinsiyet: ${partnerGender}
+- Yaş: ${partnerAge}
+- Burç: ${partnerZodiac}
+
+Danışanın anlattığı sorun:
+"${problemText}"
+
+${hasChatImages ? 'Ekte sohbet ekran görüntüleri var; bunları metinle birlikte incele.' : 'Sohbet görseli yüklenmedi; yalnızca metne dayan.'}
+
+Yorumunda:
+1) Durumu objektif özetle.
+2) Karşı tarafın olası bakış açısını kısaca değerlendir.
+3) Danışanın iletişim veya davranışında düzeltebileceği noktaları belirt.
+4) Net, dengeli ve uygulanabilir öneriler sun.
+[id:${requestId}]`;
+}
 
 const AUTO_CATEGORY_SAFETY = `GÜVENLİK VE ETİK:
 - Tıbbi teşhis, psikolojik tanı, finansal garanti veya kesin gelecek vaadi verme.
@@ -583,12 +634,30 @@ function validateAutoCategoryInput(categoryType, inputData) {
       }
       return { ok: true };
     }
+    case 'relationship_advice': {
+      const partnerName = String(inputData.partnerName ?? '').trim();
+      const partnerGender = String(inputData.partnerGender ?? '').trim();
+      const partnerZodiac = String(inputData.partnerZodiac ?? '').trim();
+      const partnerAge = String(inputData.partnerAge ?? '').trim();
+      const problemText = String(inputData.problemText ?? '').trim();
+      if (!partnerName || !partnerGender || !partnerZodiac || !partnerAge) {
+        return { ok: false, error: 'Karşı taraf bilgileri eksik' };
+      }
+      if (problemText.length < 15) {
+        return { ok: false, error: 'Sorun metni en az 15 karakter olmalı' };
+      }
+      return { ok: true };
+    }
     default:
       return { ok: false, error: 'Geçersiz kategori tipi' };
   }
 }
 
 function buildAutoCategorySystemPrompt(categoryType, persona) {
+  if (categoryType === 'relationship_advice') {
+    return buildRelationshipAdviceSystemPrompt(false);
+  }
+
   const titles = {
     dream_interpretation: 'Rüya Tabiri Uzmanı',
     numerology: 'Numeroloji Yorumcusu',
@@ -615,6 +684,10 @@ Kendini ${persona.name} olarak tut.`;
 
 function buildAutoCategoryUserPrompt(categoryType, inputData, persona, structure) {
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  if (categoryType === 'relationship_advice') {
+    return buildRelationshipAdviceUserPrompt(inputData, false);
+  }
 
   switch (categoryType) {
     case 'dream_interpretation': {
@@ -676,4 +749,6 @@ module.exports = {
   validateAutoCategoryInput,
   buildAutoCategorySystemPrompt,
   buildAutoCategoryUserPrompt,
+  buildRelationshipAdviceSystemPrompt,
+  buildRelationshipAdviceUserPrompt,
 };

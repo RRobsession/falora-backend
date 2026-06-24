@@ -963,6 +963,7 @@ class FaloraAncientBottomNav extends StatelessWidget {
   static const _items = [
     (Icons.home_rounded, FontAwesomeIcons.house, 'Ana Sayfa'),
     (Icons.auto_stories_rounded, FontAwesomeIcons.bookOpen, 'Fallarım'),
+    (Icons.chat_rounded, FontAwesomeIcons.comments, 'İlişki'),
     (Icons.favorite_rounded, FontAwesomeIcons.solidHeart, 'Çift Uyumu'),
     (Icons.person_rounded, FontAwesomeIcons.user, 'Profil'),
   ];

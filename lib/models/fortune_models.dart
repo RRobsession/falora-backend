@@ -71,6 +71,13 @@ enum FortuneCategory {
     'assets/icons/burc.svg',
     FontAwesomeIcons.star,
     Color(0xFF7A5C3E),
+  ),
+  iliskiTavsiyesi(
+    'İlişki Tavsiyesi',
+    'İlişkinizdeki sorunlara objektif ve dengeli bakış',
+    'assets/icons/iliski.svg',
+    FontAwesomeIcons.comments,
+    Color(0xFF8B4A62),
   );
 
   const FortuneCategory(
@@ -109,6 +116,8 @@ enum FortuneCategory {
         return 'Numeroloji yorumunuz hazırlanıyor...';
       case FortuneCategory.burcYorumu:
         return 'Burç yorumunuz hazırlanıyor...';
+      case FortuneCategory.iliskiTavsiyesi:
+        return 'İlişki tavsiyeniz hazırlanıyor...';
     }
   }
 
@@ -121,6 +130,8 @@ enum FortuneCategory {
         return 'Numeroloji Yorumu';
       case FortuneCategory.burcYorumu:
         return 'Burç Yorumu';
+      case FortuneCategory.iliskiTavsiyesi:
+        return 'İlişki Tavsiyesi';
       default:
         return label;
     }
@@ -183,7 +194,10 @@ class FortuneReading {
   }
 
   bool get showsCountdown =>
-      readyAt != null && !isReadyAtElapsed && !isReadyDisplay;
+      readyAt != null &&
+      !isReadyAtElapsed &&
+      !isReadyDisplay &&
+      !isFailedDisplay;
 
   bool get isFailedDisplay => firestoreStatus == 'error';
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/config/manual_fortune_config.dart';
 import 'package:falora/models/fortune_models.dart';
@@ -8,6 +10,7 @@ import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
+import 'package:falora/services/manual_reader_quota_service.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -34,6 +37,22 @@ class FortuneTellerSelectionPage extends StatefulWidget {
 
 class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage> {
   ManualFortuneOffer? _manualOffer;
+  Timer? _manualReaderHoursTimer;
+  StreamSubscription<ManualReaderDailyQuota>? _quotaSub;
+  ManualReaderDailyQuota _quota = ManualReaderDailyQuota.empty;
+  String? _quotaDayKey;
+
+  void _bindQuotaStream() {
+    final dayKey = ManualReaderQuotaService.instance.quotaDayKey();
+    if (_quotaDayKey == dayKey && _quotaSub != null) return;
+    _quotaDayKey = dayKey;
+    _quotaSub?.cancel();
+    _quotaSub = ManualReaderQuotaService.instance.watchDay(dayKey).listen(
+      (quota) {
+        if (mounted) setState(() => _quota = quota);
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -41,7 +60,23 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
     if (supportsManualFortuneReaders(widget.category)) {
       _manualOffer = manualOfferFor(widget.category);
       logManualReaderConfig(widget.category);
+      _bindQuotaStream();
+      _manualReaderHoursTimer = Timer.periodic(
+        const Duration(minutes: 1),
+        (_) {
+          if (!mounted) return;
+          _bindQuotaStream();
+          setState(() {});
+        },
+      );
     }
+  }
+
+  @override
+  void dispose() {
+    _quotaSub?.cancel();
+    _manualReaderHoursTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -122,17 +157,49 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                   const SizedBox(height: 8),
                   const FaloraSectionHeading('Özel Yorumcular'),
                   const SizedBox(height: 12),
+                  _ManualReaderHoursInfoBanner(
+                    isActive: isManualReaderActiveNow,
+                  ),
+                  const SizedBox(height: 12),
                   ...manualFortuneReaders.map(
-                    (reader) => Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: _ManualFortuneReaderCard(
-                        reader: reader,
-                        category: category,
-                        offer: _manualOffer!,
-                        onTap: () =>
-                            widget.onManualReaderChosen(context, reader),
-                      ),
-                    ),
+                    (reader) {
+                      final dailyCount = _quota.countFor(reader.id);
+                      final hoursActive = isManualReaderActiveNow;
+                      final quotaAvailable =
+                          isManualReaderQuotaAvailable(dailyCount);
+                      final readerActive = hoursActive && quotaAvailable;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _ManualFortuneReaderCard(
+                          reader: reader,
+                          category: category,
+                          offer: _manualOffer!,
+                          dailyCount: dailyCount,
+                          isActive: readerActive,
+                          onTap: () {
+                            if (!hoursActive) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(manualReaderInactiveInfo),
+                                ),
+                              );
+                              return;
+                            }
+                            if (!quotaAvailable) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    manualReaderQuotaFullInfo(reader.name),
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            widget.onManualReaderChosen(context, reader);
+                          },
+                        ),
+                      );
+                    },
                   ),
                 ],
               ],
@@ -149,21 +216,27 @@ class _ManualFortuneReaderCard extends StatelessWidget {
     required this.reader,
     required this.category,
     required this.offer,
+    required this.dailyCount,
+    required this.isActive,
     required this.onTap,
   });
 
   final ManualFortuneReader reader;
   final FortuneCategory category;
   final ManualFortuneOffer offer;
+  final int dailyCount;
+  final bool isActive;
   final VoidCallback onTap;
 
   static const _avatarSize = 64.0;
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTap(
-      onTap: onTap,
-      child: Container(
+    return Opacity(
+      opacity: isActive ? 1 : 0.72,
+      child: ScaleTap(
+        onTap: onTap,
+        child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
         decoration: faloraParchmentDecoration(
           base: Color.lerp(faloraParchmentCard, reader.accentColor, 0.08)!,
@@ -216,7 +289,14 @@ class _ManualFortuneReaderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _CompactTokenPriceBadge(amount: offer.tokenCost),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _CompactQuotaBadge(count: dailyCount),
+                    const SizedBox(height: 6),
+                    _CompactTokenPriceBadge(amount: offer.tokenCost),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -229,6 +309,30 @@ class _ManualFortuneReaderCard extends StatelessWidget {
                 fontSize: 12.5,
                 height: 1.32,
               ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _InfoChip(
+                    label: manualReaderActiveHoursLabel,
+                    color: reader.accentColor,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _InfoChip(
+                    label: isActive
+                        ? 'Şu an aktif'
+                        : (dailyCount >= manualReaderDailyQuotaCloseAt
+                            ? 'Kota doldu'
+                            : 'Şu an kapalı'),
+                    color: isActive
+                        ? const Color(0xFF2E7D32)
+                        : faloraBronze,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
@@ -250,11 +354,59 @@ class _ManualFortuneReaderCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _ManualReaderContinueButton(
-              label: 'Devam Et · ${offer.priceLabel}',
+              label: !isManualReaderQuotaAvailable(dailyCount)
+                  ? 'Günlük kota doldu'
+                  : isActive
+                      ? 'Devam Et · ${offer.priceLabel}'
+                      : 'Şu an aktif değil',
               onPressed: onTap,
             ),
           ],
         ),
+      ),
+    ),
+    );
+  }
+}
+
+class _ManualReaderHoursInfoBanner extends StatelessWidget {
+  const _ManualReaderHoursInfoBanner({required this.isActive});
+
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: (isActive ? const Color(0xFF2E7D32) : faloraBronze)
+            .withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: (isActive ? const Color(0xFF2E7D32) : faloraBronze)
+              .withValues(alpha: 0.28),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FaIcon(
+            FontAwesomeIcons.clock,
+            size: 16,
+            color: isActive ? const Color(0xFF2E7D32) : faloraBronzeDark,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isActive ? manualReaderActiveNowInfo : manualReaderInactiveInfo,
+              style: FaloraTypography.bodyMedium.copyWith(
+                color: faloraInkHeading,
+                fontSize: 12.5,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -281,6 +433,33 @@ class _ManualReaderBadge extends StatelessWidget {
           fontSize: 9,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.25,
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactQuotaBadge extends StatelessWidget {
+  const _CompactQuotaBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: faloraParchmentInset.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: faloraBronze.withValues(alpha: 0.45)),
+      ),
+      child: Text(
+        manualReaderQuotaLabel(count),
+        style: FaloraTypography.labelLarge.copyWith(
+          color: faloraInk,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          height: 1,
         ),
       ),
     );

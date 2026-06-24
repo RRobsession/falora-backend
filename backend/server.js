@@ -165,6 +165,8 @@ const {
   validateAutoCategoryInput,
   buildAutoCategorySystemPrompt,
   buildAutoCategoryUserPrompt,
+  buildRelationshipAdviceSystemPrompt,
+  buildRelationshipAdviceUserPrompt,
 } = require('./fortune_personas');
 
 function newRequestId() {
@@ -315,6 +317,41 @@ function buildCoupleImageContent(userPrompt, womanImage, manImage) {
   return content;
 }
 
+function parseChatImages(body) {
+  const raw = body?.chatImages;
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .slice(0, 3)
+    .map((item, index) => {
+      const parsed = parseImageField(item?.base64, item?.mime);
+      if (!parsed) return null;
+      parsed.label = item?.name || `sohbet-${index + 1}`;
+      return parsed;
+    })
+    .filter(Boolean);
+}
+
+function buildRelationshipChatImageContent(userPrompt, images) {
+  const content = [{ type: 'text', text: userPrompt }];
+
+  images.forEach((img, index) => {
+    content.push({
+      type: 'text',
+      text: `Sohbet ekran görüntüsü ${index + 1} (${img.label}):`,
+    });
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${img.mime};base64,${img.base64}`,
+        detail: 'high',
+      },
+    });
+  });
+
+  return content;
+}
+
 function logTokenUsage(kind, usage) {
   if (!usage) {
     console.log(`[${kind}] token usage: unavailable`);
@@ -372,6 +409,40 @@ async function generateCouple(openai, systemPrompt, userPrompt, images) {
 
   console.log('VISION ANALYSIS SUCCESS');
   return result;
+}
+
+async function generateRelationshipAdvice(
+  openai,
+  systemPrompt,
+  userPrompt,
+  chatImages,
+) {
+  if (chatImages.length > 0) {
+    console.log('RELATIONSHIP ADVICE VISION IMAGE COUNT:', chatImages.length);
+    const completion = await openai.chat.completions.create({
+      model: VISION_MODEL,
+      temperature: COUPLE_TEMPERATURE,
+      max_completion_tokens: COUPLE_MAX_COMPLETION_TOKENS,
+      frequency_penalty: COUPLE_FREQUENCY_PENALTY,
+      presence_penalty: COUPLE_PRESENCE_PENALTY,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: buildRelationshipChatImageContent(userPrompt, chatImages),
+        },
+      ],
+    });
+
+    logTokenUsage('relationship_advice', completion.usage);
+    const result = completion.choices?.[0]?.message?.content?.trim();
+    if (!result) {
+      throw new Error('Boş AI cevabı');
+    }
+    return result;
+  }
+
+  return generate(openai, 'relationship_advice', systemPrompt, userPrompt, 2200);
 }
 
 async function generate(
@@ -624,6 +695,28 @@ app.post(
     }
 
     try {
+      if (categoryType === 'relationship_advice') {
+        const chatImages = parseChatImages(req.body);
+        console.log(
+          `RELATIONSHIP ADVICE REQUEST images=${chatImages.length}`,
+        );
+        const systemPrompt = buildRelationshipAdviceSystemPrompt(
+          chatImages.length > 0,
+        );
+        const userPrompt = buildRelationshipAdviceUserPrompt(
+          inputData,
+          chatImages.length > 0,
+        );
+        const result = await generateRelationshipAdvice(
+          openai,
+          systemPrompt,
+          userPrompt,
+          chatImages,
+        );
+        await saveGeneratedResult(req, result);
+        return res.json({ result });
+      }
+
       const persona = pickFortunePersona();
       const structure = pickFortuneStructure();
       console.log(`AUTO CATEGORY REQUEST: ${categoryType}`);

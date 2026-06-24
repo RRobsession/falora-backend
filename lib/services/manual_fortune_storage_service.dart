@@ -11,6 +11,8 @@ import 'package:falora/models/fortune_models.dart';
 
 import 'package:falora/models/manual_fortune_request.dart';
 
+import 'package:falora/services/manual_reader_quota_service.dart';
+
 import 'package:falora/picked_image.dart';
 
 import 'package:flutter/foundation.dart';
@@ -194,50 +196,44 @@ class ManualFortuneStorageService {
     final imageInfo = encodeImagesForPayload(images);
 
     final created = DateTime.now();
-    final ready = computeReadyAt(created);
+    final ready = computeManualReadyAt(created);
+    final quotaDayKey = ManualReaderQuotaService.instance.quotaDayKey(created);
 
     try {
 
-      await _db.collection(_collection).doc(id).set({
+      await _db.runTransaction((tx) async {
+        final reserved = await ManualReaderQuotaService.instance
+            .tryIncrementInTransaction(
+          tx: tx,
+          readerId: readerId,
+          dayKey: quotaDayKey,
+        );
+        if (!reserved) {
+          throw ManualFortuneException(manualReaderQuotaFullInfo(readerName));
+        }
 
-        'userId': userId,
-
-        'userEmail': userEmail,
-
-        'fortuneType': category.name,
-
-        'readerId': readerId,
-
-        'readerName': readerName,
-
-        'tokenCost': tokenCost,
-
-        'priceTRY': 0,
-
-        'questionLimit': offer.questionLimit,
-
-        'requiresIntention': offer.requiresIntention,
-
-        'status': 'pending',
-
-        'name': name,
-
-        'age': age,
-
-        'zodiac': zodiac,
-
-        'intention': intention,
-
-        'questions': questions,
-
-        if (imageInfo.isNotEmpty) 'imageInfo': imageInfo,
-
-        'paymentStatus': 'tokens',
-
-        'createdAt': Timestamp.fromDate(created),
-
-        'readyAt': Timestamp.fromDate(ready),
-
+        final requestRef = _db.collection(_collection).doc(id);
+        tx.set(requestRef, {
+          'userId': userId,
+          'userEmail': userEmail,
+          'fortuneType': category.name,
+          'readerId': readerId,
+          'readerName': readerName,
+          'tokenCost': tokenCost,
+          'priceTRY': 0,
+          'questionLimit': offer.questionLimit,
+          'requiresIntention': offer.requiresIntention,
+          'status': 'pending',
+          'name': name,
+          'age': age,
+          'zodiac': zodiac,
+          'intention': intention,
+          'questions': questions,
+          if (imageInfo.isNotEmpty) 'imageInfo': imageInfo,
+          'paymentStatus': 'tokens',
+          'createdAt': Timestamp.fromDate(created),
+          'readyAt': Timestamp.fromDate(ready),
+        });
       });
 
       debugPrint('MANUAL REQUEST CREATE SUCCESS id=$id');

@@ -1,5 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:falora/config/category_fortune_config.dart';
+import 'package:falora/image_upload_card.dart';
 import 'package:falora/models/fortune_models.dart';
+import 'package:falora/picked_image.dart';
 import 'package:falora/services/fortune_form_prefill.dart';
 import 'package:falora/widgets/turkish_birth_date_field.dart';
 import 'package:falora/theme/falora_theme.dart';
@@ -401,6 +404,559 @@ class _HoroscopeFormPageState extends State<HoroscopeFormPage> {
               onPressed: _submit,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class RelationshipAdviceFormPage extends StatefulWidget {
+  const RelationshipAdviceFormPage({
+    super.key,
+    required this.tokenCost,
+    required this.onSubmit,
+    required this.onOpenShop,
+  });
+
+  final int tokenCost;
+  final Future<void> Function({
+    required String partnerName,
+    required String partnerGender,
+    required String partnerZodiac,
+    required int partnerAge,
+    required String problemText,
+    required List<PickedImage> chatImages,
+  }) onSubmit;
+  final VoidCallback onOpenShop;
+
+  @override
+  State<RelationshipAdviceFormPage> createState() =>
+      _RelationshipAdviceFormPageState();
+}
+
+class _RelationshipAdviceFormPageState extends State<RelationshipAdviceFormPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _ageCtrl = TextEditingController();
+  final _problemCtrl = TextEditingController();
+  String _gender = partnerGenderOptions.first;
+  String _zodiac = burclar.first;
+  PickedImage? _chat1;
+  PickedImage? _chat2;
+  PickedImage? _chat3;
+  var _submitting = false;
+
+  static const _accent = Color(0xFF8B4A62);
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _ageCtrl.dispose();
+    _problemCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      final images = [_chat1, _chat2, _chat3]
+          .whereType<PickedImage>()
+          .toList(growable: false);
+      await widget.onSubmit(
+        partnerName: _nameCtrl.text.trim(),
+        partnerGender: _gender,
+        partnerZodiac: _zodiac,
+        partnerAge: int.parse(_ageCtrl.text.trim()),
+        problemText: _problemCtrl.text.trim(),
+        chatImages: images,
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _PremiumCategoryShell(
+      title: FortuneCategory.iliskiTavsiyesi.label,
+      accent: _accent,
+      onOpenShop: widget.onOpenShop,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _RelationshipHeroCard(
+              accent: _accent,
+              tokenCost: widget.tokenCost,
+            ),
+            const SizedBox(height: 28),
+            _PremiumSectionCard(
+              accent: _accent,
+              title: 'Karşı taraf',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _PremiumTextField(
+                    controller: _nameCtrl,
+                    label: 'İsim',
+                    validator: (v) {
+                      if ((v ?? '').trim().isEmpty) {
+                        return 'İsim gerekli';
+                      }
+                      return null;
+                    },
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Cinsiyet',
+                    style: FaloraTypography.labelSmall.copyWith(
+                      color: faloraInkMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _OptionChipGroup(
+                    accent: _accent,
+                    options: partnerGenderOptions,
+                    selected: _gender,
+                    onSelected: (v) => setState(() => _gender = v),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Yaş',
+                    style: FaloraTypography.labelSmall.copyWith(
+                      color: faloraInkMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _ageCtrl,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: faloraTextPrimary, fontSize: 15),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: faloraParchmentRaised,
+                      hintText: 'Örn. 28',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(FaloraRadius.md),
+                        borderSide:
+                            BorderSide(color: faloraBronze.withValues(alpha: 0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(FaloraRadius.md),
+                        borderSide:
+                            BorderSide(color: faloraBronze.withValues(alpha: 0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(FaloraRadius.md),
+                        borderSide:
+                            const BorderSide(color: faloraGoldDark, width: 1.2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                    ),
+                    validator: (v) {
+                      final age = int.tryParse(v?.trim() ?? '');
+                      if (age == null || age < 16 || age > 99) {
+                        return '16–99 arası geçerli bir yaş girin';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Burç',
+                    style: FaloraTypography.labelSmall.copyWith(
+                      color: faloraInkMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _ZodiacPickerGrid(
+                    accent: _accent,
+                    selected: _zodiac,
+                    onSelected: (v) => setState(() => _zodiac = v),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            _PremiumSectionCard(
+              accent: _accent,
+              title: 'Yaşadığınız sorun',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                decoration: BoxDecoration(
+                  color: faloraParchmentRaised,
+                  borderRadius: BorderRadius.circular(FaloraRadius.lg),
+                  border: Border.all(
+                    color: faloraBronze.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: TextFormField(
+                  controller: _problemCtrl,
+                  style: const TextStyle(
+                    color: faloraTextPrimary,
+                    fontSize: 15,
+                    height: 1.55,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Ahmet günaydın mesajına görüldü attı',
+                    hintStyle: TextStyle(
+                      color: faloraTextSecondary.withValues(alpha: 0.65),
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  minLines: 4,
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  textCapitalization: TextCapitalization.sentences,
+                  validator: (v) {
+                    final text = v?.trim() ?? '';
+                    if (text.length < 15) {
+                      return 'Sorunu en az 15 karakterle anlatın';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _PremiumSectionCard(
+              accent: _accent,
+              title: 'Sohbet ekran görüntüleri (isteğe bağlı)',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(FaloraRadius.lg),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          _accent.withValues(alpha: 0.1),
+                          faloraParchmentRaised,
+                        ],
+                      ),
+                      border: Border.all(
+                        color: _accent.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: _accent.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: FaIcon(
+                            FontAwesomeIcons.message,
+                            size: 14,
+                            color: _accent,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Sorun yaşadığınız sohbet anını yükleyin. '
+                            'Metin ve görseller birlikte değerlendirilerek '
+                            'daha dengeli bir tavsiye sunulur.',
+                            style: FaloraTypography.bodyMedium.copyWith(
+                              color: faloraInkSoft,
+                              height: 1.45,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _CompactChatPhotoSlot(
+                          label: '1',
+                          image: _chat1,
+                          accent: _accent,
+                          onChanged: (v) => setState(() => _chat1 = v),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _CompactChatPhotoSlot(
+                          label: '2',
+                          image: _chat2,
+                          accent: _accent,
+                          onChanged: (v) => setState(() => _chat2 = v),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _CompactChatPhotoSlot(
+                          label: '3',
+                          image: _chat3,
+                          accent: _accent,
+                          onChanged: (v) => setState(() => _chat3 = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            _PremiumSubmitButton(
+              accent: _accent,
+              label: 'Tavsiye Al',
+              tokenCost: widget.tokenCost,
+              loading: _submitting,
+              onPressed: _submit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RelationshipHeroCard extends StatelessWidget {
+  const _RelationshipHeroCard({
+    required this.accent,
+    required this.tokenCost,
+  });
+
+  final Color accent;
+  final int tokenCost;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+      decoration: faloraParchmentDecoration(
+        base: Color.lerp(faloraParchmentCard, accent, 0.06)!,
+        radius: FaloraRadius.xl,
+        raised: true,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent.withValues(alpha: 0.24)),
+                ),
+                child: FaIcon(
+                  FontAwesomeIcons.comments,
+                  size: 20,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'İlişki Tavsiyesi',
+                      style: FaloraTypography.displayMedium.copyWith(
+                        fontSize: 22,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tarafsız ve dengeli uzman bakışı',
+                      style: FaloraTypography.bodyLarge.copyWith(fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const _RelationshipStepRow(
+            number: '1',
+            text: 'Karşı tarafın bilgilerini girin',
+          ),
+          const SizedBox(height: 8),
+          const _RelationshipStepRow(
+            number: '2',
+            text: 'Yaşadığınız sorunu açıkça anlatın',
+          ),
+          const SizedBox(height: 8),
+          const _RelationshipStepRow(
+            number: '3',
+            text: 'İsterseniz sohbet görüntüsü ekleyin',
+          ),
+          const SizedBox(height: 18),
+          FaloraTokenBadge(amount: tokenCost, compact: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _RelationshipStepRow extends StatelessWidget {
+  const _RelationshipStepRow({
+    required this.number,
+    required this.text,
+  });
+
+  final String number;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: faloraParchmentInset,
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: faloraBronze.withValues(alpha: 0.28)),
+          ),
+          child: Text(
+            number,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: faloraInkHeading,
+              height: 1,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: FaloraTypography.bodyMedium.copyWith(fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactChatPhotoSlot extends StatelessWidget {
+  const _CompactChatPhotoSlot({
+    required this.label,
+    required this.image,
+    required this.accent,
+    required this.onChanged,
+  });
+
+  final String label;
+  final PickedImage? image;
+  final Color accent;
+  final ValueChanged<PickedImage?> onChanged;
+
+  Future<void> _pick(BuildContext context) async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      withData: true,
+      allowMultiple: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) return;
+    onChanged(PickedImage(name: file.name, bytes: bytes));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = image != null;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _pick(context),
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          height: 108,
+          decoration: BoxDecoration(
+            color: faloraParchmentRaised,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: hasImage
+                  ? accent.withValues(alpha: 0.55)
+                  : faloraBronze.withValues(alpha: 0.28),
+            ),
+          ),
+          child: hasImage
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: Image.memory(
+                        image!.bytes,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: GestureDetector(
+                        onTap: () => onChanged(null),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FaIcon(
+                      FontAwesomeIcons.plus,
+                      size: 16,
+                      color: accent.withValues(alpha: 0.8),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: accent.withValues(alpha: 0.85),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

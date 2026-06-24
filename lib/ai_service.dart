@@ -40,11 +40,12 @@ abstract class AiService {
     PickedImage? manImage,
   });
 
-  /// Otomatik kategori yorumları: dream_interpretation, numerology, horoscope.
+  /// Otomatik kategori yorumları: dream_interpretation, numerology, horoscope, relationship_advice.
   Future<String> generateCategoryReading({
     required String categoryType,
     required Map<String, dynamic> inputData,
     String? requestId,
+    List<PickedImage> chatImages = const [],
   });
 }
 

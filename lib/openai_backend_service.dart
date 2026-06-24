@@ -198,23 +198,47 @@ class OpenAiBackendService implements AiService {
 
     String? requestId,
 
+    List<PickedImage> chatImages = const [],
+
   }) async {
 
     BackendAuthClient.logRequest('/generate-fortune');
+
+    final body = <String, dynamic>{
+
+      'categoryType': categoryType,
+
+      'inputData': inputData,
+
+      if (requestId != null && requestId.isNotEmpty) 'requestId': requestId,
+
+    };
+
+    if (chatImages.isNotEmpty) {
+
+      body['chatImages'] = [
+
+        for (final image in chatImages.take(3))
+
+          {
+
+            'base64': base64Encode(image.bytes),
+
+            'mime': _imageMime(image.name),
+
+            'name': image.name,
+
+          },
+
+      ];
+
+    }
 
     return _post(
 
       '/generate-fortune',
 
-      {
-
-        'categoryType': categoryType,
-
-        'inputData': inputData,
-
-        if (requestId != null && requestId.isNotEmpty) 'requestId': requestId,
-
-      },
+      body,
 
     );
 

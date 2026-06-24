@@ -65,6 +65,11 @@ class CategoryIconWidget extends StatelessWidget {
           size: iconSize - 2,
           color: iconColor,
         ),
+        errorBuilder: (_, __, ___) => FaIcon(
+          fallbackIcon,
+          size: iconSize - 2,
+          color: iconColor,
+        ),
       );
     } catch (_) {
       return FaIcon(fallbackIcon, size: iconSize - 2, color: iconColor);

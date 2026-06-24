@@ -3,6 +3,11 @@ import 'package:falora/models/fortune_models.dart';
 /// Standart AI kategorilerinin 1. seviye ücreti (Rüya/Numeroloji/Burç dahil).
 const autoCategoryTokenCost = 50;
 
+/// İlişki Tavsiyesi — sabit ücret.
+const relationshipAdviceTokenCost = 100;
+
+const partnerGenderOptions = ['Kadın', 'Erkek'];
+
 const horoscopeFocusAreas = ['Genel', 'Aşk', 'Para', 'Kariyer'];
 
 const dreamTypes = ['Genel', 'Aşk', 'Kariyer', 'Para', 'Aile'];
@@ -29,6 +34,7 @@ bool supportsManualFortuneReaders(FortuneCategory category) {
     case FortuneCategory.ruyaTabiri:
     case FortuneCategory.numeroloji:
     case FortuneCategory.burcYorumu:
+    case FortuneCategory.iliskiTavsiyesi:
       return false;
     default:
       return true;
@@ -41,6 +47,7 @@ bool isAutoOnlyCategory(FortuneCategory category) {
     case FortuneCategory.ruyaTabiri:
     case FortuneCategory.numeroloji:
     case FortuneCategory.burcYorumu:
+    case FortuneCategory.iliskiTavsiyesi:
       return true;
     default:
       return false;
@@ -61,6 +68,8 @@ String backendCategoryType(FortuneCategory category) {
       return 'numerology';
     case FortuneCategory.burcYorumu:
       return 'horoscope';
+    case FortuneCategory.iliskiTavsiyesi:
+      return 'relationship_advice';
     default:
       throw ArgumentError('Otomatik kategori değil: $category');
   }
@@ -74,6 +83,8 @@ String categoryFortuneTitle(FortuneCategory category) {
       return 'Numeroloji Yorumu';
     case FortuneCategory.burcYorumu:
       return 'Burç Yorumu';
+    case FortuneCategory.iliskiTavsiyesi:
+      return 'İlişki Tavsiyesi';
     default:
       return category.label;
   }
@@ -108,6 +119,14 @@ String buildCategorySummary(
       final moon = inputData['moonSign'] as String? ?? '';
       final focus = inputData['focusArea'] as String? ?? '';
       return 'Güneş: $sun · Ay: $moon\nOdak: $focus';
+    case FortuneCategory.iliskiTavsiyesi:
+      final name = inputData['partnerName'] as String? ?? '';
+      final gender = inputData['partnerGender'] as String? ?? '';
+      final zodiac = inputData['partnerZodiac'] as String? ?? '';
+      final age = inputData['partnerAge'] as String? ?? '';
+      final problem = inputData['problemText'] as String? ?? '';
+      return 'Karşı taraf: $name ($gender, $age, $zodiac)\n'
+          'Sorun: ${summarizeDreamText(problem, maxLength: 100)}';
     default:
       return category.label;
   }

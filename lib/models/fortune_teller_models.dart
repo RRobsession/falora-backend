@@ -1,3 +1,4 @@
+import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -109,6 +110,9 @@ List<FortuneTeller> fortuneTellersForCategory(FortuneCategory category) {
 
 /// Tek kaynak: kategori + falcı kimliğine göre jeton maliyeti.
 int resolveTellerTokenCost(FortuneCategory category, String tellerId) {
+  if (category == FortuneCategory.iliskiTavsiyesi) {
+    return relationshipAdviceTokenCost;
+  }
   final tellers = fortuneTellersForCategory(category);
   for (final teller in tellers) {
     if (teller.id == tellerId) {
