@@ -29,39 +29,47 @@ class PrivacyPolicyScreen extends StatelessWidget {
           'jeton bakiyenizin takibi, bildirim gönderimi ve hesap güvenliği amacıyla kullanılır.',
     ),
     _PolicySection(
-      title: '4. Üçüncü Taraf Hizmetler',
+      title: '4. Fal ve Tavsiye İçerikleri',
+      body:
+          'Uygulamada sunulan fal yorumları, spiritüel analizler, çift uyumu sonuçları ve '
+          'ilişki tavsiyeleri eğlence ve kişisel farkındalık amaçlıdır; kesin doğruluk '
+          'garantisi verilmez. Bu içerikler profesyonel danışmanlık yerine geçmez. '
+          'Önemli yaşam kararlarınızı yalnızca uygulama çıktılarına dayanarak vermemenizi öneririz.',
+    ),
+    _PolicySection(
+      title: '5. Üçüncü Taraf Hizmetler',
       body:
           'Uygulama Firebase (kimlik doğrulama, veritabanı, bildirimler), yorum hizmetleri '
           've ödeme altyapıları gibi üçüncü taraf hizmetler kullanabilir. Bu hizmetler kendi '
           'gizlilik politikalarına tabidir.',
     ),
     _PolicySection(
-      title: '5. Veri Saklama ve Güvenlik',
+      title: '6. Veri Saklama ve Güvenlik',
       body:
           'Verileriniz güvenli sunucularda saklanır. Hesabınızı sildiğinizde ilgili veriler '
           'kalıcı olarak silinmeye çalışılır. Hiçbir sistem %100 güvenlik garantisi veremez; '
           'makul teknik ve idari önlemler alınır.',
     ),
     _PolicySection(
-      title: '6. Haklarınız',
+      title: '7. Haklarınız',
       body:
           'Verilerinize erişme, düzeltme ve hesabınızı silme hakkına sahipsiniz. '
           'Profil ekranından hesabınızı silebilir veya bizimle iletişime geçebilirsiniz.',
     ),
     _PolicySection(
-      title: '7. Çocukların Gizliliği',
+      title: '8. Çocukların Gizliliği',
       body:
           '$appDisplayName 18 yaş altı kullanıcılar için tasarlanmamıştır. Bilerek çocuklardan '
           'kişisel veri toplanmaz.',
     ),
     _PolicySection(
-      title: '8. Değişiklikler',
+      title: '9. Değişiklikler',
       body:
           'Bu politika zaman zaman güncellenebilir. Önemli değişiklikler uygulama içinde '
           'duyurulabilir. Güncel metin bu sayfada yayımlanır.',
     ),
     _PolicySection(
-      title: '9. İletişim',
+      title: '10. İletişim',
       body:
           'Gizlilik ile ilgili sorularınız için: falora.admin@falora.app',
     ),

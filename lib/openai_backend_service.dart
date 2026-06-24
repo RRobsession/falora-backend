@@ -11,6 +11,7 @@ import 'package:falora/picked_image.dart';
 
 import 'package:falora/services/backend_auth_client.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
+import 'package:falora/utils/ai_result_sanitize.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -350,7 +351,7 @@ class OpenAiBackendService implements AiService {
 
 
 
-    return text;
+    return sanitizeAiResult(text);
 
   }
 

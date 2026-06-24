@@ -1,4 +1,5 @@
 const { getFirestore } = require('./fcm');
+const { sanitizeAiResult } = require('./ai_result_sanitize');
 
 const FORTUNE_COLLECTION = 'fortune_requests';
 const COUPLE_COLLECTION = 'couple_compatibility_requests';
@@ -16,7 +17,7 @@ async function persistFortuneResult({
   if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
     return { ok: false, reason: 'no_request_id' };
   }
-  const trimmed = typeof result === 'string' ? result.trim() : '';
+  const trimmed = sanitizeAiResult(typeof result === 'string' ? result : '');
   if (!trimmed) {
     return { ok: false, reason: 'empty_result' };
   }

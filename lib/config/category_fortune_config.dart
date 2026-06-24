@@ -27,6 +27,44 @@ const horoscopeFocusUiOptions = <String, String>{
   '🌟 Genel': 'Genel',
 };
 
+class HomeCategorySection {
+  const HomeCategorySection({
+    required this.title,
+    required this.categories,
+  });
+
+  final String title;
+  final List<FortuneCategory> categories;
+}
+
+const homeCategorySections = <HomeCategorySection>[
+  HomeCategorySection(
+    title: 'Fallar',
+    categories: [
+      FortuneCategory.tarot,
+      FortuneCategory.bakla,
+      FortuneCategory.kahve,
+      FortuneCategory.su,
+      FortuneCategory.iskambil,
+    ],
+  ),
+  HomeCategorySection(
+    title: 'Spiritüel Analizler',
+    categories: [
+      FortuneCategory.burcYorumu,
+      FortuneCategory.numeroloji,
+      FortuneCategory.ruyaTabiri,
+    ],
+  ),
+  HomeCategorySection(
+    title: 'İlişkiler',
+    categories: [
+      FortuneCategory.ciftUyumu,
+      FortuneCategory.iliskiTavsiyesi,
+    ],
+  ),
+];
+
 /// Serdar/Hatice teklif edilmeyen kategoriler.
 bool supportsManualFortuneReaders(FortuneCategory category) {
   switch (category) {

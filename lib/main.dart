@@ -2153,8 +2153,6 @@ class _AnaSayfa extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categories = FortuneCategory.values;
-
     return FaloraBackground(
       child: SafeArea(
         bottom: false,
@@ -2165,21 +2163,32 @@ class _AnaSayfa extends StatelessWidget {
                 SliverToBoxAdapter(
                   child: PremiumWelcomeHeader(userName: userName),
                 ),
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    22,
-                    12,
-                    22,
-                    28 + _mobileBottomInset(context),
-                  ),
-                  sliver: SliverList.separated(
-                    itemCount: categories.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 16),
-                    itemBuilder: (context, i) => PremiumCategoryCard(
-                      category: categories[i],
-                      onTap: () => onCategoryTap(categories[i]),
+                for (final section in homeCategorySections) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+                      child: Text(
+                        section.title,
+                        style: FaloraTypography.sectionHeading.copyWith(
+                          fontSize: 18,
+                        ),
+                      ),
                     ),
                   ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    sliver: SliverList.separated(
+                      itemCount: section.categories.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 16),
+                      itemBuilder: (context, i) => PremiumCategoryCard(
+                        category: section.categories[i],
+                        onTap: () => onCategoryTap(section.categories[i]),
+                      ),
+                    ),
+                  ),
+                ],
+                SliverToBoxAdapter(
+                  child: SizedBox(height: 28 + _mobileBottomInset(context)),
                 ),
               ],
             ),

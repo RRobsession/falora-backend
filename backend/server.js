@@ -168,6 +168,7 @@ const {
   buildRelationshipAdviceSystemPrompt,
   buildRelationshipAdviceUserPrompt,
 } = require('./fortune_personas');
+const { sanitizeAiResult } = require('./ai_result_sanitize');
 
 function newRequestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -408,7 +409,7 @@ async function generateCouple(openai, systemPrompt, userPrompt, images) {
   }
 
   console.log('VISION ANALYSIS SUCCESS');
-  return result;
+  return sanitizeAiResult(result);
 }
 
 async function generateRelationshipAdvice(
@@ -439,7 +440,7 @@ async function generateRelationshipAdvice(
     if (!result) {
       throw new Error('Boş AI cevabı');
     }
-    return result;
+    return sanitizeAiResult(result);
   }
 
   return generate(openai, 'relationship_advice', systemPrompt, userPrompt, 2200);
@@ -470,7 +471,7 @@ async function generate(
   if (!result) {
     throw new Error('Boş AI cevabı');
   }
-  return result;
+  return sanitizeAiResult(result);
 }
 
 const openai = createClient();
@@ -872,7 +873,10 @@ app.post(
       ),
       { woman: womanImage, man: manImage },
     );
-    const result = ensureCompatibilityHeader(raw, compatibilityPercent);
+    const result = ensureCompatibilityHeader(
+      sanitizeAiResult(raw),
+      compatibilityPercent,
+    );
     await saveGeneratedResult(req, result, COUPLE_COLLECTION);
     return res.json({ result });
   } catch (err) {

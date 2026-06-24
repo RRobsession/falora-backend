@@ -5,7 +5,7 @@ import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
 
 const _splashAsset = 'assets/characters/tombik_teyze.png';
-const _splashDuration = Duration(milliseconds: 4000);
+const _splashDuration = Duration(milliseconds: 3000);
 
 /// Uygulama açılışında Tombik Teyze karşılama animasyonu.
 class AppIntroSplashScreen extends StatefulWidget {

@@ -1,7 +1,10 @@
 import 'package:falora/auth/auth_service.dart';
 import 'package:falora/auth/auth_validators.dart';
+import 'package:falora/services/privacy_policy_service.dart';
+import 'package:falora/services/terms_of_service_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/falora_logo_header.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({
@@ -25,6 +28,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loading = false;
   bool _obscure = true;
   bool _obscureConfirm = true;
+  bool _acceptedTerms = false;
 
   @override
   void dispose() {
@@ -37,6 +41,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Devam etmek için 18 yaş onayını ve sözleşmeleri kabul etmelisiniz.',
+          ),
+        ),
+      );
+      return;
+    }
 
     setState(() => _loading = true);
     try {
@@ -166,7 +180,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 prefixIcon: Icon(Icons.card_giftcard_outlined),
                               ),
                             ),
-                            const SizedBox(height: 28),
+                            const SizedBox(height: 18),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Checkbox(
+                                  value: _acceptedTerms,
+                                  onChanged: _loading
+                                      ? null
+                                      : (value) => setState(
+                                            () => _acceptedTerms = value ?? false,
+                                          ),
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 10),
+                                    child: _TermsAcceptanceText(
+                                      enabled: !_loading,
+                                      onOpenTerms: () => TermsOfServiceService
+                                          .instance
+                                          .openTermsOfService(context),
+                                      onOpenPrivacy: () =>
+                                          PrivacyPolicyService.instance
+                                              .openPrivacyPolicy(context),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
                             ElevatedButton(
                               onPressed: _loading ? null : _submit,
                               child: _loading
@@ -190,6 +236,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TermsAcceptanceText extends StatelessWidget {
+  const _TermsAcceptanceText({
+    required this.enabled,
+    required this.onOpenTerms,
+    required this.onOpenPrivacy,
+  });
+
+  final bool enabled;
+  final VoidCallback onOpenTerms;
+  final VoidCallback onOpenPrivacy;
+
+  @override
+  Widget build(BuildContext context) {
+    const baseStyle = TextStyle(
+      color: faloraInkSoft,
+      fontSize: 13,
+      height: 1.45,
+    );
+    const linkStyle = TextStyle(
+      color: faloraBronze,
+      fontSize: 13,
+      height: 1.45,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+    );
+
+    return RichText(
+      text: TextSpan(
+        style: baseStyle,
+        children: [
+          const TextSpan(text: '18 yaşından büyüğüm, '),
+          TextSpan(
+            text: 'Kullanıcı Sözleşmesi',
+            style: linkStyle,
+            recognizer: TapGestureRecognizer()
+              ..onTap = enabled ? onOpenTerms : null,
+          ),
+          const TextSpan(text: ' ve '),
+          TextSpan(
+            text: 'Gizlilik Politikasını',
+            style: linkStyle,
+            recognizer: TapGestureRecognizer()
+              ..onTap = enabled ? onOpenPrivacy : null,
+          ),
+          const TextSpan(text: ' kabul ediyorum.'),
+        ],
       ),
     );
   }

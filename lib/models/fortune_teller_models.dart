@@ -90,6 +90,56 @@ const fortuneTellers = <FortuneTeller>[
   ),
 ];
 
+/// Rüya Tabiri, Numeroloji ve Burç Yorumu seçim ekranı yorumcuları.
+const spiritualFortuneTellers = <FortuneTeller>[
+  FortuneTeller(
+    id: 'selin',
+    name: 'Selin',
+    title: 'Rüya & Sembol Uzmanı',
+    bio:
+        'Rüyaların sembolik dilini sade ve net şekilde açar. Kısa ama derin bir yorum sunar.',
+    tokenCost: 50,
+    lengthLabel: 'Kısa yorum · ~300–500 kelime',
+    accentColor: Color(0xFF5C4A6E),
+    avatarAsset: 'assets/avatars/selin.png',
+  ),
+  FortuneTeller(
+    id: 'koray',
+    name: 'Koray',
+    title: 'Numeroloji Rehberi',
+    bio:
+        'İsim ve doğum tarihindeki enerjiyi dengeli şekilde yorumlar. Orta uzunlukta, akıcı bir analiz.',
+    tokenCost: 100,
+    lengthLabel: 'Orta yorum · ~600–900 kelime',
+    accentColor: Color(0xFF4A6B7A),
+    avatarAsset: 'assets/avatars/koray.png',
+    highlight: true,
+    badge: 'En Popüler',
+  ),
+  FortuneTeller(
+    id: 'mira',
+    name: 'Mira',
+    title: 'Kozmik Yorumcu',
+    bio:
+        'Burç ve ay enerjilerini bir arada okur. En kapsamlı spiritüel analizi sunar.',
+    tokenCost: 150,
+    lengthLabel: 'Detaylı yorum · ~1000–1500 kelime',
+    accentColor: Color(0xFF7A5C3E),
+    avatarAsset: 'assets/avatars/mira.png',
+    badge: 'Premium',
+  ),
+];
+
+bool categoryUsesSpiritualTellers(FortuneCategory category) {
+  return isAutoOnlyCategory(category);
+}
+
+List<FortuneTeller> _baseTellersForCategory(FortuneCategory category) {
+  return categoryUsesSpiritualTellers(category)
+      ? spiritualFortuneTellers
+      : fortuneTellers;
+}
+
 bool categoryUsesPremiumTellerPricing(FortuneCategory category) {
   return category == FortuneCategory.tarot;
 }
@@ -102,8 +152,9 @@ List<int> tellerTokenCostsForCategory(FortuneCategory category) {
 
 List<FortuneTeller> fortuneTellersForCategory(FortuneCategory category) {
   final costs = tellerTokenCostsForCategory(category);
-  return List.generate(fortuneTellers.length, (i) {
-    final teller = fortuneTellers[i];
+  final base = _baseTellersForCategory(category);
+  return List.generate(base.length, (i) {
+    final teller = base[i];
     return teller.withTokenCost(costs[i]);
   });
 }
@@ -162,7 +213,7 @@ FortuneTeller? fortuneTellerById(String? id, {FortuneCategory? category}) {
   if (id == null || id.isEmpty) return null;
   final list = category != null
       ? fortuneTellersForCategory(category)
-      : fortuneTellers;
+      : [...spiritualFortuneTellers, ...fortuneTellers];
   for (final t in list) {
     if (t.id == id) return t;
   }

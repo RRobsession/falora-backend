@@ -1,5 +1,6 @@
 import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/tarot_card.dart';
+import 'package:falora/utils/ai_result_sanitize.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -172,7 +173,7 @@ class FortuneReading {
   /// AI tarot falında seçilen 8 kart.
   final List<TarotCardSelection> selectedTarotCards;
 
-  String get trimmedResult => result.trim();
+  String get trimmedResult => sanitizeAiResult(result);
 
   bool get hasResult => trimmedResult.isNotEmpty;
 
