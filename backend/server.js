@@ -499,6 +499,10 @@ const {
   persistFortuneResult,
 } = require('./fortune_result_persist');
 const { refundFortuneRequest } = require('./fortune_refund');
+const {
+  RETENTION_DAYS,
+  startFortuneRetentionCleanupLoop,
+} = require('./fortune_retention');
 
 async function saveGeneratedResult(req, result, collection) {
   const requestId = req.body?.requestId;
@@ -911,6 +915,8 @@ app.listen(PORT, '0.0.0.0', () => {
   );
   if (fcmReady) {
     console.log('Firebase Admin aktif (auth + FCM + Firestore).');
+    startFortuneRetentionCleanupLoop();
+    console.log(`Fal kayit saklama suresi: ${RETENTION_DAYS} gun.`);
   } else {
     console.error(
       'Firebase Admin kapalı — Railway Variables içine FIREBASE_SERVICE_ACCOUNT_JSON ekleyin.',
