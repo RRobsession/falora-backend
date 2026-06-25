@@ -5,6 +5,7 @@ import 'package:falora/screens/shop_screen.dart';
 import 'package:falora/widgets/compact_birth_date_dialog.dart';
 import 'package:falora/widgets/preset_avatar_picker.dart';
 import 'package:falora/models/fortune_models.dart';
+import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/user_profile_service.dart';
 import 'package:falora/services/privacy_policy_service.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
@@ -14,6 +15,7 @@ import 'package:falora/widgets/user_avatar_image.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/reward_ad_helper.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -72,9 +74,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await PrivacyPolicyService.instance.openPrivacyPolicy(context);
   }
 
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature yakında aktif olacak.')),
+  Future<void> _openNotificationSettings() async {
+    final service = NotificationService.instance;
+    final enabled = await service.areNotificationsEnabled();
+
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Bildirim Ayarları',
+                  style: FaloraTypography.sectionHeading,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  enabled
+                      ? 'Fal hazır bildirimleri açık. Falın hazır olduğunda haber veririz.'
+                      : 'Fal hazır bildirimleri kapalı. Açtığında falın hazır olduğunda haber veririz.',
+                  style: FaloraTypography.bodyOnParchment,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () async {
+                    final granted = await service.enableNotificationsForUser(
+                      widget.user.userId,
+                    );
+                    if (!sheetContext.mounted) return;
+                    Navigator.pop(sheetContext);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          granted
+                              ? 'Bildirimler açıldı.'
+                              : 'Bildirim izni verilmedi. Sistem ayarlarından açabilirsin.',
+                        ),
+                      ),
+                    );
+                  },
+                  child: Text(enabled ? 'Bildirimleri Yenile' : 'Bildirimleri Aç'),
+                ),
+                if (!kIsWeb) ...[
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: () async {
+                      await service.openSystemSettings();
+                      if (sheetContext.mounted) {
+                        Navigator.pop(sheetContext);
+                      }
+                    },
+                    style: faloraOutlinedOnParchmentStyle(),
+                    child: const Text('Sistem Ayarlarını Aç'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -513,7 +581,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         iconColor: faloraGoldDark,
                         title: 'Bildirimler',
                         subtitle: 'Fal hazır bildirimleri',
-                        onTap: () => _showComingSoon('Bildirim ayarları'),
+                        onTap: _openNotificationSettings,
                       ),
                       _ProfileMenuTile(
                         icon: Icons.privacy_tip_outlined,

@@ -255,4 +255,40 @@ class NotificationService {
     );
     debugPrint('FCM TOKEN saved for userId=$userId');
   }
+
+  Future<bool> areNotificationsEnabled() async {
+    if (kIsWeb) {
+      final settings = await _messaging.getNotificationSettings();
+      return settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final settings = await _messaging.getNotificationSettings();
+      return settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final status = await Permission.notification.status;
+      return status.isGranted;
+    }
+
+    return false;
+  }
+
+  Future<bool> enableNotificationsForUser(String userId) async {
+    _currentUserId = userId;
+    if (kIsWeb) {
+      await _registerWebToken(userId);
+    } else {
+      await _registerMobileToken(userId);
+    }
+    return areNotificationsEnabled();
+  }
+
+  Future<void> openSystemSettings() async {
+    if (kIsWeb) return;
+    await openAppSettings();
+  }
 }

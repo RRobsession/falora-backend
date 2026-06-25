@@ -46,9 +46,13 @@ class PrivacyPolicyScreen extends StatelessWidget {
     _PolicySection(
       title: '6. Veri Saklama ve Güvenlik',
       body:
-          'Verileriniz güvenli sunucularda saklanır. Hesabınızı sildiğinizde ilgili veriler '
-          'kalıcı olarak silinmeye çalışılır. Hiçbir sistem %100 güvenlik garantisi veremez; '
-          'makul teknik ve idari önlemler alınır.',
+          'Verileriniz güvenli sunucularda saklanır. Fal yorumları, ilişki tavsiyeleri, '
+          'çift uyumu raporları, rüya tabiri, burç yorumu ve numeroloji kayıtları '
+          'oluşturulma tarihinden itibaren en fazla 15 gün saklanır; bu sürenin sonunda '
+          'otomatik olarak silinir. Hesap bilgileriniz ve jeton bakiyeniz bu kapsamın '
+          'dışındadır. Hesabınızı sildiğinizde ilgili veriler kalıcı olarak silinmeye '
+          'çalışılır. Hiçbir sistem %100 güvenlik garantisi veremez; makul teknik ve '
+          'idari önlemler alınır.',
     ),
     _PolicySection(
       title: '7. Haklarınız',
