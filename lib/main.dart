@@ -113,6 +113,10 @@ class _FaloraAppState extends State<FaloraApp> with WidgetsBindingObserver {
     if (_isMobilePlatform) {
       WidgetsBinding.instance.addObserver(this);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      precacheSplashAsset(context);
+    });
   }
 
   @override
@@ -143,14 +147,19 @@ class _FaloraAppState extends State<FaloraApp> with WidgetsBindingObserver {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: _showIntroSplash
-          ? AppIntroSplashScreen(
+      home: Stack(
+        fit: StackFit.expand,
+        children: [
+          const AuthGate(),
+          if (_showIntroSplash)
+            AppIntroSplashScreen(
               onFinished: () {
                 if (!mounted) return;
                 setState(() => _showIntroSplash = false);
               },
-            )
-          : const AuthGate(),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -392,6 +401,28 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       _applyReadyUnlock(current, list);
     }
     return true;
+  }
+
+  Future<bool> _recoverReadingWithRetry(
+    String requestId,
+    List<FortuneReading> list, {
+    Duration pollInterval = const Duration(seconds: 15),
+    int maxAttempts = 20,
+  }) async {
+    debugPrint(
+      'RECOVERY POLL START id=$requestId attempts=$maxAttempts',
+    );
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (await _tryRecoverReadingFromFirestore(requestId, list)) {
+        debugPrint('RECOVERY POLL OK id=$requestId attempt=$attempt');
+        return true;
+      }
+      if (attempt < maxAttempts) {
+        await Future.delayed(pollInterval);
+      }
+    }
+    debugPrint('RECOVERY POLL GAVE UP id=$requestId');
+    return false;
   }
 
   void _stopPollingReading(String id) {
@@ -1237,7 +1268,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     } catch (e, stackTrace) {
       debugPrint('FORTUNE BACKEND ERROR: $e');
       debugPrint(stackTrace.toString());
-      if (await _tryRecoverReadingFromFirestore(
+      if (await _recoverReadingWithRetry(
         requestId,
         _fortuneRequests,
       )) {
@@ -1302,9 +1333,10 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     } catch (e, stackTrace) {
       debugPrint('CATEGORY RESPONSE ERROR: $e');
       debugPrint(stackTrace.toString());
-      if (await _tryRecoverReadingFromFirestore(
+      if (await _recoverReadingWithRetry(
         requestId,
         targetList,
+        maxAttempts: chatImages.isNotEmpty ? 24 : 12,
       )) {
         return;
       }
@@ -1358,9 +1390,10 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
   }
 
   Future<void> _failCoupleRequest(String requestId) async {
-    if (await _tryRecoverReadingFromFirestore(
+    if (await _recoverReadingWithRetry(
       requestId,
       _coupleCompatibilityRequests,
+      maxAttempts: 24,
     )) {
       return;
     }
@@ -1387,8 +1420,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     }
   }
 
-  static const _coupleBackendTimeout = Duration(seconds: 120);
-
   Future<void> _resolveCoupleInBackground({
     required String requestId,
     required String kadinIsim,
@@ -1414,8 +1445,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         return;
       }
 
-      final result = await _aiService
-          .generateCoupleCompatibility(
+      final result = await _aiService.generateCoupleCompatibility(
             womanName: kadinIsim,
             womanAge: kadinYas,
             womanZodiac: kadinBurc,
@@ -1425,14 +1455,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
             requestId: requestId,
             womanImage: kadinFoto,
             manImage: erkekFoto,
-          )
-          .timeout(
-            _coupleBackendTimeout,
-            onTimeout: () {
-              throw TimeoutException(
-                'Couple backend timeout after ${_coupleBackendTimeout.inSeconds}s',
-              );
-            },
           );
       debugPrint('COUPLE BACKEND SUCCESS');
       await storage.updateCoupleResult(requestId, result);
@@ -1710,6 +1732,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       _registerReading(reading);
       _addReadingRequest(reading, category);
       _scheduleReadyAtUnlock(reading, targetList);
+      _startPollingReading(reading, targetList);
       _scheduleReadyPushNotification(
         readingId: requestId,
         readyAt: readyAt,
@@ -2013,6 +2036,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       _registerReading(reading);
       _addCoupleRequest(reading);
       _scheduleReadyAtUnlock(reading, _coupleCompatibilityRequests);
+      _startPollingReading(reading, _coupleCompatibilityRequests);
       _scheduleReadyPushNotification(
         readingId: requestId,
         readyAt: readyAt,

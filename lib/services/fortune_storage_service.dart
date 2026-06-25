@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:falora/ai_service.dart';
 import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/config/category_fortune_config.dart';
@@ -36,6 +39,13 @@ class FortuneStorageService {
 
       final readings = snap.docs.map(_fortuneFromDoc).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      for (final doc in snap.docs) {
+        unawaited(_reconcileStaleErrorStatus(
+          collection: _fortunes,
+          id: doc.id,
+          data: doc.data(),
+        ));
+      }
       return readings;
     } catch (e) {
       debugPrint('FIRESTORE loadFortunes error: $e');
@@ -52,6 +62,13 @@ class FortuneStorageService {
 
       final readings = snap.docs.map(_coupleFromDoc).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      for (final doc in snap.docs) {
+        unawaited(_reconcileStaleErrorStatus(
+          collection: _couples,
+          id: doc.id,
+          data: doc.data(),
+        ));
+      }
       return readings;
     } catch (e) {
       debugPrint('FIRESTORE loadCoupleFortunes error: $e');
@@ -223,6 +240,12 @@ class FortuneStorageService {
   }
 
   Future<void> markFortuneError(String id) async {
+    final snap = await _db.collection(_fortunes).doc(id).get();
+    if (!snap.exists) return;
+    final result = (snap.data()?['result'] as String?)?.trim() ?? '';
+    if (result.isNotEmpty && !isFortuneResultError(result)) {
+      return;
+    }
     await _db.collection(_fortunes).doc(id).update({'status': 'error'});
   }
 
@@ -352,6 +375,12 @@ class FortuneStorageService {
   }
 
   Future<void> markCoupleError(String id, {String? message}) async {
+    final snap = await _db.collection(_couples).doc(id).get();
+    if (!snap.exists) return;
+    final existing = (snap.data()?['result'] as String?)?.trim() ?? '';
+    if (existing.isNotEmpty && !isFortuneResultError(existing)) {
+      return;
+    }
     final data = <String, dynamic>{'status': 'error'};
     final trimmed = message?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {
@@ -402,7 +431,15 @@ class FortuneStorageService {
     required bool usesDelayGate,
     required DateTime? readyAt,
   }) {
-    if (rawStatus == 'error') return 'error';
+    if (rawStatus == 'error') {
+      if (result.isNotEmpty && !isFortuneResultError(result)) {
+        return _statusForSuccessfulResult(
+          usesDelayGate: usesDelayGate,
+          readyAt: readyAt,
+        );
+      }
+      return 'error';
+    }
     if (rawStatus == 'answered') return 'answered';
     if (usesDelayGate && readyAt != null) {
       final elapsed = !DateTime.now().isBefore(readyAt);
@@ -412,6 +449,33 @@ class FortuneStorageService {
     if (rawStatus == 'ready') return 'ready';
     if (result.isNotEmpty) return 'ready';
     return rawStatus ?? 'pending';
+  }
+
+  String _statusForSuccessfulResult({
+    required bool usesDelayGate,
+    required DateTime? readyAt,
+  }) {
+    if (usesDelayGate && readyAt != null) {
+      final elapsed = !DateTime.now().isBefore(readyAt);
+      if (elapsed) return 'ready';
+      return 'pending';
+    }
+    return 'ready';
+  }
+
+  Future<void> _reconcileStaleErrorStatus({
+    required String collection,
+    required String id,
+    required Map<String, dynamic> data,
+  }) async {
+    if (data['status'] != 'error') return;
+    final result = (data['result'] as String?)?.trim() ?? '';
+    if (result.isEmpty || isFortuneResultError(result)) return;
+    try {
+      await _db.collection(collection).doc(id).update({'status': 'pending'});
+    } catch (e) {
+      debugPrint('FIRESTORE reconcile stale error failed ($id): $e');
+    }
   }
 
   Future<Map<String, dynamic>?> fetchFortuneRawData(String userId, String id) async {
@@ -431,6 +495,11 @@ class FortuneStorageService {
     try {
       final data = await fetchFortuneRawData(userId, id);
       if (data == null) return null;
+      unawaited(_reconcileStaleErrorStatus(
+        collection: _fortunes,
+        id: id,
+        data: data,
+      ));
       return _fortuneFromData(id, data);
     } catch (e) {
       debugPrint('FIRESTORE fetchFortuneById error: $e');
@@ -444,6 +513,11 @@ class FortuneStorageService {
       if (!doc.exists) return null;
       final data = doc.data();
       if (data == null || data['userId'] != userId) return null;
+      unawaited(_reconcileStaleErrorStatus(
+        collection: _couples,
+        id: id,
+        data: data,
+      ));
       return _coupleFromData(id, data);
     } catch (e) {
       debugPrint('FIRESTORE fetchCoupleById error: $e');

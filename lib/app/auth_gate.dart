@@ -12,6 +12,8 @@ import 'package:falora/screens/verification_screen.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/referral_service.dart';
 import 'package:falora/services/user_profile_service.dart';
+import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -32,7 +34,6 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   StreamSubscription<void>? _authSub;
   int _sessionGeneration = 0;
   bool _showVerificationSentMessage = false;
-  String? _referralNotice;
 
   @override
   void initState() {
@@ -75,23 +76,6 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       debugPrint('ADMIN UID: ${fbUser.uid}');
     }
 
-    if (user != null && emailVerified && !isAdminUser(user.userId)) {
-      try {
-        await NotificationService.instance.registerForUser(user.userId);
-      } catch (_) {}
-      try {
-        final notice =
-            await ReferralService.instance.claimPendingReferralIfNeeded(
-          user.userId,
-        );
-        if (notice != null && notice.isNotEmpty) {
-          _referralNotice = notice;
-        }
-      } catch (_) {
-        debugPrint('REFERRAL_IGNORED_REGISTRATION_CONTINUES');
-      }
-    }
-
     if (!mounted || generation != _sessionGeneration) return;
 
     setState(() {
@@ -99,6 +83,27 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       _firebaseEmailVerified = emailVerified;
       _loading = false;
     });
+
+    if (user != null && emailVerified && !isAdminUser(user.userId)) {
+      unawaited(_runPostAuthSetup(user.userId));
+    }
+  }
+
+  Future<void> _runPostAuthSetup(String userId) async {
+    try {
+      await NotificationService.instance.registerForUser(userId);
+    } catch (_) {}
+
+    try {
+      final notice =
+          await ReferralService.instance.claimPendingReferralIfNeeded(userId);
+      if (!mounted || notice == null || notice.isEmpty) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(notice)),
+      );
+    } catch (_) {
+      debugPrint('REFERRAL_IGNORED_REGISTRATION_CONTINUES');
+    }
   }
 
   void _onAuthenticated({bool verificationEmailSent = false}) {
@@ -123,7 +128,18 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: FaloraBackground(
+          child: Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: faloraBronze,
+              ),
+            ),
+          ),
+        ),
       );
     }
 
@@ -166,13 +182,9 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       );
     }
 
-    final referralNotice = _referralNotice;
-    _referralNotice = null;
-
     return FaloraShell(
       user: _user!.copyWith(emailVerified: true),
       onLogout: _onLogout,
-      initialSnackBarMessage: referralNotice,
     );
   }
 }

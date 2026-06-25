@@ -1,3 +1,4 @@
+import 'package:falora/ai_service.dart';
 import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/utils/ai_result_sanitize.dart';
@@ -200,7 +201,9 @@ class FortuneReading {
       !isReadyDisplay &&
       !isFailedDisplay;
 
-  bool get isFailedDisplay => firestoreStatus == 'error';
+  bool get isFailedDisplay =>
+      firestoreStatus == 'error' &&
+      (!hasResult || isFortuneResultError(trimmedResult));
 
   String get statusBadgeLabel {
     if (isReadyDisplay) return 'Hazır';

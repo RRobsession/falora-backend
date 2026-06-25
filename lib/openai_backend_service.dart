@@ -12,6 +12,7 @@ import 'package:falora/picked_image.dart';
 import 'package:falora/services/backend_auth_client.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:falora/utils/ai_result_sanitize.dart';
+import 'package:falora/utils/upload_image_prepare.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -39,7 +40,8 @@ class OpenAiBackendService implements AiService {
 
 
 
-  static const _timeout = Duration(seconds: 180);
+  static const _defaultTimeout = Duration(seconds: 180);
+  static const _visionTimeout = Duration(seconds: 420);
 
 
 
@@ -148,32 +150,32 @@ class OpenAiBackendService implements AiService {
     }
 
     if (womanImage != null) {
+      final prepared = await prepareImageForUpload(womanImage);
+      body['womanImageBase64'] = base64Encode(prepared.bytes);
 
-      body['womanImageBase64'] = base64Encode(womanImage.bytes);
+      body['womanImageMime'] = _imageMime(prepared.name);
 
-      body['womanImageMime'] = _imageMime(womanImage.name);
-
-      body['womanImageName'] = womanImage.name;
+      body['womanImageName'] = prepared.name;
 
       if (kDebugMode) {
 
-        debugPrint('COUPLE VISION woman bytes=${womanImage.bytes.length}');
+        debugPrint('COUPLE VISION woman bytes=${prepared.bytes.length}');
 
       }
 
     }
 
     if (manImage != null) {
+      final prepared = await prepareImageForUpload(manImage);
+      body['manImageBase64'] = base64Encode(prepared.bytes);
 
-      body['manImageBase64'] = base64Encode(manImage.bytes);
+      body['manImageMime'] = _imageMime(prepared.name);
 
-      body['manImageMime'] = _imageMime(manImage.name);
-
-      body['manImageName'] = manImage.name;
+      body['manImageName'] = prepared.name;
 
       if (kDebugMode) {
 
-        debugPrint('COUPLE VISION man bytes=${manImage.bytes.length}');
+        debugPrint('COUPLE VISION man bytes=${prepared.bytes.length}');
 
       }
 
@@ -216,23 +218,15 @@ class OpenAiBackendService implements AiService {
     };
 
     if (chatImages.isNotEmpty) {
-
+      final prepared = await prepareImagesForUpload(chatImages.take(3).toList());
       body['chatImages'] = [
-
-        for (final image in chatImages.take(3))
-
+        for (final image in prepared)
           {
-
             'base64': base64Encode(image.bytes),
-
             'mime': _imageMime(image.name),
-
             'name': image.name,
-
           },
-
       ];
-
     }
 
     return _post(
@@ -246,6 +240,15 @@ class OpenAiBackendService implements AiService {
   }
 
 
+
+  Duration _timeoutFor(Map<String, dynamic> body) {
+    if (body.containsKey('chatImages')) return _visionTimeout;
+    if (body.containsKey('womanImageBase64') ||
+        body.containsKey('manImageBase64')) {
+      return _visionTimeout;
+    }
+    return _defaultTimeout;
+  }
 
   String _imageMime(String name) {
 
@@ -283,7 +286,7 @@ class OpenAiBackendService implements AiService {
             headers: headers,
             body: jsonEncode(body),
           )
-          .timeout(_timeout);
+          .timeout(_timeoutFor(body));
     } on BackendAuthException catch (e) {
       FortuneSubmitLogger.logError(e);
       throw AiBackendException(e.message);

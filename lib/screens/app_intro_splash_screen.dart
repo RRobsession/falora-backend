@@ -4,8 +4,12 @@ import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
 
-const _splashAsset = 'assets/characters/tombik_teyze.png';
+const splashAsset = 'assets/characters/tombik_teyze.png';
 const _splashDuration = Duration(milliseconds: 3000);
+
+void precacheSplashAsset(BuildContext context) {
+  precacheImage(const AssetImage(splashAsset), context);
+}
 
 /// Uygulama açılışında Tombik Teyze karşılama animasyonu.
 class AppIntroSplashScreen extends StatefulWidget {
@@ -94,7 +98,7 @@ class _AppIntroSplashScreenState extends State<AppIntroSplashScreen>
                               children: [
                                 _SoftHalo(size: figureHeight * 0.9),
                                 _FadedCharacterImage(
-                                  asset: _splashAsset,
+                                  asset: splashAsset,
                                   height: figureHeight,
                                 ),
                               ],
