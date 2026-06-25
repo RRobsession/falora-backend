@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:falora/auth/email_verification_helper.dart' as email_verification;
 import 'package:falora/auth/auth_service.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/services/fortune_storage_service.dart';
@@ -44,35 +45,22 @@ class FirebaseAuthService implements AuthService {
   }
 
   Future<void> _sendVerificationEmailToCurrentUser() async {
-    debugPrint('EMAIL_VERIFICATION_SEND_START');
+    await email_verification.sendVerificationEmail();
+  }
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      debugPrint('EMAIL_VERIFICATION_SEND_FAILED: currentUser is null');
-      throw AuthException('Oturum bulunamadı, doğrulama e-postası gönderilemedi.');
-    }
-
-    debugPrint('EMAIL_VERIFICATION_SEND uid: ${user.uid}');
-    if (kDebugMode) {
-      debugPrint('EMAIL_VERIFICATION_SEND email present: ${user.email != null}');
-    }
-
+  Future<void> _deleteNewUserFirestoreDoc(String uid) async {
     try {
-      await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-      debugPrint('EMAIL_VERIFICATION_SEND_SUCCESS');
-    } on FirebaseAuthException catch (e) {
-      debugPrint('EMAIL_VERIFICATION_SEND_FAILED: code=${e.code} message=${e.message}');
-      throw AuthException(mapVerificationEmailError(e));
-    } catch (e, stackTrace) {
-      debugPrint('EMAIL_VERIFICATION_SEND_FAILED: $e');
-      debugPrint(stackTrace.toString());
-      throw AuthException('Doğrulama e-postası gönderilemedi: $e');
+      await _db.collection('users').doc(uid).delete();
+      debugPrint('REGISTER_USER_DOC_ROLLBACK_OK uid=$uid');
+    } catch (e) {
+      debugPrint('REGISTER_USER_DOC_ROLLBACK_FAILED uid=$uid error=$e');
     }
   }
 
   Future<void> _rollbackNewAuthAccount(User? user) async {
     if (user == null) return;
     debugPrint('REGISTER_AUTH_ROLLBACK_DELETE_START');
+    await _deleteNewUserFirestoreDoc(user.uid);
     try {
       await user.delete();
       debugPrint('REGISTER_AUTH_ROLLBACK_DELETE_SUCCESS');
@@ -155,7 +143,7 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<AppUser> register({
+  Future<RegisterResult> register({
     required String email,
     required String password,
     String? referralCode,
@@ -181,6 +169,7 @@ class FirebaseAuthService implements AuthService {
       debugPrint('REGISTER_AUTH_CREATED uid: $uid');
       debugPrint('REGISTER_AUTH_TOKEN_EMAIL: ${newUser?.email ?? '<null>'}');
 
+      var verificationEmailSent = false;
       try {
         debugPrint('REGISTER_USER_DOC_CREATE_START uid: $uid');
         await TokenService.instance.ensureUserDocument(
@@ -194,8 +183,13 @@ class FirebaseAuthService implements AuthService {
           ReferralService.instance.storePendingReferralCode(uid, referralCode);
         }
 
-        await _sendVerificationEmailToCurrentUser();
-        debugPrint('EMAIL_VERIFICATION_REQUIRED');
+        try {
+          await _sendVerificationEmailToCurrentUser();
+          verificationEmailSent = true;
+          debugPrint('EMAIL_VERIFICATION_REQUIRED');
+        } on AuthException catch (e) {
+          debugPrint('EMAIL_VERIFICATION_DEFERRED: ${e.message}');
+        }
       } on AuthException {
         await _rollbackNewAuthAccount(newUser);
         rethrow;
@@ -214,13 +208,16 @@ class FirebaseAuthService implements AuthService {
         throw AuthException('Hesap kaydı tamamlanamadı. Lütfen tekrar deneyin.');
       }
 
-      return AppUser(
-        userId: uid,
-        name: '',
-        displayName: '',
-        email: normalizedEmail,
-        tokens: initialUserTokens,
-        emailVerified: false,
+      return RegisterResult(
+        user: AppUser(
+          userId: uid,
+          name: '',
+          displayName: '',
+          email: normalizedEmail,
+          tokens: initialUserTokens,
+          emailVerified: false,
+        ),
+        verificationEmailSent: verificationEmailSent,
       );
     } on AuthException {
       rethrow;

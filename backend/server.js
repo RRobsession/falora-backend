@@ -503,6 +503,7 @@ const {
   RETENTION_DAYS,
   startFortuneRetentionCleanupLoop,
 } = require('./fortune_retention');
+const { sendVerificationEmailWithIdToken } = require('./auth_verification');
 
 async function saveGeneratedResult(req, result, collection) {
   const requestId = req.body?.requestId;
@@ -539,6 +540,32 @@ app.get('/health', (_req, res) => {
     model: MODEL,
     visionModel: VISION_MODEL,
   });
+});
+
+app.post('/auth/send-verification-email', requireAuth, async (req, res) => {
+  if (req.auth?.emailVerified) {
+    return res.json({ ok: true, alreadyVerified: true });
+  }
+
+  const header = req.headers.authorization || '';
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return res.status(401).json({ ok: false, error: 'Kimlik doğrulama gerekli' });
+  }
+
+  try {
+    const result = await sendVerificationEmailWithIdToken(match[1]);
+    if (!result.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: result.reason || 'verification_send_failed',
+      });
+    }
+    return res.json({ ok: true, email: result.email });
+  } catch (err) {
+    console.error('AUTH VERIFY EMAIL ERROR:', err.message);
+    return res.status(500).json({ ok: false, error: 'verification_send_failed' });
+  }
 });
 
 app.post('/send-notification', requireAuth, async (req, res) => {

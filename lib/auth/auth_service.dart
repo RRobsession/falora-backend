@@ -1,11 +1,21 @@
 import 'package:falora/auth/firebase_auth_service.dart';
 import 'package:falora/models/app_user.dart';
 
+class RegisterResult {
+  const RegisterResult({
+    required this.user,
+    required this.verificationEmailSent,
+  });
+
+  final AppUser user;
+  final bool verificationEmailSent;
+}
+
 abstract class AuthService {
   Future<AppUser?> getCurrentUser();
 
   /// Kayıt sonrası oturum açık kalır; e-posta doğrulaması gerekir.
-  Future<AppUser> register({
+  Future<RegisterResult> register({
     required String email,
     required String password,
     String? referralCode,

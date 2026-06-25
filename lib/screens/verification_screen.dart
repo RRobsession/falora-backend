@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:falora/auth/auth_service.dart';
+import 'package:falora/auth/email_verification_helper.dart';
 import 'package:falora/auth/firebase_auth_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/falora_logo_header.dart';
@@ -40,6 +41,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showEmailSentSnackBar();
       });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Hesabın oluşturuldu. Doğrulama e-postasını göndermek için '
+              '"Tekrar Gönder"e bas.',
+            ),
+          ),
+        );
+      });
     }
   }
 
@@ -64,8 +77,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       debugPrint('SEND VERIFICATION START');
       try {
-        await FirebaseAuth.instance.currentUser?.sendEmailVerification();
+        await sendVerificationEmail();
         debugPrint('SEND VERIFICATION SUCCESS');
+      } on AuthException catch (e) {
+        debugPrint('SEND VERIFICATION ERROR: ${e.message}');
+        rethrow;
       } on FirebaseAuthException catch (e) {
         debugPrint('SEND VERIFICATION ERROR: code=${e.code} message=${e.message}');
         throw AuthException(FirebaseAuthService.mapVerificationEmailError(e));

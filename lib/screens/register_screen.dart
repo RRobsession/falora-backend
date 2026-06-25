@@ -54,7 +54,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _loading = true);
     try {
-      await widget.authService.register(
+      final result = await widget.authService.register(
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
         referralCode: _referralCtrl.text.trim().isEmpty
@@ -63,7 +63,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       if (!mounted) return;
       Navigator.of(context).pop();
-      widget.onRegistered(verificationEmailSent: true);
+      widget.onRegistered(
+        verificationEmailSent: result.verificationEmailSent,
+      );
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
