@@ -50,7 +50,10 @@ class TermsOfServiceScreen extends StatelessWidget {
           'Hesap bilgilerinizin gizliliğinden siz sorumlusunuz. Jetonlar dijital '
           'hizmet kredisi niteliğindedir; kullanılmış jetonlar için yasal zorunluluklar '
           'saklı kalmak kaydıyla iade yapılmayabilir. Teknik arıza nedeniyle oluşturulamayan '
-          'hizmetlerde uygulama içi iade politikası geçerli olabilir.',
+          'hizmetlerde uygulama içi iade politikası geçerli olabilir. Fal yorumları, ilişki '
+          'tavsiyeleri, çift uyumu raporları ve spiritüel analiz kayıtları oluşturulma '
+          'tarihinden itibaren en fazla 15 gün saklanır; bu sürenin sonunda otomatik olarak '
+          'silinir. Hesap bilgileriniz ve jeton bakiyeniz bu kapsamın dışındadır.',
     ),
     _TermsSection(
       title: '6. Kullanıcı Yükümlülükleri',

@@ -71,7 +71,7 @@ service cloud.firestore {
       let newTokens = request.resource.data.get('tokens', 0);
       let oldAds = resource.data.get('rewardedAdsToday', 0);
       let newAds = request.resource.data.get('rewardedAdsToday', 0);
-      return newTokens == oldTokens + 50
+      return newTokens == oldTokens + 25
         && newAds <= 2
         && (
           newAds == oldAds + 1

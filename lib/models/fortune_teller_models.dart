@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Yalnızca Tarot Falı falcı tier fiyatları (değiştirilmez).
-const premiumTellerTokenCosts = <int>[100, 150, 200];
+const premiumTellerTokenCosts = <int>[50, 150, 200];
 
 /// Kahve, Su, İskambil, Bakla ve diğer standart AI fal kategorileri.
 const standardTellerTokenCosts = <int>[50, 100, 150];
