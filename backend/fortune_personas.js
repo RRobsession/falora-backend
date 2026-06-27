@@ -144,7 +144,7 @@ const FORTUNE_STRUCTURE_VARIANTS = [
     id: 'mid-session',
     name: 'Ortadan giriş',
     instruction:
-      '"Baktığımda..." veya "Şu an gördüğüm..." gibi ortadan başla; uzun selamlama yok. Doğal oturum hissi ver.',
+      'Ortadan, doğrudan sembol veya duygu imgeleriyle başla; uzun selamlama yok. "Baktığımda" kalıbını kullanma.',
   },
   {
     id: 'time-thread',
@@ -213,15 +213,75 @@ const COUPLE_STRUCTURE_VARIANTS = [
 
 const SHARED_RULES = `ORTAK KURALLAR:
 - İsim, yaş, burç, niyet veya çift bilgilerini organik yedir; etiket listesi yapma.
-- Her cümle yeni bir içgörü sunsun; aynı fikri tekrarlama.
+- Her cümle yeni bir içgörü sunsun; aynı fikri veya aynı cümle kalıbını tekrarlama.
 - Cevabı mutlaka tamamlanmış bir cümleyle bitir; yarım cümle bırakma.
-- Son kapanış kısa ve net olsun.
+- Son kapanış kısa ve net olsun; kapanış cümlesi önceki fallardan farklı olsun.
 - Başlık, madde, numara, emoji kullanma.
 - "AI", "model", "algoritma", "veri", "analiz ettim" gibi ifadeler yasak.
-- "Genel olarak", "bu dönemde", "olabilir" klişelerinden kaçın.
+- "Genel olarak", "bu dönemde", "olabilir", "yolun açılıyor", "kartların dili" klişelerinden kaçın.
 - Kesin kader, tıbbi/hukuki tavsiye, evlilik/aldatma garantisi yok.
 - Makale veya Google metni gibi jenerik burç kalıpları yok.
-- Robotik, şablon veya her seferinde aynı giriş cümlesi kullanma.`;
+- Robotik, şablon veya her seferinde aynı giriş cümlesi kullanma.
+- Şu açılışları varsayılan giriş olarak kullanma: "Baktığımda...", "Şu an gördüğüm...", "Kartların dili...", "Genel olarak...".`;
+
+const VOCABULARY_STYLE_RULE = `KELİME HAVUZU KURALI:
+- Aşağıdaki kelime örnekleri yalnızca TON rehberidir; kelimesi kelimesine kopyalama.
+- Her oturumda farklı eş anlamlı ve özgün ifadeler üret.
+- Aynı oturum içinde bir ifadeyi iki kez kullanma.`;
+
+const CATEGORY_SYMBOL_POOLS = {
+  'Kahve Falı': [
+    'kuş figürü',
+    'yol çizgisi',
+    'halka',
+    'kalp izi',
+    'kapı açıklığı',
+    'göz işareti',
+    'ağaç dalı',
+    'yüzen telve',
+  ],
+  'Su Falı': [
+    'yüzey dalgası',
+    'yansıma',
+    'berraklık',
+    'akış halkası',
+    'köpük izi',
+    'derinlik gölgesi',
+    'ışık kırılması',
+    'sakin göl',
+  ],
+  'Bakla Falı': [
+    'spiral dizilim',
+    'açık yol',
+    'kapalı yol',
+    'merkez boşluğu',
+    'sağa yığılma',
+    'sola yığılma',
+    'niyet halkası',
+    'tohum çizgisi',
+  ],
+  'İskambil Falı': [
+    'Kupa enerjisi',
+    'Karo dizisi',
+    'Sinek hareketi',
+    'Maça keskinliği',
+    'As kartı',
+    'dizili kartlar',
+    'açık kapı',
+    'gizli mesaj',
+  ],
+};
+
+const TAROT_CARD_FLOW_VARIANTS = [
+  'Her seçili kartın Türkçe adını metinde geçir; kartları akıcı paragraflar içinde, seçim sırasına sadık kalarak yorumla.',
+  'Kartları üç doğal grupta anlat (başlangıç, dönüm, sonuç) — grup başlığı yazma; tüm kart adları geçsin.',
+  'Önce en güçlü iki kartı derinleştir, sonra kalan kartları niyetle bağla; sekiz kartın tamamının adı metinde yer alsın.',
+  'Kartları danışanın niyetiyle eşleştirirken geçmiş-şimdi-yakın gelecek akışı hissettir; numaralı liste yazma.',
+];
+
+const AUTO_CATEGORY_ANTI_REPEAT = `ÇEŞİTLİLİK:
+- Bu yorum önceki oturumlardan ve şablon metinlerden farklı olsun.
+- Aynı cümle yapısını art arda kullanma; giriş ve kapanış bu içeriğe özgü olsun.`;
 
 const FORTUNE_TELLERS = {
   gizem_ana: {
@@ -230,7 +290,7 @@ const FORTUNE_TELLERS = {
     voice:
       'Sıcak, sezgisel ve net. Sanki karşısında oturan birine yumuşak ama dürüst konuşur. Cümleler akıcı, fazla süslü değil.',
     vocabulary:
-      '"içinden geçen", "kalbinin tarafı", "yolun açılıyor", "sabırla", "kendine iyi bak". Abartılı mistik kelimelerden kaçın.',
+      'Ton örneği (kopyalama): sıcak, sezgisel, net; duyguyu günlük dile indirgeme.',
     approach:
       'Önce duygusal ihtiyacı okur, sonra niyete somut bir yön verir. Sembolleri günlük hayata indirir.',
     minWords: 300,
@@ -243,7 +303,7 @@ const FORTUNE_TELLERS = {
     voice:
       'Ruhsal rehber tonu; empatik ama profesyonel. Orta uzunlukta cümleler, dengeli ritim.',
     vocabulary:
-      '"enerjinde", "gölge taraf", "aydınlık kapı", "sessizlikte", "nefesin", "ruhsal bağ".',
+      'Ton örneği (kopyalama): ruhsal rehberlik, empatik ritim, sembol-duygu bağlantısı.',
     approach:
       'Sembolleri duygu katmanına bağlar. Geçmiş-şimdi-gelecek akışını hissettirerek yedirir.',
     minWords: 600,
@@ -256,7 +316,7 @@ const FORTUNE_TELLERS = {
     voice:
       'Kadim bilge tonu; sakin, düşünceli, danışman gibi. Her cümle bir parça puzzle ekler.',
     vocabulary:
-      '"dikkat etmen gereken", "zemin hazırlanıyor", "doğru zaman", "iç sesin", "denge", "kader ipi".',
+      'Ton örneği (kopyalama): kadim bilge, sakin danışman; neden-sonuç ve sembol derinliği.',
     approach:
       'Neden-sonuç zinciri kurar ama ders verme tonunda değil. Detaylı sembol okuması ve kapsamlı kapanış.',
     minWords: 1000,
@@ -289,6 +349,39 @@ function categoryGuidance(category) {
     CATEGORY_GUIDANCE[category] ||
     'Bu fal türünün geleneksel sembollerini kullanarak kişiye özel, somut bir yorum yaz.'
   );
+}
+
+function pickCategoryGuidance(category) {
+  const base = categoryGuidance(category);
+  const pool = CATEGORY_SYMBOL_POOLS[category];
+  if (!pool || pool.length === 0) return base;
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const hints = shuffled.slice(0, 3).join(', ');
+  return `${base} Bu oturumda özellikle şu imgeleri canlı ve özgün betimle: ${hints}.`;
+}
+
+function resolveRequestId(body, fallbackPrefix = 'fortune') {
+  const fromBody = String(body?.requestId ?? '').trim();
+  if (fromBody) return fromBody;
+  return `${fallbackPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildUniquenessDirective(requestId, { intention, name, category }) {
+  const intentSnippet = String(intention ?? '')
+    .trim()
+    .slice(0, 80);
+  const namePart = String(name ?? '').trim();
+  const categoryPart = String(category ?? '').trim();
+  return `BENZERSİZLİK (oturum ${requestId}):
+- Bu yorum önceki tüm fallardan, şablon metinlerden ve tekrarlayan fal kalıplarından farklı olsun.
+- ${categoryPart ? `Kategori: ${categoryPart}.` : ''} ${namePart ? `Danışan: ${namePart}.` : ''}
+- Niyet: "${intentSnippet}" — bu niyete özel somut imgeler üret; jenerik metin yazma.
+- Aynı cümleyi veya cümle iskeletini birden fazla kez kullanma.
+- Giriş ve kapanış cümlelerini yalnızca bu oturuma özgü kur.`;
+}
+
+function pickTarotCardFlowHint() {
+  return pickRandom(TAROT_CARD_FLOW_VARIANTS);
 }
 
 function pickRandom(items) {
@@ -328,6 +421,7 @@ BU YORUMUN YAPISI — ${structure.name}:
 ${structure.instruction}
 
 ${SHARED_RULES}
+${VOCABULARY_STYLE_RULE}
 ${wordRule}
 
 Kendini ${teller.name} olarak tut; başka isim veya persona kullanma.
@@ -361,23 +455,31 @@ Kendini ${persona.name} olarak tut; başka isim veya persona kullanma.`;
 function buildFortuneUserPrompt(body, teller, structure) {
   const { category, name, age, zodiac, intention, imageNames, selectedCards } =
     body;
-  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const requestId = resolveRequestId(body);
   const photos =
     Array.isArray(imageNames) && imageNames.length > 0
       ? `Fotoğraf: ${imageNames.length} adet.`
       : '';
 
-  const tarotSection = formatSelectedTarotCards(selectedCards);
+  const tarotFlowHint = pickTarotCardFlowHint();
+  const tarotSection = formatSelectedTarotCards(selectedCards, tarotFlowHint);
+  const guidance = pickCategoryGuidance(category);
+  const uniqueness = buildUniquenessDirective(requestId, {
+    intention,
+    name,
+    category,
+  });
 
-  return `${categoryGuidance(category)}
+  return `${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
 Falcı: ${teller.name} | Yapı: ${structure.name}
-${tarotSection}[id:${requestId}]
+${tarotSection}${uniqueness}
+[id:${requestId}]
 ${teller.minWords}-${teller.maxWords} kelime. ${structure.instruction}
 Cevabı tamamlanmış cümleyle bitir.`;
 }
 
-function formatSelectedTarotCards(selectedCards) {
+function formatSelectedTarotCards(selectedCards, tarotFlowHint) {
   if (!Array.isArray(selectedCards) || selectedCards.length === 0) {
     return '';
   }
@@ -397,11 +499,11 @@ ${lines.join('\n')}
 
 TAROT YORUM KURALLARI:
 - Kartları dosya adıyla (p03, c03, w12 gibi) ASLA anma; yalnızca yukarıdaki Türkçe kart isimlerini kullan.
-- Önce her kartın anlamını tek tek yorumla (sırayla, kart başına 1-2 cümle).
-- Tüm kartları yorumladıktan sonra bütünsel genel yorum oluştur.
+- ${tarotFlowHint || TAROT_CARD_FLOW_VARIANTS[0]}
+- Sekiz kartın tamamının Türkçe adı metinde geçmeli; eksik kart bırakma.
 - Kartları danışanın niyeti/sorusu ile ilişkilendir.
 - Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
-- Premium, sezgisel ve doğal bir dil kullan.
+- Premium, sezgisel ve doğal bir dil kullan; her kart için aynı cümle kalıbını tekrarlama.
 
 `;
 }
@@ -677,16 +779,30 @@ YORUMLAMA YAKLAŞIMIN:
 ${persona.approach}
 
 ${AUTO_CATEGORY_SAFETY}
+${AUTO_CATEGORY_ANTI_REPEAT}
+${VOCABULARY_STYLE_RULE}
 
 250-400 kelime arasında, paragraflar halinde, tamamlanmış cümleyle bitir.
 Kendini ${persona.name} olarak tut.`;
 }
 
 function buildAutoCategoryUserPrompt(categoryType, inputData, persona, structure) {
-  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const requestId = resolveRequestId({ requestId: inputData?.requestId }, 'auto');
+  const uniqueness = buildUniquenessDirective(requestId, {
+    intention:
+      inputData?.dreamText ||
+      inputData?.problemText ||
+      inputData?.focusArea ||
+      inputData?.name ||
+      '',
+    name: inputData?.name || inputData?.partnerName || '',
+    category: categoryType,
+  });
 
   if (categoryType === 'relationship_advice') {
-    return buildRelationshipAdviceUserPrompt(inputData, false);
+    return `${buildRelationshipAdviceUserPrompt(inputData, false)}
+
+${uniqueness}`;
   }
 
   switch (categoryType) {
@@ -698,6 +814,7 @@ Rüya metni: "${dreamText}"
 Sembolik, sezgisel ve eğlence amaçlı yorum yap. Rüyadaki imgeleri duygusal katmanla bağla.
 Psikolojik teşhis veya sağlık yorumu yapma.
 Yapı: ${structure.name} — ${structure.instruction}
+${uniqueness}
 [id:${requestId}]`;
     }
     case 'numerology': {
@@ -710,6 +827,7 @@ Doğum tarihi: ${birthDate}
 Kişilik, yaşam yolu, enerji ve dönemsel tema tarzında yorum ver.
 Kesin kader, sağlık veya para garantisi verme.
 Yapı: ${structure.name} — ${structure.instruction}
+${uniqueness}
 [id:${requestId}]`;
     }
     case 'horoscope': {
@@ -724,10 +842,13 @@ Odak alanı: ${focusArea}
 Premium, kişisel ve sıcak bir dille yaz. Odak alanına (${focusArea}) özel vurgu yap.
 Tıbbi/finansal garanti veya kesin gelecek vaadi verme.
 Yapı: ${structure.name} — ${structure.instruction}
+${uniqueness}
 [id:${requestId}]`;
     }
     default:
-      return `Yorum yaz. [id:${requestId}]`;
+      return `Yorum yaz.
+${uniqueness}
+[id:${requestId}]`;
   }
 }
 
@@ -745,6 +866,7 @@ module.exports = {
   buildFortuneUserPrompt,
   buildCoupleUserPrompt,
   categoryGuidance,
+  pickCategoryGuidance,
   formatSelectedTarotCards,
   validateAutoCategoryInput,
   buildAutoCategorySystemPrompt,
