@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:falora/models/notification_open_request.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -17,12 +21,17 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
+  final ValueNotifier<NotificationOpenRequest?> pendingOpenRequest =
+      ValueNotifier<NotificationOpenRequest?>(null);
+
   String? _currentUserId;
   bool _localNotificationsReady = false;
+  bool _openHandlersReady = false;
 
   Future<void> init() async {
     try {
       await _initLocalNotifications();
+      _setupOpenHandlers();
       if (kIsWeb) {
         await _initWeb();
         return;
@@ -38,6 +47,44 @@ class NotificationService {
     }
   }
 
+  void _setupOpenHandlers() {
+    if (_openHandlersReady) return;
+    _openHandlersReady = true;
+
+    FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => _queueOpenFromData(message.data),
+      onError: (Object e) => debugPrint('FCM open handler error: $e'),
+    );
+
+    unawaited(_captureInitialMessage());
+  }
+
+  Future<void> _captureInitialMessage() async {
+    try {
+      final message = await _messaging.getInitialMessage();
+      if (message != null) {
+        _queueOpenFromData(message.data);
+      }
+    } catch (e) {
+      debugPrint('FCM initial message error: $e');
+    }
+  }
+
+  void _queueOpenFromData(Map<String, dynamic> data) {
+    final request = NotificationOpenRequest.fromData(data);
+    if (!request.isValid) return;
+    debugPrint(
+      'FCM OPEN REQUEST | type=${request.type} readingId=${request.readingId}',
+    );
+    pendingOpenRequest.value = request;
+  }
+
+  NotificationOpenRequest? consumePendingOpenRequest() {
+    final request = pendingOpenRequest.value;
+    pendingOpenRequest.value = null;
+    return request;
+  }
+
   Future<void> _initLocalNotifications() async {
     if (kIsWeb) return;
 
@@ -48,6 +95,7 @@ class NotificationService {
         android: androidSettings,
         iOS: iosSettings,
       ),
+      onDidReceiveNotificationResponse: _onLocalNotificationTapped,
     );
 
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -65,6 +113,19 @@ class NotificationService {
     }
 
     _localNotificationsReady = true;
+  }
+
+  void _onLocalNotificationTapped(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map) {
+        _queueOpenFromData(Map<String, dynamic>.from(decoded));
+      }
+    } catch (e) {
+      debugPrint('FCM local tap payload error: $e');
+    }
   }
 
   Future<void> _initWeb() async {
@@ -133,6 +194,11 @@ class NotificationService {
       return;
     }
 
+    final payload = jsonEncode({
+      'type': message.data['type'],
+      if (message.data['readingId'] != null) 'readingId': message.data['readingId'],
+    });
+
     await _localNotifications.show(
       message.hashCode,
       title,
@@ -151,6 +217,7 @@ class NotificationService {
           presentSound: true,
         ),
       ),
+      payload: payload,
     );
   }
 

@@ -7,6 +7,8 @@ import 'package:falora/ai_config.dart';
 import 'package:falora/ai_service.dart';
 
 import 'package:falora/models/bakla_scatter.dart';
+import 'package:falora/models/water_scatter.dart';
+import 'package:falora/models/playing_card.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
@@ -68,7 +70,11 @@ class OpenAiBackendService implements AiService {
 
     List<TarotCardSelection> selectedTarotCards = const [],
 
+    List<PlayingCardSelection> selectedPlayingCards = const [],
+
     BaklaScatterReading? baklaScatter,
+
+    WaterScatterReading? waterScatter,
 
   }) async {
 
@@ -100,7 +106,13 @@ class OpenAiBackendService implements AiService {
           'selectedCards':
               selectedTarotCards.map((c) => c.toApiMap()).toList(),
 
+        if (selectedPlayingCards.isNotEmpty)
+          'selectedCards':
+              selectedPlayingCards.map((c) => c.toApiMap()).toList(),
+
         if (baklaScatter != null) 'baklaScatter': baklaScatter.toApiMap(),
+
+        if (waterScatter != null) 'waterScatter': waterScatter.toApiMap(),
 
       },
 

@@ -204,7 +204,7 @@ async function sendNotification({ token, title, body, data = {}, userId }) {
   }
 }
 
-async function notifyFortuneReady(userId, type) {
+async function notifyFortuneReady(userId, type, readingId) {
   const template = READY_MESSAGES[type];
   if (!template) {
     const err = new Error('type fortune, couple veya manual olmalı');
@@ -227,11 +227,16 @@ async function notifyFortuneReady(userId, type) {
     return { success: false, reason: 'no_token' };
   }
 
+  const data = { type, userId };
+  if (readingId) {
+    data.readingId = String(readingId);
+  }
+
   const messageId = await sendNotification({
     token,
     title: template.title,
     body: template.body,
-    data: { type, userId },
+    data,
     userId,
   });
 
@@ -356,7 +361,7 @@ async function fireScheduledNotification(scheduleId, userId, type) {
     '| type=',
     type,
   );
-  return notifyFortuneReady(userId, type);
+  return notifyFortuneReady(userId, type, readingId);
 }
 
 async function restorePendingNotificationSchedules() {

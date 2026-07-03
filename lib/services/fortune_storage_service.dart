@@ -6,6 +6,8 @@ import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/models/bakla_scatter.dart';
+import 'package:falora/models/water_scatter.dart';
+import 'package:falora/models/playing_card.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:flutter/foundation.dart';
 
@@ -156,7 +158,9 @@ class FortuneStorageService {
     String? tellerId,
     String? tellerName,
     List<TarotCardSelection> selectedTarotCards = const [],
+    List<PlayingCardSelection> selectedPlayingCards = const [],
     BaklaScatterReading? baklaScatter,
+    WaterScatterReading? waterScatter,
     DateTime? createdAt,
     DateTime? readyAt,
   }) async {
@@ -174,7 +178,10 @@ class FortuneStorageService {
       if (tellerName != null) 'tellerName': tellerName,
       if (selectedTarotCards.isNotEmpty)
         'selectedCards': selectedTarotCards.map((c) => c.toMap()).toList(),
+      if (selectedPlayingCards.isNotEmpty)
+        'selectedCards': selectedPlayingCards.map((c) => c.toMap()).toList(),
       if (baklaScatter != null) 'baklaScatter': baklaScatter.toApiMap(),
+      if (waterScatter != null) 'waterScatter': waterScatter.toApiMap(),
       'result': '',
       'status': 'pending',
       'tokenCost': tokenCost,
@@ -398,6 +405,7 @@ class FortuneStorageService {
     required String summary,
     required Map<String, dynamic> d,
     List<TarotCardSelection> selectedTarotCards = const [],
+    List<PlayingCardSelection> selectedPlayingCards = const [],
   }) {
     final result = (d['result'] as String?)?.trim() ?? '';
     final createdAt = _parseCreatedAt(d['createdAt']);
@@ -425,6 +433,7 @@ class FortuneStorageService {
       firestoreStatus: firestoreStatus,
       usesDelayGate: usesDelayGate,
       selectedTarotCards: selectedTarotCards,
+      selectedPlayingCards: selectedPlayingCards,
     );
   }
 
@@ -529,10 +538,18 @@ class FortuneStorageService {
   }
 
   List<TarotCardSelection> parseSelectedCardsFromData(Map<String, dynamic> d) =>
-      _parseSelectedCards(d);
+      _parseSelectedTarotCards(d);
+
+  List<PlayingCardSelection> parseSelectedPlayingCardsFromData(
+    Map<String, dynamic> d,
+  ) =>
+      _parsePlayingCards(d);
 
   BaklaScatterReading? parseBaklaScatterFromData(Map<String, dynamic> d) =>
       _parseBaklaScatter(d);
+
+  WaterScatterReading? parseWaterScatterFromData(Map<String, dynamic> d) =>
+      _parseWaterScatter(d);
 
   BaklaScatterReading? _parseBaklaScatter(Map<String, dynamic> d) {
     final raw = d['baklaScatter'];
@@ -540,14 +557,46 @@ class FortuneStorageService {
     return BaklaScatterReading.fromMap(Map<String, dynamic>.from(raw));
   }
 
-  List<TarotCardSelection> _parseSelectedCards(Map<String, dynamic> d) {
+  WaterScatterReading? _parseWaterScatter(Map<String, dynamic> d) {
+    final raw = d['waterScatter'];
+    if (raw is! Map) return null;
+    return WaterScatterReading.fromMap(Map<String, dynamic>.from(raw));
+  }
+
+  List<TarotCardSelection> _parseSelectedTarotCards(Map<String, dynamic> d) {
     final raw = d['selectedCards'] ?? d['selectedTarotCards'];
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
+        .where((item) => item['deckType'] != 'playing')
         .map((item) => TarotCardSelection.fromMap(Map<String, dynamic>.from(item)))
         .toList()
       ..sort((a, b) => a.positionIndex.compareTo(b.positionIndex));
+  }
+
+  List<PlayingCardSelection> _parsePlayingCards(Map<String, dynamic> d) {
+    final raw = d['selectedCards'] ?? d['selectedPlayingCards'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .where(
+          (item) =>
+              item['deckType'] == 'playing' ||
+              _looksLikePlayingCardId(item['id']?.toString() ?? ''),
+        )
+        .map(
+          (item) =>
+              PlayingCardSelection.fromMap(Map<String, dynamic>.from(item)),
+        )
+        .toList()
+      ..sort((a, b) => a.positionIndex.compareTo(b.positionIndex));
+  }
+
+  bool _looksLikePlayingCardId(String id) {
+    final parts = id.split('_');
+    if (parts.length != 2) return false;
+    const suits = {'h', 'd', 'c', 's'};
+    return suits.contains(parts[0]);
   }
 
   FortuneReading _fortuneFromData(String id, Map<String, dynamic> d) {
@@ -556,7 +605,12 @@ class FortuneStorageService {
       (c) => c.name == categoryName,
       orElse: () => FortuneCategory.tarot,
     );
-    final selectedCards = _parseSelectedCards(d);
+    final selectedTarotCards = category == FortuneCategory.tarot
+        ? _parseSelectedTarotCards(d)
+        : const <TarotCardSelection>[];
+    final selectedPlayingCards = category == FortuneCategory.iskambil
+        ? _parsePlayingCards(d)
+        : const <PlayingCardSelection>[];
 
     final inputData = d['inputData'];
     if (inputData is Map) {
@@ -566,7 +620,8 @@ class FortuneStorageService {
         category: category,
         summary: buildCategorySummary(category, map),
         d: d,
-        selectedTarotCards: selectedCards,
+        selectedTarotCards: selectedTarotCards,
+        selectedPlayingCards: selectedPlayingCards,
       );
     }
 
@@ -576,12 +631,19 @@ class FortuneStorageService {
     final intention = d['intention'] as String? ?? '';
     var summary =
         '${category.label} — $name, $age, $zodiac\nNiyet: $intention';
-    if (selectedCards.isNotEmpty) {
-      summary += '\n${selectedCards.length} tarot kartı seçildi';
+    if (selectedTarotCards.isNotEmpty) {
+      summary += '\n${selectedTarotCards.length} tarot kartı seçildi';
+    }
+    if (selectedPlayingCards.isNotEmpty) {
+      summary += '\n${selectedPlayingCards.length} iskambil kartı seçildi';
     }
     final baklaScatter = _parseBaklaScatter(d);
     if (baklaScatter != null) {
       summary += '\n${baklaScatter.beanCount} bakla döküldü';
+    }
+    final waterScatter = _parseWaterScatter(d);
+    if (waterScatter != null) {
+      summary += '\nSu falı: ${waterScatter.symbols.join(', ')}';
     }
 
     return _readingFromFields(
@@ -589,7 +651,8 @@ class FortuneStorageService {
       category: category,
       summary: summary,
       d: d,
-      selectedTarotCards: selectedCards,
+      selectedTarotCards: selectedTarotCards,
+      selectedPlayingCards: selectedPlayingCards,
     );
   }
 

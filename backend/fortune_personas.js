@@ -279,6 +279,22 @@ const TAROT_CARD_FLOW_VARIANTS = [
   'Kartları danışanın niyetiyle eşleştirirken geçmiş-şimdi-yakın gelecek akışı hissettir; numaralı liste yazma.',
 ];
 
+const PLAYING_SPREAD_POSITIONS = [
+  'Temel',
+  'Geçmiş',
+  'Şimdi',
+  'Yakın gelecek',
+  'Engel',
+  'Tavsiye',
+  'Sonuç',
+];
+
+const PLAYING_CARD_FLOW_VARIANTS = [
+  'Her kartı pozisyon anlamıyla birlikte yorumla; yedi kartın tamamının Türkçe adı metinde geçsin.',
+  'Önce Temel-Geçmiş-Şimdi hattını kur, sonra Engel-Tavsiye-Sonuç ile kapanış yap; pozisyon başlığı yazma.',
+  'Kupa/Karo/Sinek/Maça enerjilerini doğal biçimde hissettir; kartları niyetle ilişkilendir.',
+];
+
 const AUTO_CATEGORY_ANTI_REPEAT = `ÇEŞİTLİLİK:
 - Bu yorum önceki oturumlardan ve şablon metinlerden farklı olsun.
 - Aynı cümle yapısını art arda kullanma; giriş ve kapanış bu içeriğe özgü olsun.`;
@@ -462,9 +478,15 @@ function buildFortuneUserPrompt(body, teller, structure) {
       : '';
 
   const tarotFlowHint = pickTarotCardFlowHint();
-  const tarotSection = formatSelectedTarotCards(selectedCards, tarotFlowHint);
+  const playingFlowHint = pickPlayingCardFlowHint();
+  const cardsSection =
+    category === 'İskambil Falı'
+      ? formatSelectedPlayingCards(selectedCards, playingFlowHint)
+      : formatSelectedTarotCards(selectedCards, tarotFlowHint);
   const baklaSection = formatBaklaScatter(body.baklaScatter);
-  const guidance = baklaSection
+  const waterSection = formatWaterScatter(body.waterScatter);
+  const ritualSection = baklaSection || waterSection;
+  const guidance = ritualSection
     ? categoryGuidance(category)
     : pickCategoryGuidance(category);
   const uniqueness = buildUniquenessDirective(requestId, {
@@ -473,10 +495,10 @@ function buildFortuneUserPrompt(body, teller, structure) {
     category,
   });
 
-  return `${baklaSection}${guidance}
+  return `${ritualSection}${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
 Falcı: ${teller.name} | Yapı: ${structure.name}
-${tarotSection}${uniqueness}
+${cardsSection}${uniqueness}
 [id:${requestId}]
 ${teller.minWords}-${teller.maxWords} kelime. ${structure.instruction}
 Cevabı tamamlanmış cümleyle bitir.`;
@@ -527,6 +549,47 @@ BAKLA YORUM KURALLARI:
 `;
 }
 
+function formatWaterScatter(waterScatter) {
+  if (!waterScatter || typeof waterScatter !== 'object') {
+    return '';
+  }
+
+  const {
+    fortuneType,
+    symbols,
+    waterClarity,
+    rippleCount,
+    motion,
+    dominantSymbol,
+    reflectionStrength,
+  } = waterScatter;
+
+  const symbolList = Array.isArray(symbols)
+    ? symbols.join(', ')
+    : 'belirgin sembol yok';
+
+  return `SU FALI RİTÜEL VERİSİ (mutlaka dikkate al — falın omurgası):
+fortuneType: ${fortuneType || 'water'}
+Semboller (su yüzeyinde belirdi): ${symbolList}
+Su berraklığı: ${waterClarity || 'berrak'}
+Dalga/halka sayısı: ${rippleCount ?? 0}
+Hareket: ${motion || 'sakin'}
+Baskın sembol: ${dominantSymbol || 'belirsiz'}
+Yansıma gücü: ${reflectionStrength || 'orta'}
+
+SU FALI YORUM KURALLARI:
+- Sen mistik ve geleneksel tarzda su falı yorumlayan bir falcısın.
+- Aşağıdaki su falı verisine göre yorum yap.
+- Yorum tamamen eğlence amaçlıdır.
+- Sembolleri, suyun berraklığını, dalga sayısını ve hareketini yorumla.
+- Aşk, iş, para ve yakın gelecek başlıklarında yorum üret.
+- Genel ve rastgele konuşma; mutlaka verilen sembollere göre yorum yap.
+- Başka fal türü sembolleri veya rastgele imge uydurma.
+- Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
+
+`;
+}
+
 function formatSelectedTarotCards(selectedCards, tarotFlowHint) {
   if (!Array.isArray(selectedCards) || selectedCards.length === 0) {
     return '';
@@ -552,6 +615,54 @@ TAROT YORUM KURALLARI:
 - Kartları danışanın niyeti/sorusu ile ilişkilendir.
 - Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
 - Premium, sezgisel ve doğal bir dil kullan; her kart için aynı cümle kalıbını tekrarlama.
+
+`;
+}
+
+function pickPlayingCardFlowHint() {
+  const shuffled = [...PLAYING_CARD_FLOW_VARIANTS].sort(() => Math.random() - 0.5);
+  return shuffled[0];
+}
+
+function resolvePlayingCardLabel(card) {
+  const nameTr = String(card?.nameTr ?? card?.id ?? '').trim();
+  if (nameTr) return nameTr;
+  const suit = String(card?.suit ?? '').trim();
+  const rank = String(card?.rank ?? '').trim();
+  if (suit && rank) return `${suit} ${rank}`;
+  return 'Kart';
+}
+
+function formatSelectedPlayingCards(selectedCards, playingFlowHint) {
+  if (!Array.isArray(selectedCards) || selectedCards.length === 0) {
+    return '';
+  }
+
+  const cards = selectedCards.slice(0, 7);
+  const count = cards.length;
+
+  const lines = cards.map((card, index) => {
+    const pos = card.positionIndex ?? index + 1;
+    const positionLabel =
+      card.positionLabel ||
+      PLAYING_SPREAD_POSITIONS[pos - 1] ||
+      `Pozisyon ${pos}`;
+    const label = resolvePlayingCardLabel(card);
+    const orientation = card.isReversed ? 'Ters' : 'Düz';
+    return `${pos}. ${positionLabel}: ${label} (${orientation})`;
+  });
+
+  return `SEÇİLEN ${count} İSKAMBİL KARTI — 7'Lİ AÇILIM (mutlaka dikkate al — falın omurgası):
+${lines.join('\n')}
+
+İSKAMBİL YORUM KURALLARI:
+- Kartları teknik kodla (h_a, d_k gibi) ASLA anma; yalnızca Türkçe kart isimlerini kullan.
+- Her kartı yanındaki pozisyon anlamıyla (Temel, Geçmiş, Şimdi, Yakın gelecek, Engel, Tavsiye, Sonuç) birlikte yorumla.
+- ${playingFlowHint || PLAYING_CARD_FLOW_VARIANTS[0]}
+- Yedi kartın tamamının adı metinde geçmeli; eksik kart bırakma.
+- Kupa (duygu), Karo (maddi/pratik), Sinek (zihin/iletişim), Maça (dönüşüm/mücadele) enerjilerini doğal biçimde kullan.
+- Kartları danışanın niyeti/sorusu ile ilişkilendir.
+- Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
 
 `;
 }
@@ -916,7 +1027,9 @@ module.exports = {
   categoryGuidance,
   pickCategoryGuidance,
   formatSelectedTarotCards,
+  formatSelectedPlayingCards,
   formatBaklaScatter,
+  formatWaterScatter,
   validateAutoCategoryInput,
   buildAutoCategorySystemPrompt,
   buildAutoCategoryUserPrompt,

@@ -1,5 +1,6 @@
 import 'package:falora/ai_service.dart';
 import 'package:falora/config/reading_delay_config.dart';
+import 'package:falora/models/playing_card.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/utils/ai_result_sanitize.dart';
 import 'package:flutter/material.dart';
@@ -156,6 +157,7 @@ class FortuneReading {
     this.isManualPremium = false,
     this.manualReaderName,
     this.selectedTarotCards = const [],
+    this.selectedPlayingCards = const [],
   });
 
   final String id;
@@ -173,6 +175,8 @@ class FortuneReading {
   final String? manualReaderName;
   /// AI tarot falında seçilen 8 kart.
   final List<TarotCardSelection> selectedTarotCards;
+  /// AI iskambil falında seçilen 7 kart.
+  final List<PlayingCardSelection> selectedPlayingCards;
 
   String get trimmedResult => sanitizeAiResult(result);
 
@@ -253,6 +257,7 @@ class FortuneReading {
     bool? isManualPremium,
     String? manualReaderName,
     List<TarotCardSelection>? selectedTarotCards,
+    List<PlayingCardSelection>? selectedPlayingCards,
   }) {
     return FortuneReading(
       id: id,
@@ -267,6 +272,7 @@ class FortuneReading {
       isManualPremium: isManualPremium ?? this.isManualPremium,
       manualReaderName: manualReaderName ?? this.manualReaderName,
       selectedTarotCards: selectedTarotCards ?? this.selectedTarotCards,
+      selectedPlayingCards: selectedPlayingCards ?? this.selectedPlayingCards,
     );
   }
 
@@ -285,6 +291,9 @@ class FortuneReading {
         if (selectedTarotCards.isNotEmpty)
           'selectedTarotCards':
               selectedTarotCards.map((c) => c.toMap()).toList(),
+        if (selectedPlayingCards.isNotEmpty)
+          'selectedPlayingCards':
+              selectedPlayingCards.map((c) => c.toMap()).toList(),
       };
 
   factory FortuneReading.fromJson(Map<String, dynamic> json) {
@@ -311,6 +320,7 @@ class FortuneReading {
       isManualPremium: json['isManualPremium'] as bool? ?? false,
       manualReaderName: json['manualReaderName'] as String?,
       selectedTarotCards: _parseSelectedTarotCards(json),
+      selectedPlayingCards: _parseSelectedPlayingCards(json),
     );
   }
 }
@@ -326,6 +336,32 @@ List<TarotCardSelection> _parseSelectedTarotCards(Map<String, dynamic> json) {
   if (raw is! List) return const [];
   return raw
       .whereType<Map>()
+      .where((item) => item['deckType'] != 'playing')
       .map((item) => TarotCardSelection.fromMap(Map<String, dynamic>.from(item)))
       .toList();
+}
+
+List<PlayingCardSelection> _parseSelectedPlayingCards(
+  Map<String, dynamic> json,
+) {
+  final raw = json['selectedPlayingCards'] ?? json['selectedCards'];
+  if (raw is! List) return const [];
+  return raw
+      .whereType<Map>()
+      .where(
+        (item) =>
+            item['deckType'] == 'playing' ||
+            _looksLikePlayingCardId(item['id']?.toString() ?? ''),
+      )
+      .map(
+        (item) => PlayingCardSelection.fromMap(Map<String, dynamic>.from(item)),
+      )
+      .toList();
+}
+
+bool _looksLikePlayingCardId(String id) {
+  final parts = id.split('_');
+  if (parts.length != 2) return false;
+  const suits = {'h', 'd', 'c', 's'};
+  return suits.contains(parts[0]);
 }

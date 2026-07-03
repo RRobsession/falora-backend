@@ -2,6 +2,8 @@
 
 import 'package:falora/ai_service.dart';
 import 'package:falora/models/bakla_scatter.dart';
+import 'package:falora/models/water_scatter.dart';
+import 'package:falora/models/playing_card.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
@@ -240,8 +242,29 @@ class MockAiService implements AiService {
     String? requestId,
     List<String> imageNames = const [],
     List<TarotCardSelection> selectedTarotCards = const [],
+    List<PlayingCardSelection> selectedPlayingCards = const [],
     BaklaScatterReading? baklaScatter,
+    WaterScatterReading? waterScatter,
   }) async {
+    if (selectedPlayingCards.isNotEmpty &&
+        _categoryFromLabel(category) == FalCategory.iskambil) {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      final cards = selectedPlayingCards
+          .map((c) => '${c.positionLabel}: ${c.nameTr}')
+          .join(', ');
+      return 'Sevgili $name, 7\'li iskambil açılımında ($cards) niyetin '
+          '"$intention" için masadaki kartlar net konuşuyor. '
+          'Kupa ve karo enerjileri yakın dönemde somut bir gelişmeye işaret ediyor.';
+    }
+    if (waterScatter != null && _categoryFromLabel(category) == FalCategory.su) {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      final symbols = waterScatter.symbols.join(', ');
+      return 'Sevgili $name, suyun ${waterScatter.waterClarity} yüzeyinde '
+          '${waterScatter.rippleCount} halka belirdi; hareket ${waterScatter.motion}. '
+          'Baskın sembol ${waterScatter.dominantSymbol}, yansıma ${waterScatter.reflectionStrength}.\n\n'
+          'Niyetin "$intention" için beliren imgeler ($symbols) '
+          'aşk ve yakın gelecekte yumuşak bir dönüşe işaret ediyor.';
+    }
     if (baklaScatter != null && _categoryFromLabel(category) == FalCategory.bakla) {
       await Future<void>.delayed(const Duration(milliseconds: 900));
       final symbols = baklaScatter.markedSymbols

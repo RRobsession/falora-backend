@@ -591,13 +591,13 @@ app.post(
   requireAuth,
   requireMatchingUserId,
   async (req, res) => {
-  const { userId, type } = req.body ?? {};
+  const { userId, type, readingId } = req.body ?? {};
   if (!userId || !type) {
     return res.status(400).json({ error: 'userId ve type gerekli' });
   }
 
   try {
-    const result = await notifyFortuneReady(userId, type);
+    const result = await notifyFortuneReady(userId, type, readingId);
     return res.json(result);
   } catch (err) {
     console.error('FCM NOTIFY READY ERROR:', err.message);

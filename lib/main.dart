@@ -23,10 +23,14 @@ import 'package:falora/firebase_options.dart';
 import 'package:falora/image_upload_card.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/models/bakla_scatter.dart';
+import 'package:falora/models/water_scatter.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/models/fortune_teller_models.dart';
 import 'package:falora/models/manual_fortune_request.dart';
 import 'package:falora/models/manual_fortune_reader.dart';
+import 'package:falora/models/notification_open_request.dart';
+import 'package:falora/config/playing_card_names.dart';
+import 'package:falora/models/playing_card.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/screens/auto_category_form_screens.dart';
 import 'package:falora/screens/fortune_teller_selection_screen.dart';
@@ -46,6 +50,7 @@ import 'package:falora/services/notification_backend_service.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/play_billing_service.dart';
 import 'package:falora/services/reading_ready_logger.dart';
+import 'package:falora/services/playing_card_deck_service.dart';
 import 'package:falora/services/tarot_deck_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
@@ -58,6 +63,9 @@ import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/reading_record_card.dart';
 import 'package:falora/widgets/reward_ad_helper.dart';
 import 'package:falora/widgets/bakla_fortune_simulation.dart';
+import 'package:falora/widgets/water_fortune_simulation.dart';
+import 'package:falora/widgets/playing_card_picker_sheet.dart';
+import 'package:falora/widgets/playing_card_widgets.dart';
 import 'package:falora/widgets/tarot_card_picker_sheet.dart';
 import 'package:falora/widgets/tarot_card_widgets.dart';
 
@@ -261,11 +269,21 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     );
     unawaited(PlayBillingService.instance.init());
     unawaited(TarotDeckService.instance.loadDeck());
-    _loadUserFortunes();
+    unawaited(PlayingCardDeckService.instance.loadDeck());
+    NotificationService.instance.pendingOpenRequest
+        .addListener(_onNotificationOpenRequest);
+    unawaited(_loadUserFortunes());
+  }
+
+  void _onNotificationOpenRequest() {
+    if (!mounted) return;
+    unawaited(_applyPendingNotificationNavigation());
   }
 
   @override
   void dispose() {
+    NotificationService.instance.pendingOpenRequest
+        .removeListener(_onNotificationOpenRequest);
     WidgetsBinding.instance.removeObserver(this);
     for (final timer in _readyTimers.values) {
       timer.cancel();
@@ -334,6 +352,58 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       }
     });
     _armReadyAtTimersForLoadedReadings();
+    await _applyPendingNotificationNavigation();
+  }
+
+  Future<void> _applyPendingNotificationNavigation() async {
+    final request = NotificationService.instance.consumePendingOpenRequest();
+    if (request == null || !request.isValid || !mounted) return;
+
+    final tab = request.targetTabIndex;
+    if (tab != null) {
+      setState(() => _tabIndex = tab);
+    }
+
+    final readingId = request.readingId;
+    if (readingId == null || readingId.isEmpty) return;
+
+    final reading = await _resolveReadingForNotification(
+      readingId: readingId,
+      type: request.type,
+    );
+    if (!mounted || reading == null) return;
+    _readingNotifiers.putIfAbsent(
+      reading.id,
+      () => ValueNotifier(reading),
+    );
+    _openSonuc(reading);
+  }
+
+  Future<FortuneReading?> _resolveReadingForNotification({
+    required String readingId,
+    required String type,
+  }) async {
+    final localList = type == 'couple'
+        ? _coupleCompatibilityRequests
+        : _fortuneRequests;
+    for (final reading in localList) {
+      if (reading.id == readingId) return reading;
+    }
+
+    final storage = FortuneStorageService.instance;
+    if (type == 'couple') {
+      return storage.fetchCoupleById(_userId, readingId);
+    }
+
+    final fortune = await storage.fetchFortuneById(_userId, readingId);
+    if (fortune != null) return fortune;
+
+    final manualReadings =
+        await ManualFortuneStorageService.instance.loadUserReadings(_userId);
+    for (final reading in manualReadings) {
+      if (reading.id == readingId) return reading;
+    }
+    return null;
   }
 
   FortuneReading _newPendingReading({
@@ -344,6 +414,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     bool isManualPremium = false,
     String? manualReaderName,
     List<TarotCardSelection> selectedTarotCards = const [],
+    List<PlayingCardSelection> selectedPlayingCards = const [],
   }) {
     final readyAt = isManualPremium
         ? computeManualReadyAt(createdAt)
@@ -363,6 +434,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       isManualPremium: isManualPremium,
       manualReaderName: manualReaderName,
       selectedTarotCards: selectedTarotCards,
+      selectedPlayingCards: selectedPlayingCards,
     );
   }
 
@@ -575,8 +647,14 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
               ?.map((e) => e.toString())
               .toList() ??
           const <String>[];
-      final selectedCards = storage.parseSelectedCardsFromData(data);
+      final selectedTarotCards = category == FortuneCategory.tarot
+          ? storage.parseSelectedCardsFromData(data)
+          : const <TarotCardSelection>[];
+      final selectedPlayingCards = category == FortuneCategory.iskambil
+          ? storage.parseSelectedPlayingCardsFromData(data)
+          : const <PlayingCardSelection>[];
       final baklaScatter = storage.parseBaklaScatterFromData(data);
+      final waterScatter = storage.parseWaterScatterFromData(data);
 
       await _resolveFortuneInBackground(
         requestId: reading.id,
@@ -587,8 +665,10 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         burc: data['zodiac'] as String? ?? '',
         niyet: data['intention'] as String? ?? '',
         photoNames: imageNames,
-        selectedTarotCards: selectedCards,
+        selectedTarotCards: selectedTarotCards,
+        selectedPlayingCards: selectedPlayingCards,
         baklaScatter: baklaScatter,
+        waterScatter: waterScatter,
       );
     } finally {
       _resolvingReadingIds.remove(reading.id);
@@ -1045,6 +1125,13 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
                     onSubmit: _submitNormal,
                     onOpenShop: _openShop,
                   )
+                : cat == FortuneCategory.su
+                    ? SuFormPage(
+                        teller: resolved,
+                        prefill: _fortuneFormPrefill(),
+                        onSubmit: _submitNormal,
+                        onOpenShop: _openShop,
+                      )
                 : NormalFalFormPage(
                 category: cat,
                 teller: resolved,
@@ -1243,7 +1330,9 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     required String niyet,
     List<String>? photoNames,
     List<TarotCardSelection>? selectedTarotCards,
+    List<PlayingCardSelection>? selectedPlayingCards,
     BaklaScatterReading? baklaScatter,
+    WaterScatterReading? waterScatter,
   }) async {
     final storage = FortuneStorageService.instance;
     debugPrint('FORTUNE BACKEND START');
@@ -1270,7 +1359,9 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         requestId: requestId,
         imageNames: photoNames ?? const [],
         selectedTarotCards: selectedTarotCards ?? const [],
+        selectedPlayingCards: selectedPlayingCards ?? const [],
         baklaScatter: baklaScatter,
+        waterScatter: waterScatter,
       );
       debugPrint('FORTUNE BACKEND SUCCESS');
       await storage.updateFortuneResult(requestId, result);
@@ -1537,7 +1628,9 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     String niyet, {
     List<String>? photoNames,
     List<TarotCardSelection>? selectedTarotCards,
+    List<PlayingCardSelection>? selectedPlayingCards,
     BaklaScatterReading? baklaScatter,
+    WaterScatterReading? waterScatter,
   }) async {
     if (cat == FortuneCategory.tarot) {
       final cards = selectedTarotCards ?? const [];
@@ -1546,8 +1639,21 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         return;
       }
     }
+    if (cat == FortuneCategory.iskambil) {
+      final cards = selectedPlayingCards ?? const [];
+      if (cards.length != playingSpreadCardCount) {
+        _showSubmitError(
+          'İskambil falı için $playingSpreadCardCount kart seçmelisiniz.',
+        );
+        return;
+      }
+    }
     if (cat == FortuneCategory.bakla && baklaScatter == null) {
       _showSubmitError('Bakla dökme tamamlanamadı. Lütfen tekrar deneyin.');
+      return;
+    }
+    if (cat == FortuneCategory.su && waterScatter == null) {
+      _showSubmitError('Su falı ritüeli tamamlanamadı. Lütfen tekrar deneyin.');
       return;
     }
 
@@ -1600,7 +1706,9 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           tellerId: teller.id,
           tellerName: teller.name,
           selectedTarotCards: selectedTarotCards ?? const [],
+          selectedPlayingCards: selectedPlayingCards ?? const [],
           baklaScatter: baklaScatter,
+          waterScatter: waterScatter,
           createdAt: now,
           readyAt: readyAt,
         );
@@ -1637,10 +1745,19 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
               'Niyet: $niyet\n'
               '${selectedTarotCards!.length} tarot kartı seçildi'
+          : cat == FortuneCategory.iskambil &&
+                  (selectedPlayingCards?.isNotEmpty ?? false)
+              ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+                  'Niyet: $niyet\n'
+                  '${selectedPlayingCards!.length} iskambil kartı seçildi'
           : cat == FortuneCategory.bakla && baklaScatter != null
               ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
                   'Niyet: $niyet\n'
                   '${baklaScatter.beanCount} bakla döküldü'
+              : cat == FortuneCategory.su && waterScatter != null
+                  ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+                      'Niyet: $niyet\n'
+                      'Semboller: ${waterScatter.symbols.join(', ')}'
               : '${cat.label} — ${teller.name} — $name, $age, $burc\nNiyet: $niyet';
       final reading = _newPendingReading(
         id: requestId,
@@ -1648,6 +1765,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         createdAt: now,
         summary: summary,
         selectedTarotCards: selectedTarotCards ?? const [],
+        selectedPlayingCards: selectedPlayingCards ?? const [],
       );
       _registerReading(reading);
       _addFortuneRequest(reading);
@@ -1668,7 +1786,9 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           niyet: niyet,
           photoNames: photoNames,
           selectedTarotCards: selectedTarotCards,
+          selectedPlayingCards: selectedPlayingCards,
           baklaScatter: baklaScatter,
+          waterScatter: waterScatter,
         ),
       );
 
@@ -2565,7 +2685,9 @@ typedef NormalSubmit = Future<void> Function(
   String niyet, {
   List<String>? photoNames,
   List<TarotCardSelection>? selectedTarotCards,
+  List<PlayingCardSelection>? selectedPlayingCards,
   BaklaScatterReading? baklaScatter,
+  WaterScatterReading? waterScatter,
 });
 
 class NormalFalFormPage extends StatefulWidget {
@@ -2596,8 +2718,10 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
   String _burc = burclar.first;
   bool _submitting = false;
   List<TarotCardSelection> _selectedTarotCards = const [];
+  List<PlayingCardSelection> _selectedPlayingCards = const [];
 
   bool get _isTarot => widget.category == FortuneCategory.tarot;
+  bool get _isIskambil => widget.category == FortuneCategory.iskambil;
 
   @override
   void initState() {
@@ -2629,6 +2753,16 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
     }
   }
 
+  Future<void> _openPlayingPicker() async {
+    final result = await showPlayingCardPickerSheet(
+      context,
+      initialSelection: _selectedPlayingCards,
+    );
+    if (result != null && mounted) {
+      setState(() => _selectedPlayingCards = result);
+    }
+  }
+
   Future<void> _submit() async {
     if (_submitting || !_formKey.currentState!.validate()) return;
     if (_isTarot && _selectedTarotCards.length != tarotSpreadCardCount) {
@@ -2636,6 +2770,16 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
         SnackBar(
           content: Text(
             'Tarot falı için $tarotSpreadCardCount kart seçmelisiniz.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_isIskambil && _selectedPlayingCards.length != playingSpreadCardCount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'İskambil falı için $playingSpreadCardCount kart seçmelisiniz.',
           ),
         ),
       );
@@ -2652,6 +2796,8 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
         _niyetCtrl.text.trim(),
         selectedTarotCards:
             _isTarot ? _selectedTarotCards : null,
+        selectedPlayingCards:
+            _isIskambil ? _selectedPlayingCards : null,
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -2741,13 +2887,42 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
                   TarotSelectedCardsStrip(cards: _selectedTarotCards),
                 ],
               ],
+              if (_isIskambil) ...[
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FaloraSealButton(
+                        label: 'Kartları Seç',
+                        icon: Icons.style_rounded,
+                        enabled: !_submitting,
+                        onPressed: _openPlayingPicker,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    FaloraSelectionCounter(
+                      selected: _selectedPlayingCards.length,
+                      total: playingSpreadCardCount,
+                      prefix:
+                          '${_selectedPlayingCards.length}/$playingSpreadCardCount',
+                    ),
+                  ],
+                ),
+                if (_selectedPlayingCards.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  PlayingSelectedCardsStrip(cards: _selectedPlayingCards),
+                ],
+              ],
               const SizedBox(height: 32),
               FaloraPrimaryButton(
                 label: 'Falı Gönder',
                 loading: _submitting,
                 onPressed: (_submitting ||
                         (_isTarot &&
-                            _selectedTarotCards.length != tarotSpreadCardCount))
+                            _selectedTarotCards.length != tarotSpreadCardCount) ||
+                        (_isIskambil &&
+                            _selectedPlayingCards.length !=
+                                playingSpreadCardCount))
                     ? null
                     : _submit,
               ),
@@ -3104,6 +3279,154 @@ class _BaklaFormPageState extends State<BaklaFormPage> {
                 label: 'Baklaları Dök',
                 loading: _submitting,
                 onPressed: _submitting ? null : _pourAndSubmit,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SuFormPage extends StatefulWidget {
+  const SuFormPage({
+    super.key,
+    required this.teller,
+    required this.onSubmit,
+    required this.onOpenShop,
+    this.prefill,
+  });
+
+  final FortuneTeller teller;
+  final NormalSubmit onSubmit;
+  final VoidCallback onOpenShop;
+  final FortuneFormPrefill? prefill;
+
+  @override
+  State<SuFormPage> createState() => _SuFormPageState();
+}
+
+class _SuFormPageState extends State<SuFormPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _ageCtrl = TextEditingController();
+  final _niyetCtrl = TextEditingController();
+  String _burc = burclar.first;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    logFortuneVisibleCost(FortuneCategory.su, widget.teller.id);
+    final prefill = widget.prefill;
+    if (prefill != null && prefill.hasAny) {
+      prefill.applyToNameController(_nameCtrl);
+      prefill.applyToAgeController(_ageCtrl);
+      _burc = prefill.applyToZodiac(_burc);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _ageCtrl.dispose();
+    _niyetCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _gazeAndSubmit() async {
+    if (_submitting || !_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      final scatter = await showWaterFortuneSimulation(context);
+      if (!mounted) return;
+      if (scatter == null) return;
+      await widget.onSubmit(
+        FortuneCategory.su,
+        widget.teller,
+        _nameCtrl.text.trim(),
+        int.parse(_ageCtrl.text.trim()),
+        _burc,
+        _niyetCtrl.text.trim(),
+        waterScatter: scatter,
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Su Falı')),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + _mobileBottomInset(context),
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
+              const SizedBox(height: 12),
+              _FormHeader(
+                category: FortuneCategory.su,
+                teller: widget.teller,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bilgilerini doldur, su kasesine bak; ardından falın yorumlanır.',
+                style: FaloraTypography.bodyMedium.copyWith(
+                  color: faloraInkSoft,
+                ),
+              ),
+              const SizedBox(height: 20),
+              FaloraLabeledFormField(
+                label: 'İsim',
+                controller: _nameCtrl,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'İsim gerekli' : null,
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Yaş',
+                controller: _ageCtrl,
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
+                  final age = int.tryParse(v.trim());
+                  if (age == null || age < 1 || age > 120) {
+                    return 'Geçerli bir yaş girin';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Burç',
+                value: _burc,
+                items: burclar
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
+                onChanged: (v) => setState(() => _burc = v ?? _burc),
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Niyet',
+                controller: _niyetCtrl,
+                maxLines: 3,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Niyet gerekli' : null,
+              ),
+              const SizedBox(height: 32),
+              FaloraPrimaryButton(
+                label: 'Su Falına Bak',
+                loading: _submitting,
+                onPressed: _submitting ? null : _gazeAndSubmit,
               ),
             ],
           ),
@@ -3543,6 +3866,8 @@ class _SonucContentState extends State<_SonucContent>
     final isAutoCategory = isAutoOnlyCategory(reading.category);
     final hasTarotCards = reading.category == FortuneCategory.tarot &&
         reading.selectedTarotCards.isNotEmpty;
+    final hasPlayingCards = reading.category == FortuneCategory.iskambil &&
+        reading.selectedPlayingCards.isNotEmpty;
     final compatibility = isCouple && !isError
         ? parseCompatibilityPercent(reading.result)
         : null;
@@ -3642,6 +3967,26 @@ class _SonucContentState extends State<_SonucContent>
                       const SizedBox(height: 28),
                       Text(
                         'Detaylı Yorum',
+                        style: FaloraTypography.sectionHeading.copyWith(
+                          fontSize: 12,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ] else if (hasPlayingCards) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        '7\'li Açılım',
+                        style: FaloraTypography.sectionHeading.copyWith(
+                          fontSize: 12,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      PlayingResultCardsGrid(cards: reading.selectedPlayingCards),
+                      const SizedBox(height: 20),
+                      Text(
+                        'İskambil Yorumu',
                         style: FaloraTypography.sectionHeading.copyWith(
                           fontSize: 12,
                           letterSpacing: 1.1,
