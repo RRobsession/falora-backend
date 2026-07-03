@@ -5,6 +5,7 @@ import 'package:falora/ai_service.dart';
 import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/config/category_fortune_config.dart';
+import 'package:falora/models/bakla_scatter.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:flutter/foundation.dart';
 
@@ -155,6 +156,7 @@ class FortuneStorageService {
     String? tellerId,
     String? tellerName,
     List<TarotCardSelection> selectedTarotCards = const [],
+    BaklaScatterReading? baklaScatter,
     DateTime? createdAt,
     DateTime? readyAt,
   }) async {
@@ -172,6 +174,7 @@ class FortuneStorageService {
       if (tellerName != null) 'tellerName': tellerName,
       if (selectedTarotCards.isNotEmpty)
         'selectedCards': selectedTarotCards.map((c) => c.toMap()).toList(),
+      if (baklaScatter != null) 'baklaScatter': baklaScatter.toApiMap(),
       'result': '',
       'status': 'pending',
       'tokenCost': tokenCost,
@@ -528,6 +531,15 @@ class FortuneStorageService {
   List<TarotCardSelection> parseSelectedCardsFromData(Map<String, dynamic> d) =>
       _parseSelectedCards(d);
 
+  BaklaScatterReading? parseBaklaScatterFromData(Map<String, dynamic> d) =>
+      _parseBaklaScatter(d);
+
+  BaklaScatterReading? _parseBaklaScatter(Map<String, dynamic> d) {
+    final raw = d['baklaScatter'];
+    if (raw is! Map) return null;
+    return BaklaScatterReading.fromMap(Map<String, dynamic>.from(raw));
+  }
+
   List<TarotCardSelection> _parseSelectedCards(Map<String, dynamic> d) {
     final raw = d['selectedCards'] ?? d['selectedTarotCards'];
     if (raw is! List) return const [];
@@ -566,6 +578,10 @@ class FortuneStorageService {
         '${category.label} — $name, $age, $zodiac\nNiyet: $intention';
     if (selectedCards.isNotEmpty) {
       summary += '\n${selectedCards.length} tarot kartı seçildi';
+    }
+    final baklaScatter = _parseBaklaScatter(d);
+    if (baklaScatter != null) {
+      summary += '\n${baklaScatter.beanCount} bakla döküldü';
     }
 
     return _readingFromFields(

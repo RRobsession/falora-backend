@@ -463,20 +463,68 @@ function buildFortuneUserPrompt(body, teller, structure) {
 
   const tarotFlowHint = pickTarotCardFlowHint();
   const tarotSection = formatSelectedTarotCards(selectedCards, tarotFlowHint);
-  const guidance = pickCategoryGuidance(category);
+  const baklaSection = formatBaklaScatter(body.baklaScatter);
+  const guidance = baklaSection
+    ? categoryGuidance(category)
+    : pickCategoryGuidance(category);
   const uniqueness = buildUniquenessDirective(requestId, {
     intention,
     name,
     category,
   });
 
-  return `${guidance}
+  return `${baklaSection}${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
 Falcı: ${teller.name} | Yapı: ${structure.name}
 ${tarotSection}${uniqueness}
 [id:${requestId}]
 ${teller.minWords}-${teller.maxWords} kelime. ${structure.instruction}
 Cevabı tamamlanmış cümleyle bitir.`;
+}
+
+function formatBaklaScatter(baklaScatter) {
+  if (!baklaScatter || typeof baklaScatter !== 'object') {
+    return '';
+  }
+
+  const {
+    beanCount,
+    densityBias,
+    patternTraits,
+    spreadSummary,
+    markedSymbols,
+  } = baklaScatter;
+
+  const traits = Array.isArray(patternTraits) ? patternTraits.join(', ') : '';
+  const symbols = Array.isArray(markedSymbols)
+    ? markedSymbols
+        .map((m, index) => {
+          const zone = m.zone || 'bilinmeyen bölge';
+          const symbol = m.symbol || 'Sembol';
+          const x = Math.round((Number(m.normX) || 0) * 100);
+          const y = Math.round((Number(m.normY) || 0) * 100);
+          const cluster = m.nearCluster ? ', küme yakınında' : ', yalnız duruyor';
+          return `${index + 1}. ${symbol} — ${zone} (masa %${x} yatay, %${y} dikey${cluster})`;
+        })
+        .join('\n')
+    : 'Belirgin imge yok';
+
+  return `DÖKÜLEN BAKLA SAÇILIMI (mutlaka dikkate al — falın omurgası):
+Özet: ${spreadSummary || `${beanCount || 0} bakla döküldü.`}
+Yoğunluk/yığılma: ${densityBias || 'belirsiz'}
+Örüntü izleri: ${traits || 'genel dağılım'}
+
+BELİREN MİSTİK İMGELER (konumlarıyla yorumla):
+${symbols}
+
+BAKLA YORUM KURALLARI:
+- Yukarıdaki saçılım ve imgeleri uydurma; yalnızca verilen yerlere ve izlere dayan.
+- İmgelerin masa üzerindeki konumunu (sol/sağ/merkez/üst/alt) yorumun omurgasına kat.
+- Yoğunluk, küme, merkez boşluğu ve yığılma ipuçlarını danışanın niyetiyle bağla.
+- Başka fal türü sembolleri veya rastgele imge uydurma.
+- Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
+
+`;
 }
 
 function formatSelectedTarotCards(selectedCards, tarotFlowHint) {
@@ -868,6 +916,7 @@ module.exports = {
   categoryGuidance,
   pickCategoryGuidance,
   formatSelectedTarotCards,
+  formatBaklaScatter,
   validateAutoCategoryInput,
   buildAutoCategorySystemPrompt,
   buildAutoCategoryUserPrompt,

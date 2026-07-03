@@ -1,6 +1,7 @@
 import 'package:falora/ai_config.dart';
 import 'package:falora/mock_ai_service.dart';
 import 'package:falora/openai_backend_service.dart';
+import 'package:falora/models/bakla_scatter.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
@@ -26,6 +27,7 @@ abstract class AiService {
     String? requestId,
     List<String> imageNames = const [],
     List<TarotCardSelection> selectedTarotCards = const [],
+    BaklaScatterReading? baklaScatter,
   });
 
   Future<String> generateCoupleCompatibility({

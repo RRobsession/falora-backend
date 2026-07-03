@@ -22,6 +22,7 @@ import 'package:falora/firebase_messaging_background.dart';
 import 'package:falora/firebase_options.dart';
 import 'package:falora/image_upload_card.dart';
 import 'package:falora/models/app_user.dart';
+import 'package:falora/models/bakla_scatter.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/models/fortune_teller_models.dart';
 import 'package:falora/models/manual_fortune_request.dart';
@@ -56,6 +57,7 @@ import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/reading_record_card.dart';
 import 'package:falora/widgets/reward_ad_helper.dart';
+import 'package:falora/widgets/bakla_fortune_simulation.dart';
 import 'package:falora/widgets/tarot_card_picker_sheet.dart';
 import 'package:falora/widgets/tarot_card_widgets.dart';
 
@@ -574,6 +576,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
               .toList() ??
           const <String>[];
       final selectedCards = storage.parseSelectedCardsFromData(data);
+      final baklaScatter = storage.parseBaklaScatterFromData(data);
 
       await _resolveFortuneInBackground(
         requestId: reading.id,
@@ -585,6 +588,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         niyet: data['intention'] as String? ?? '',
         photoNames: imageNames,
         selectedTarotCards: selectedCards,
+        baklaScatter: baklaScatter,
       );
     } finally {
       _resolvingReadingIds.remove(reading.id);
@@ -1034,7 +1038,14 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
                 onSubmit: _submitNormal,
                 onOpenShop: _openShop,
               )
-            : NormalFalFormPage(
+            : cat == FortuneCategory.bakla
+                ? BaklaFormPage(
+                    teller: resolved,
+                    prefill: _fortuneFormPrefill(),
+                    onSubmit: _submitNormal,
+                    onOpenShop: _openShop,
+                  )
+                : NormalFalFormPage(
                 category: cat,
                 teller: resolved,
                 prefill: _fortuneFormPrefill(),
@@ -1232,6 +1243,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     required String niyet,
     List<String>? photoNames,
     List<TarotCardSelection>? selectedTarotCards,
+    BaklaScatterReading? baklaScatter,
   }) async {
     final storage = FortuneStorageService.instance;
     debugPrint('FORTUNE BACKEND START');
@@ -1258,6 +1270,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         requestId: requestId,
         imageNames: photoNames ?? const [],
         selectedTarotCards: selectedTarotCards ?? const [],
+        baklaScatter: baklaScatter,
       );
       debugPrint('FORTUNE BACKEND SUCCESS');
       await storage.updateFortuneResult(requestId, result);
@@ -1524,6 +1537,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     String niyet, {
     List<String>? photoNames,
     List<TarotCardSelection>? selectedTarotCards,
+    BaklaScatterReading? baklaScatter,
   }) async {
     if (cat == FortuneCategory.tarot) {
       final cards = selectedTarotCards ?? const [];
@@ -1531,6 +1545,10 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         _showSubmitError('Tarot falı için $tarotSpreadCardCount kart seçmelisiniz.');
         return;
       }
+    }
+    if (cat == FortuneCategory.bakla && baklaScatter == null) {
+      _showSubmitError('Bakla dökme tamamlanamadı. Lütfen tekrar deneyin.');
+      return;
     }
 
     final submitCost = resolveTellerTokenCost(cat, teller.id);
@@ -1582,6 +1600,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           tellerId: teller.id,
           tellerName: teller.name,
           selectedTarotCards: selectedTarotCards ?? const [],
+          baklaScatter: baklaScatter,
           createdAt: now,
           readyAt: readyAt,
         );
@@ -1618,7 +1637,11 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
               'Niyet: $niyet\n'
               '${selectedTarotCards!.length} tarot kartı seçildi'
-          : '${cat.label} — ${teller.name} — $name, $age, $burc\nNiyet: $niyet';
+          : cat == FortuneCategory.bakla && baklaScatter != null
+              ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+                  'Niyet: $niyet\n'
+                  '${baklaScatter.beanCount} bakla döküldü'
+              : '${cat.label} — ${teller.name} — $name, $age, $burc\nNiyet: $niyet';
       final reading = _newPendingReading(
         id: requestId,
         category: cat,
@@ -1645,6 +1668,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           niyet: niyet,
           photoNames: photoNames,
           selectedTarotCards: selectedTarotCards,
+          baklaScatter: baklaScatter,
         ),
       );
 
@@ -2541,6 +2565,7 @@ typedef NormalSubmit = Future<void> Function(
   String niyet, {
   List<String>? photoNames,
   List<TarotCardSelection>? selectedTarotCards,
+  BaklaScatterReading? baklaScatter,
 });
 
 class NormalFalFormPage extends StatefulWidget {
@@ -2929,6 +2954,156 @@ class _KahveFormPageState extends State<KahveFormPage> {
                         ),
                       )
                     : const Text('Falı Gönder'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Bakla Falı Formu ───────────────────────────────────────────────────────
+
+class BaklaFormPage extends StatefulWidget {
+  const BaklaFormPage({
+    super.key,
+    required this.teller,
+    required this.onSubmit,
+    required this.onOpenShop,
+    this.prefill,
+  });
+
+  final FortuneTeller teller;
+  final NormalSubmit onSubmit;
+  final VoidCallback onOpenShop;
+  final FortuneFormPrefill? prefill;
+
+  @override
+  State<BaklaFormPage> createState() => _BaklaFormPageState();
+}
+
+class _BaklaFormPageState extends State<BaklaFormPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _ageCtrl = TextEditingController();
+  final _niyetCtrl = TextEditingController();
+  String _burc = burclar.first;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    logFortuneVisibleCost(FortuneCategory.bakla, widget.teller.id);
+    final prefill = widget.prefill;
+    if (prefill != null && prefill.hasAny) {
+      prefill.applyToNameController(_nameCtrl);
+      prefill.applyToAgeController(_ageCtrl);
+      _burc = prefill.applyToZodiac(_burc);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _ageCtrl.dispose();
+    _niyetCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pourAndSubmit() async {
+    if (_submitting || !_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      final scatter = await showBaklaFortuneSimulation(context);
+      if (!mounted) return;
+      if (scatter == null) return;
+      await widget.onSubmit(
+        FortuneCategory.bakla,
+        widget.teller,
+        _nameCtrl.text.trim(),
+        int.parse(_ageCtrl.text.trim()),
+        _burc,
+        _niyetCtrl.text.trim(),
+        baklaScatter: scatter,
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bakla Falı')),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + _mobileBottomInset(context),
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FaloraLiveTappableTokenBalance(onOpenShop: widget.onOpenShop),
+              const SizedBox(height: 12),
+              _FormHeader(
+                category: FortuneCategory.bakla,
+                teller: widget.teller,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Bilgilerini doldur, baklaları dök; ardından falın yorumlanır.',
+                style: FaloraTypography.bodyMedium.copyWith(
+                  color: faloraInkSoft,
+                ),
+              ),
+              const SizedBox(height: 20),
+              FaloraLabeledFormField(
+                label: 'İsim',
+                controller: _nameCtrl,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'İsim gerekli' : null,
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Yaş',
+                controller: _ageCtrl,
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
+                  final age = int.tryParse(v.trim());
+                  if (age == null || age < 1 || age > 120) {
+                    return 'Geçerli bir yaş girin';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Burç',
+                value: _burc,
+                items: burclar
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
+                onChanged: (v) => setState(() => _burc = v ?? _burc),
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledFormField(
+                label: 'Niyet',
+                controller: _niyetCtrl,
+                maxLines: 3,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Niyet gerekli' : null,
+              ),
+              const SizedBox(height: 32),
+              FaloraPrimaryButton(
+                label: 'Baklaları Dök',
+                loading: _submitting,
+                onPressed: _submitting ? null : _pourAndSubmit,
               ),
             ],
           ),

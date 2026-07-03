@@ -1,6 +1,7 @@
 // Falora — Kişiye özel, seed tabanlı mock AI fal yorumu üretici servisi.
 
 import 'package:falora/ai_service.dart';
+import 'package:falora/models/bakla_scatter.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
@@ -239,7 +240,20 @@ class MockAiService implements AiService {
     String? requestId,
     List<String> imageNames = const [],
     List<TarotCardSelection> selectedTarotCards = const [],
+    BaklaScatterReading? baklaScatter,
   }) async {
+    if (baklaScatter != null && _categoryFromLabel(category) == FalCategory.bakla) {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      final symbols = baklaScatter.markedSymbols
+          .map((m) => '${m.symbol} (${m.zone})')
+          .join(', ');
+      return 'Sevgili $name, dökülen ${baklaScatter.beanCount} baklanın izinde '
+          '${baklaScatter.densityBias} görünüyor. '
+          '${baklaScatter.spreadSummary}\n\n'
+          'Niyetin "$intention" için beliren imgeler ($symbols) '
+          'yakın dönemde yeni bir kapı aralayacak bir döneme işaret ediyor. '
+          'Kalbini açık tut; semboller senin lehine hizalanıyor.';
+    }
     return MockAiService.generateFal(
       FalInput(
         category: _categoryFromLabel(category),

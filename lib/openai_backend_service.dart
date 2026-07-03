@@ -6,6 +6,7 @@ import 'package:falora/ai_config.dart';
 
 import 'package:falora/ai_service.dart';
 
+import 'package:falora/models/bakla_scatter.dart';
 import 'package:falora/models/tarot_card.dart';
 import 'package:falora/picked_image.dart';
 
@@ -67,6 +68,8 @@ class OpenAiBackendService implements AiService {
 
     List<TarotCardSelection> selectedTarotCards = const [],
 
+    BaklaScatterReading? baklaScatter,
+
   }) async {
 
     BackendAuthClient.logRequest('/generate-fortune');
@@ -96,6 +99,8 @@ class OpenAiBackendService implements AiService {
         if (selectedTarotCards.isNotEmpty)
           'selectedCards':
               selectedTarotCards.map((c) => c.toApiMap()).toList(),
+
+        if (baklaScatter != null) 'baklaScatter': baklaScatter.toApiMap(),
 
       },
 
