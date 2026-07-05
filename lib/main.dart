@@ -43,6 +43,7 @@ import 'package:falora/services/ads/ad_service_bootstrap.dart';
 import 'package:falora/services/fortune_submit_support.dart';
 import 'package:falora/services/fortune_backend_service.dart';
 import 'package:falora/services/fortune_form_prefill.dart';
+import 'package:falora/services/fortune_share_service.dart';
 import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:falora/services/interstitial_ad_service.dart';
@@ -3806,26 +3807,65 @@ class _SonucPageState extends State<SonucPage> {
   @override
   Widget build(BuildContext context) {
     final reading = _reading;
+    final canShare = FortuneShareService.instance.canShare(reading);
 
     return Scaffold(
-      appBar: AppBar(title: Text(reading.category.label)),
+      appBar: AppBar(
+        title: Text(reading.category.label),
+        actions: [
+          if (canShare)
+            IconButton(
+              tooltip: 'Paylaş',
+              icon: const Icon(Icons.share_rounded),
+              onPressed: () => _shareReading(context, reading),
+            ),
+        ],
+      ),
       body: reading.isViewable
           ? _SonucContent(
               reading: reading,
+              canShare: canShare,
+              onShare: () => _shareReading(context, reading),
               answerImageInfo: _manualRequest?.answerImageInfo ?? const {},
             )
           : _SonucWaitingView(reading: reading),
     );
+  }
+
+  Future<void> _shareReading(BuildContext context, FortuneReading reading) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await FortuneShareService.instance.shareFortuneReading(
+      reading,
+      context: context,
+    );
+    if (!context.mounted) return;
+    switch (outcome) {
+      case FortuneShareOutcome.clipboard:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Yorum metni panoya kopyalandı.')),
+        );
+      case FortuneShareOutcome.failed:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Paylaşım şu anda yapılamadı.')),
+        );
+      case FortuneShareOutcome.shared:
+      case FortuneShareOutcome.dismissed:
+        break;
+    }
   }
 }
 
 class _SonucContent extends StatefulWidget {
   const _SonucContent({
     required this.reading,
+    required this.canShare,
+    required this.onShare,
     this.answerImageInfo = const {},
   });
 
   final FortuneReading reading;
+  final bool canShare;
+  final VoidCallback onShare;
   final Map<String, String> answerImageInfo;
 
   @override
@@ -4052,6 +4092,14 @@ class _SonucContentState extends State<_SonucContent>
                   ],
                 ),
               ),
+              if (widget.canShare) ...[
+                const SizedBox(height: 16),
+                PremiumOutlinedButton(
+                  label: 'Arkadaşlarınla Paylaş',
+                  icon: Icons.share_rounded,
+                  onPressed: widget.onShare,
+                ),
+              ],
               const SizedBox(height: 20),
               PremiumOutlinedButton(
                 label: 'Fallarıma Dön',
