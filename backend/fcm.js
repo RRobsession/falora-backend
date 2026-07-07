@@ -11,6 +11,7 @@ const DEFAULT_SERVICE_ACCOUNT_PATH = path.join(
   'firebase-service-account.json',
 );
 const { safeLog } = require('./safe_log');
+const { adminUids } = require('./admin_config');
 const FCM_ANDROID_CHANNEL_ID =
   process.env.FCM_ANDROID_CHANNEL_ID || 'falora_ready';
 const MAX_TIMEOUT_MS = 2147483647;
@@ -247,6 +248,67 @@ async function notifyFortuneReady(userId, type, readingId) {
   return { success: true, messageId };
 }
 
+async function getAdminFcmTokens() {
+  const tokens = [];
+  for (const uid of adminUids) {
+    const token = await getUserFcmToken(uid);
+    if (token) {
+      tokens.push({ uid, token });
+    }
+  }
+  return tokens;
+}
+
+async function notifyAdminsNewManualRequest({
+  requestId,
+  readerName,
+  categoryLabel,
+  clientName,
+}) {
+  if (!isFcmReady()) {
+    console.log(
+      'FCM ADMIN NOTIFY | reason=not_configured | requestId=',
+      requestId,
+    );
+    return { success: false, reason: 'fcm_not_configured' };
+  }
+
+  const admins = await getAdminFcmTokens();
+  if (admins.length === 0) {
+    safeLog('FCM ADMIN NOTIFY | reason=no_admin_tokens | requestId=', requestId);
+    return { success: false, reason: 'no_admin_tokens' };
+  }
+
+  const reader = readerName?.trim() || 'Özel yorumcu';
+  const category = categoryLabel?.trim() || 'Özel fal';
+  const client = clientName?.trim();
+  const title = 'Yeni özel fal talebi';
+  const body = client
+    ? `${reader} — ${category} (${client})`
+    : `${reader} — ${category}`;
+
+  let sent = 0;
+  for (const { uid, token } of admins) {
+    const messageId = await sendNotification({
+      token,
+      title,
+      body,
+      data: {
+        type: 'admin_manual_request',
+        requestId: String(requestId),
+      },
+      userId: uid,
+    });
+    if (messageId) sent += 1;
+  }
+
+  return {
+    success: sent > 0,
+    sent,
+    total: admins.length,
+  };
+}
+
 function scheduleInMemoryTimer(scheduleId, userId, type, notifyAtMs) {
   const delayMs = Math.max(0, notifyAtMs - Date.now());
   const existing = scheduledJobs.get(scheduleId);
@@ -449,6 +511,7 @@ module.exports = {
   getUserFcmToken,
   sendNotification,
   notifyFortuneReady,
+  notifyAdminsNewManualRequest,
   scheduleFortuneNotify,
   restorePendingNotificationSchedules,
   READY_MESSAGES,

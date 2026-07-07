@@ -478,8 +478,10 @@ const openai = createClient();
 const {
   initFirebaseAdmin,
   isFcmReady,
+  getFirestore,
   sendNotification,
   notifyFortuneReady,
+  notifyAdminsNewManualRequest,
   scheduleFortuneNotify,
 } = require('./fcm');
 const {
@@ -608,6 +610,47 @@ app.post(
   }
 },
 );
+
+app.post('/notify-admin-manual-request', requireAuth, async (req, res) => {
+  const { requestId, readerName, categoryLabel, clientName } = req.body ?? {};
+  if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
+    return res.status(400).json({ error: 'requestId gerekli' });
+  }
+
+  const db = getFirestore();
+  if (!db) {
+    return res.status(503).json({ error: 'Firebase Admin yapılandırılmadı' });
+  }
+
+  try {
+    const doc = await db
+      .collection('manual_fortune_requests')
+      .doc(requestId.trim())
+      .get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Talep bulunamadı' });
+    }
+
+    const data = doc.data() || {};
+    if (data.userId !== req.auth.uid) {
+      return res.status(403).json({ error: 'Yetkisiz' });
+    }
+    if (data.status !== 'pending') {
+      return res.json({ success: false, reason: 'not_pending' });
+    }
+
+    const result = await notifyAdminsNewManualRequest({
+      requestId: requestId.trim(),
+      readerName: readerName || data.readerName,
+      categoryLabel: categoryLabel || data.fortuneType,
+      clientName: clientName || data.name,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('FCM ADMIN MANUAL REQUEST ERROR:', err.message);
+    return res.status(500).json({ error: 'Admin bildirimi gönderilemedi' });
+  }
+});
 
 app.post(
   '/schedule-notify',

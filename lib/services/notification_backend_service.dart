@@ -56,6 +56,39 @@ class NotificationBackendService {
   Future<void> notifyManualFortuneReady({required String userId}) =>
       _notifyReady(userId: userId, type: 'manual');
 
+  Future<void> notifyAdminsManualRequest({
+    required String requestId,
+    required String readerName,
+    required String categoryLabel,
+    String? clientName,
+  }) async {
+    try {
+      final uri = Uri.parse('$apiBaseUrl/notify-admin-manual-request');
+      final response = await http
+          .post(
+            uri,
+            headers: await _headers(),
+            body: jsonEncode({
+              'requestId': requestId,
+              'readerName': readerName,
+              'categoryLabel': categoryLabel,
+              if (clientName != null && clientName.isNotEmpty)
+                'clientName': clientName,
+            }),
+          )
+          .timeout(_timeout);
+
+      BackendAuthClient.logRequest(
+        '/notify-admin-manual-request',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('NOTIFY ADMIN MANUAL REQUEST error: $e');
+      }
+    }
+  }
+
   Future<void> scheduleNotify({
     required String userId,
     required bool isCouple,

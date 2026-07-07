@@ -24,11 +24,19 @@ class NotificationOpenRequest {
   factory NotificationOpenRequest.fromData(Map<String, dynamic> data) {
     final type = data['type']?.toString().trim() ?? '';
     final readingId = data['readingId']?.toString().trim();
+    final requestId = data['requestId']?.toString().trim();
+    final id = (readingId != null && readingId.isNotEmpty)
+        ? readingId
+        : ((requestId != null && requestId.isNotEmpty) ? requestId : null);
     return NotificationOpenRequest(
       type: type,
-      readingId: (readingId == null || readingId.isEmpty) ? null : readingId,
+      readingId: id,
     );
   }
 
-  bool get isValid => type == 'fortune' || type == 'couple' || type == 'manual';
+  bool get isValid =>
+      type == 'fortune' ||
+      type == 'couple' ||
+      type == 'manual' ||
+      type == 'admin_manual_request';
 }

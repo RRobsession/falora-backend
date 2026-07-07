@@ -2043,6 +2043,15 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       requestCreated = true;
       debugPrint('FORTUNE_REQUEST_CREATE_SUCCESS id=$requestId');
 
+      unawaited(
+        NotificationBackendService.instance.notifyAdminsManualRequest(
+          requestId: requestId,
+          readerName: reader.name,
+          categoryLabel: category.label,
+          clientName: name,
+        ),
+      );
+
       await _deductSubmitTokens(logPrefix: 'MANUAL', amount: tokenCost);
       tokensDeducted = true;
 

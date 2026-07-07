@@ -12,6 +12,8 @@ import 'package:falora/services/manual_fortune_storage_service.dart';
 
 import 'package:falora/services/notification_backend_service.dart';
 
+import 'package:falora/services/notification_service.dart';
+
 import 'package:falora/theme/falora_theme.dart';
 
 import 'package:falora/widgets/premium_ui.dart';
@@ -31,7 +33,7 @@ String _formatAdminDate(DateTime dt) {
 
 /// Admin girişinde manuel fal talepleri yönetilir.
 
-class AdminManualRequestsScreen extends StatelessWidget {
+class AdminManualRequestsScreen extends StatefulWidget {
 
   const AdminManualRequestsScreen({
 
@@ -49,67 +51,159 @@ class AdminManualRequestsScreen extends StatelessWidget {
 
   @override
 
+  State<AdminManualRequestsScreen> createState() =>
+
+      _AdminManualRequestsScreenState();
+
+}
+
+
+
+class _AdminManualRequestsScreenState extends State<AdminManualRequestsScreen>
+
+    with SingleTickerProviderStateMixin {
+
+  late final TabController _tabController;
+
+  VoidCallback? _notificationListener;
+
+
+
+  @override
+
+  void initState() {
+
+    super.initState();
+
+    _tabController = TabController(length: 2, vsync: this);
+
+    _notificationListener = _onPendingAdminNotification;
+
+    NotificationService.instance.pendingOpenRequest
+
+        .addListener(_notificationListener!);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+
+      _onPendingAdminNotification();
+
+    });
+
+  }
+
+
+
+  @override
+
+  void dispose() {
+
+    if (_notificationListener != null) {
+
+      NotificationService.instance.pendingOpenRequest
+
+          .removeListener(_notificationListener!);
+
+    }
+
+    _tabController.dispose();
+
+    super.dispose();
+
+  }
+
+
+
+  void _onPendingAdminNotification() {
+
+    final pending = NotificationService.instance.pendingOpenRequest.value;
+
+    if (pending?.type != 'admin_manual_request' || pending?.isValid != true) {
+
+      return;
+
+    }
+
+    NotificationService.instance.consumePendingOpenRequest();
+
+    if (!mounted) return;
+
+    if (_tabController.index != 0) {
+
+      _tabController.animateTo(0);
+
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+
+      const SnackBar(content: Text('Yeni özel fal talebi geldi')),
+
+    );
+
+  }
+
+
+
+  @override
+
   Widget build(BuildContext context) {
 
-    return DefaultTabController(
+    return Scaffold(
 
-      length: 2,
+      appBar: AppBar(
 
-      child: Scaffold(
+        title: const Text('Manuel Fal Talepleri'),
 
-        appBar: AppBar(
+        bottom: TabBar(
 
-          title: const Text('Manuel Fal Talepleri'),
+          controller: _tabController,
 
-          bottom: const TabBar(
+          tabs: const [
 
-            tabs: [
+            Tab(text: 'Bekleyen Talepler'),
 
-              Tab(text: 'Bekleyen Talepler'),
-
-              Tab(text: 'Cevaplananlar'),
-
-            ],
-
-          ),
-
-          actions: [
-
-            IconButton(
-
-              onPressed: onLogout,
-
-              icon: const Icon(Icons.logout),
-
-              tooltip: 'Çıkış',
-
-            ),
+            Tab(text: 'Cevaplananlar'),
 
           ],
 
         ),
 
-        body: FaloraBackground(
+        actions: [
 
-          child: TabBarView(
+          IconButton(
 
-            children: [
+            onPressed: widget.onLogout,
 
-              _AdminPendingTab(
+            icon: const Icon(Icons.logout),
 
-                stream: ManualFortuneStorageService.instance.watchPendingForAdmin(),
-
-              ),
-
-              _AdminAnsweredTab(
-
-                stream: ManualFortuneStorageService.instance.watchAnsweredForAdmin(),
-
-              ),
-
-            ],
+            tooltip: 'Çıkış',
 
           ),
+
+        ],
+
+      ),
+
+      body: FaloraBackground(
+
+        child: TabBarView(
+
+          controller: _tabController,
+
+          children: [
+
+            _AdminPendingTab(
+
+              stream: ManualFortuneStorageService.instance.watchPendingForAdmin(),
+
+            ),
+
+            _AdminAnsweredTab(
+
+              stream: ManualFortuneStorageService.instance.watchAnsweredForAdmin(),
+
+            ),
+
+          ],
 
         ),
 

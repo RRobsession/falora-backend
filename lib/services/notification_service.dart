@@ -197,6 +197,7 @@ class NotificationService {
     final payload = jsonEncode({
       'type': message.data['type'],
       if (message.data['readingId'] != null) 'readingId': message.data['readingId'],
+      if (message.data['requestId'] != null) 'requestId': message.data['requestId'],
     });
 
     await _localNotifications.show(

@@ -84,9 +84,19 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       _loading = false;
     });
 
-    if (user != null && emailVerified && !isAdminUser(user.userId)) {
-      unawaited(_runPostAuthSetup(user.userId));
+    if (user != null && emailVerified) {
+      if (isAdminUser(user.userId)) {
+        unawaited(_runAdminPostAuthSetup(user.userId));
+      } else {
+        unawaited(_runPostAuthSetup(user.userId));
+      }
     }
+  }
+
+  Future<void> _runAdminPostAuthSetup(String userId) async {
+    try {
+      await NotificationService.instance.registerForUser(userId);
+    } catch (_) {}
   }
 
   Future<void> _runPostAuthSetup(String userId) async {
