@@ -4,7 +4,9 @@ const {
   COUPLE_COLLECTION,
 } = require('./fortune_result_persist');
 
-const RETENTION_DAYS = Number(process.env.FORTUNE_RETENTION_DAYS) || 7;
+const MANUAL_FORTUNE_COLLECTION = 'manual_fortune_requests';
+
+const RETENTION_DAYS = Number(process.env.FORTUNE_RETENTION_DAYS) || 15;
 const CLEANUP_INTERVAL_MS =
   Number(process.env.FORTUNE_RETENTION_CLEANUP_MS) || 6 * 60 * 60 * 1000;
 const DELETE_BATCH_SIZE = 200;
@@ -59,12 +61,13 @@ async function runFortuneRetentionCleanup() {
   const cutoffDate = retentionCutoffDate();
 
   try {
-    const [fortunesDeleted, couplesDeleted] = await Promise.all([
+    const [fortunesDeleted, couplesDeleted, manualDeleted] = await Promise.all([
       deleteExpiredFromCollection(db, FORTUNE_COLLECTION, cutoffDate),
       deleteExpiredFromCollection(db, COUPLE_COLLECTION, cutoffDate),
+      deleteExpiredFromCollection(db, MANUAL_FORTUNE_COLLECTION, cutoffDate),
     ]);
 
-    const deleted = fortunesDeleted + couplesDeleted;
+    const deleted = fortunesDeleted + couplesDeleted + manualDeleted;
     console.log(
       'FORTUNE RETENTION OK | days=',
       RETENTION_DAYS,
@@ -74,6 +77,8 @@ async function runFortuneRetentionCleanup() {
       fortunesDeleted,
       '| couplesDeleted=',
       couplesDeleted,
+      '| manualDeleted=',
+      manualDeleted,
     );
 
     return { ok: true, deleted };
@@ -107,6 +112,7 @@ function startFortuneRetentionCleanupLoop() {
 
 module.exports = {
   RETENTION_DAYS,
+  MANUAL_FORTUNE_COLLECTION,
   runFortuneRetentionCleanup,
   startFortuneRetentionCleanupLoop,
 };

@@ -1,3 +1,4 @@
+import 'package:falora/services/ads/ad_consent_service.dart';
 import 'package:falora/services/ads/admob_config.dart';
 import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/admob_interstitial_ad_service.dart';
@@ -44,6 +45,8 @@ class AdServiceBootstrap {
     );
     AdMobLogger.log('BUILD MODE: ${kDebugMode ? 'debug' : 'release'}');
     AdMobLogger.log('USE_PRODUCTION_ADS: $useProductionAds');
+
+    await AdConsentService.requestConsentIfNeeded();
 
     final rewarded = AdMobRewardedAdService();
     RewardedAdService.instance = rewarded;

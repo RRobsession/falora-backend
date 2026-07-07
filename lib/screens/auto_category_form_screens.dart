@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:falora/config/category_fortune_config.dart';
+import 'package:falora/config/legal_config.dart';
 import 'package:falora/image_upload_card.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/picked_image.dart';
@@ -561,10 +562,7 @@ class _RelationshipAdviceFormPageState extends State<RelationshipAdviceFormPage>
                     ),
                     validator: (v) {
                       final age = int.tryParse(v?.trim() ?? '');
-                      if (age == null || age < 16 || age > 99) {
-                        return '16–99 arası geçerli bir yaş girin';
-                      }
-                      return null;
+                      return validateFortuneSubjectAge(age);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -673,8 +671,10 @@ class _RelationshipAdviceFormPageState extends State<RelationshipAdviceFormPage>
                         Expanded(
                           child: Text(
                             'Sorun yaşadığınız sohbet anını yükleyin. '
-                            'Metin ve görseller birlikte değerlendirilerek '
-                            'daha dengeli bir tavsiye sunulur.',
+                            'Yalnızca kendi verilerinizi ve üçüncü kişilerin '
+                            'açık rızası olan içerikleri paylaşın. Görseller '
+                            'en fazla 15 gün saklanır ve eğlence amaçlı '
+                            'tavsiye üretimi için işlenir.',
                             style: FaloraTypography.bodyMedium.copyWith(
                               color: faloraInkSoft,
                               height: 1.45,

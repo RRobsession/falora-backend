@@ -17,6 +17,7 @@ import 'package:falora/screens/app_intro_splash_screen.dart';
 import 'package:falora/category_icon.dart';
 import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/config/manual_fortune_config.dart';
+import 'package:falora/config/legal_config.dart';
 import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/firebase_messaging_background.dart';
 import 'package:falora/firebase_options.dart';
@@ -61,6 +62,7 @@ import 'package:falora/widgets/falora_labeled_form_field.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
+import 'package:falora/widgets/legal_disclaimer_banner.dart';
 import 'package:falora/widgets/reading_record_card.dart';
 import 'package:falora/widgets/reward_ad_helper.dart';
 import 'package:falora/widgets/bakla_fortune_simulation.dart';
@@ -2848,10 +2850,7 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                   final age = int.tryParse(v.trim());
-                  if (age == null || age < 1 || age > 120) {
-                    return 'Geçerli bir yaş girin';
-                  }
-                  return null;
+                  return validateFortuneSubjectAge(age);
                 },
               ),
               const SizedBox(height: 18),
@@ -3065,10 +3064,7 @@ class _KahveFormPageState extends State<KahveFormPage> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                   final age = int.tryParse(v.trim());
-                  if (age == null || age < 1 || age > 120) {
-                    return 'Geçerli bir yaş girin';
-                  }
-                  return null;
+                  return validateFortuneSubjectAge(age);
                 },
               ),
               const SizedBox(height: 18),
@@ -3261,10 +3257,7 @@ class _BaklaFormPageState extends State<BaklaFormPage> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                   final age = int.tryParse(v.trim());
-                  if (age == null || age < 1 || age > 120) {
-                    return 'Geçerli bir yaş girin';
-                  }
-                  return null;
+                  return validateFortuneSubjectAge(age);
                 },
               ),
               const SizedBox(height: 18),
@@ -3409,10 +3402,7 @@ class _SuFormPageState extends State<SuFormPage> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                   final age = int.tryParse(v.trim());
-                  if (age == null || age < 1 || age > 120) {
-                    return 'Geçerli bir yaş girin';
-                  }
-                  return null;
+                  return validateFortuneSubjectAge(age);
                 },
               ),
               const SizedBox(height: 18),
@@ -3661,10 +3651,7 @@ class _PersonSection extends StatelessWidget {
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                 final age = int.tryParse(v.trim());
-                if (age == null || age < 1 || age > 120) {
-                  return 'Geçerli bir yaş girin';
-                }
-                return null;
+                return validateFortuneSubjectAge(age);
               },
             ),
             const SizedBox(height: 18),
@@ -4115,6 +4102,10 @@ class _SonucContentState extends State<_SonucContent>
                 icon: Icons.arrow_back_rounded,
                 onPressed: () => Navigator.of(context).pop(),
               ),
+              if (!isError && !reading.isManualPremium) ...[
+                const SizedBox(height: 14),
+                LegalDisclaimerBanner(micro: true),
+              ],
             ],
           ),
         ),

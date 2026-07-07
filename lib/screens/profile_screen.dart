@@ -8,6 +8,7 @@ import 'package:falora/models/fortune_models.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/user_profile_service.dart';
 import 'package:falora/services/privacy_policy_service.dart';
+import 'package:falora/services/terms_of_service_service.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
@@ -74,9 +75,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await PrivacyPolicyService.instance.openPrivacyPolicy(context);
   }
 
+  Future<void> _openTermsOfService() async {
+    await TermsOfServiceService.instance.openTermsOfService(context);
+  }
+
   Future<void> _openNotificationSettings() async {
     final service = NotificationService.instance;
-    final enabled = await service.areNotificationsEnabled();
+    final userId = widget.user.userId;
 
     if (!mounted) return;
 
@@ -84,63 +89,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Bildirim Ayarları',
-                  style: FaloraTypography.sectionHeading,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  enabled
-                      ? 'Fal hazır bildirimleri açık. Falın hazır olduğunda haber veririz.'
-                      : 'Fal hazır bildirimleri kapalı. Açtığında falın hazır olduğunda haber veririz.',
-                  style: FaloraTypography.bodyOnParchment,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () async {
-                    final granted = await service.enableNotificationsForUser(
-                      widget.user.userId,
-                    );
-                    if (!sheetContext.mounted) return;
-                    Navigator.pop(sheetContext);
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          granted
-                              ? 'Bildirimler açıldı.'
-                              : 'Bildirim izni verilmedi. Sistem ayarlarından açabilirsin.',
-                        ),
-                      ),
-                    );
-                  },
-                  child: Text(enabled ? 'Bildirimleri Yenile' : 'Bildirimleri Aç'),
-                ),
-                if (!kIsWeb) ...[
-                  const SizedBox(height: 10),
-                  OutlinedButton(
-                    onPressed: () async {
-                      await service.openSystemSettings();
-                      if (sheetContext.mounted) {
-                        Navigator.pop(sheetContext);
-                      }
-                    },
-                    style: faloraOutlinedOnParchmentStyle(),
-                    child: const Text('Sistem Ayarlarını Aç'),
-                  ),
-                ],
-              ],
-            ),
-          ),
+        return _NotificationSettingsSheet(
+          userId: userId,
+          service: service,
+          hostContext: context,
         );
       },
     );
@@ -589,6 +541,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'Gizlilik Politikası',
                         subtitle: 'Veri kullanımı ve gizlilik',
                         onTap: _openPrivacyPolicy,
+                      ),
+                      _ProfileMenuTile(
+                        icon: Icons.description_outlined,
+                        iconColor: faloraInkSoft,
+                        title: 'Kullanıcı Sözleşmesi',
+                        subtitle: 'Hizmet şartları ve feragatler',
+                        onTap: _openTermsOfService,
                       ),
                       _ProfileLogoutTile(
                         onPressed: _deletingAccount ? null : _confirmLogout,
@@ -1180,6 +1139,130 @@ class _ProfileDeleteSection extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _NotificationSettingsSheet extends StatefulWidget {
+  const _NotificationSettingsSheet({
+    required this.userId,
+    required this.service,
+    required this.hostContext,
+  });
+
+  final String userId;
+  final NotificationService service;
+  final BuildContext hostContext;
+
+  @override
+  State<_NotificationSettingsSheet> createState() =>
+      _NotificationSettingsSheetState();
+}
+
+class _NotificationSettingsSheetState extends State<_NotificationSettingsSheet> {
+  bool? _enabled;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatus();
+  }
+
+  Future<void> _refreshStatus() async {
+    final enabled =
+        await widget.service.areAppNotificationsEnabled(widget.userId);
+    if (!mounted) return;
+    setState(() => _enabled = enabled);
+  }
+
+  Future<void> _toggleNotifications() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final wasEnabled = _enabled ?? false;
+    final nowEnabled = wasEnabled
+        ? await widget.service.disableNotificationsForUser(widget.userId)
+        : await widget.service.enableNotificationsForUser(widget.userId);
+
+    if (!mounted) return;
+    setState(() {
+      _enabled = nowEnabled;
+      _busy = false;
+    });
+
+    if (!widget.hostContext.mounted) return;
+    ScaffoldMessenger.of(widget.hostContext).showSnackBar(
+      SnackBar(
+        content: Text(
+          nowEnabled
+              ? 'Bildirimler açıldı.'
+              : wasEnabled
+                  ? 'Bildirimler kapatıldı.'
+                  : 'Bildirim izni verilmedi. Sistem ayarlarından açabilirsin.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = _enabled;
+    final statusText = enabled == null
+        ? 'Bildirim durumu kontrol ediliyor...'
+        : enabled
+            ? 'Fal hazır bildirimleri açık. Falın hazır olduğunda haber veririz.'
+            : 'Fal hazır bildirimleri kapalı. Açtığında falın hazır olduğunda haber veririz.';
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Bildirim Ayarları',
+              style: FaloraTypography.sectionHeading,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              statusText,
+              style: FaloraTypography.bodyOnParchment,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: enabled == null || _busy ? null : _toggleNotifications,
+              child: _busy
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(enabled == true ? 'Bildirimleri Kapat' : 'Bildirimleri Aç'),
+            ),
+            if (!kIsWeb) ...[
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        await widget.service.openSystemSettings();
+                        if (!context.mounted) return;
+                        await _refreshStatus();
+                      },
+                style: faloraOutlinedOnParchmentStyle(),
+                child: const Text('Sistem Ayarlarını Aç'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

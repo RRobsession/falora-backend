@@ -26,11 +26,11 @@ String get manualReaderActiveNowInfo =>
 String get manualReaderInactiveInfo =>
     '$manualReaderActiveHoursInfo Şu anda aktif değiller; bu saatler dışında talep oluşturulamaz.';
 
-/// Kart üzerinde gösterilen günlük kota (ör. 12/30).
-const manualReaderDailyQuotaDisplayMax = 30;
+/// Kart üzerinde gösterilen günlük kota (ör. 8/15).
+const manualReaderDailyQuotaDisplayMax = 15;
 
-/// Bu sayıya ulaşınca yorumcu o gün kapanır (toplam üst sınır 60).
-const manualReaderDailyQuotaCloseAt = 20;
+/// Bu sayıya ulaşınca yorumcu o gün kapanır.
+const manualReaderDailyQuotaCloseAt = 15;
 
 bool isManualReaderQuotaAvailable(int count) =>
     count < manualReaderDailyQuotaCloseAt;

@@ -55,6 +55,10 @@
 	<string>Main</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-5266723758630344~8041647287</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Kahve falı ve ilişki analizi için fotoğraf seçebilmeniz amacıyla galeri erişimi gereklidir.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Kahve falı ve ilişki analizi için fotoğraf çekebilmeniz amacıyla kamera erişimi gereklidir.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

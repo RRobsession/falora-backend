@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 class TermsOfServiceScreen extends StatelessWidget {
   const TermsOfServiceScreen({super.key});
 
-  static const _sections = <_TermsSection>[
+  List<_TermsSection> get _sections => [
     _TermsSection(
       title: '1. Taraflar ve Kabul',
       body:
@@ -45,7 +45,15 @@ class TermsOfServiceScreen extends StatelessWidget {
           'tavsiye üretimi amacıyla işlenir.',
     ),
     _TermsSection(
-      title: '5. Hesap ve Jetonlar',
+      title: '5. Yapay Zeka, Reklamlar ve Ödüller',
+      body:
+          'Otomatik yorumlar yapay zeka ile üretilebilir. Uygulama Google AdMob reklamları '
+          'gösterebilir; ödüllü reklam izleyerek jeton kazanabilirsiniz. Reklam tercihleri '
+          'cihazınızın bölgesine göre yönetilir. Davet kodu ile kazanılan jetonlar promosyon '
+          'niteliğindedir; kötüye kullanım hesabın askıya alınmasına yol açabilir.',
+    ),
+    _TermsSection(
+      title: '6. Hesap ve Jetonlar',
       body:
           'Hesap bilgilerinizin gizliliğinden siz sorumlusunuz. Jetonlar dijital '
           'hizmet kredisi niteliğindedir; kullanılmış jetonlar için yasal zorunluluklar '
@@ -56,34 +64,34 @@ class TermsOfServiceScreen extends StatelessWidget {
           'silinir. Hesap bilgileriniz ve jeton bakiyeniz bu kapsamın dışındadır.',
     ),
     _TermsSection(
-      title: '6. Kullanıcı Yükümlülükleri',
+      title: '7. Kullanıcı Yükümlülükleri',
       body:
           'Uygulamayı yürürlükteki mevzuata, üçüncü kişilerin haklarına ve genel ahlak '
           'kurallarına uygun kullanmayı kabul edersiniz. Yanıltıcı bilgi vermek, sistemi '
           'kötüye kullanmak veya hizmeti tersine mühendislik ile kopyalamak yasaktır.',
     ),
     _TermsSection(
-      title: '7. Fikri Mülkiyet',
+      title: '8. Fikri Mülkiyet',
       body:
           'Uygulama tasarımı, markası, metinleri ve yazılımı hizmet sağlayıcıya aittir. '
           'İzinsiz kopyalama, dağıtma veya ticari kullanım yasaktır.',
     ),
     _TermsSection(
-      title: '8. Hesabın Askıya Alınması ve Fesih',
+      title: '9. Hesabın Askıya Alınması ve Fesih',
       body:
           'Sözleşmeye aykırı kullanım tespit edilirse hesabınız uyarı verilmeksizin '
           'askıya alınabilir veya sonlandırılabilir. Kullanıcı, profil ekranından '
           'hesabını istediği zaman silebilir.',
     ),
     _TermsSection(
-      title: '9. Değişiklikler',
+      title: '10. Değişiklikler',
       body:
           'Bu sözleşme güncellenebilir. Güncel metin uygulama içinde yayımlanır. '
           'Kullanıma devam etmeniz güncellenmiş metni kabul ettiğiniz anlamına gelir.',
     ),
     _TermsSection(
-      title: '10. İletişim',
-      body: 'Sözleşme ile ilgili sorularınız için: falora.admin@falora.app',
+      title: '11. İletişim',
+      body: 'Sözleşme ile ilgili sorularınız için: prserdar.cakir@gmail.com',
     ),
   ];
 

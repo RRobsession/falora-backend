@@ -324,6 +324,23 @@ class NotificationService {
     debugPrint('FCM TOKEN saved for userId=$userId');
   }
 
+  Future<bool> hasRegisteredPushToken(String userId) async {
+    try {
+      final doc = await _db.collection('users').doc(userId).get();
+      final token = doc.data()?['fcmToken'];
+      return token is String && token.trim().isNotEmpty;
+    } catch (e) {
+      debugPrint('FCM token read error: $e');
+      return false;
+    }
+  }
+
+  /// Sistem izni + Firestore'da kayıtlı push token.
+  Future<bool> areAppNotificationsEnabled(String userId) async {
+    if (!await areNotificationsEnabled()) return false;
+    return hasRegisteredPushToken(userId);
+  }
+
   Future<bool> areNotificationsEnabled() async {
     if (kIsWeb) {
       final settings = await _messaging.getNotificationSettings();
@@ -352,7 +369,12 @@ class NotificationService {
     } else {
       await _registerMobileToken(userId);
     }
-    return areNotificationsEnabled();
+    return areAppNotificationsEnabled(userId);
+  }
+
+  Future<bool> disableNotificationsForUser(String userId) async {
+    await unregisterForUser(userId);
+    return areAppNotificationsEnabled(userId);
   }
 
   Future<void> openSystemSettings() async {

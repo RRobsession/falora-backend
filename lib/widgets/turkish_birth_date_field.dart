@@ -1,4 +1,5 @@
 import 'package:falora/config/category_fortune_config.dart';
+import 'package:falora/config/legal_config.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/utils/profile_age.dart';
 import 'package:flutter/material.dart';
@@ -13,12 +14,14 @@ class TurkishBirthDateField extends StatefulWidget {
     required this.onChanged,
     this.enabled = true,
     this.showAgeHint = true,
+    this.minimumAge = minimumUserAge,
   });
 
   final DateTime? initialDate;
   final ValueChanged<DateTime?> onChanged;
   final bool enabled;
   final bool showAgeHint;
+  final int minimumAge;
 
   @override
   State<TurkishBirthDateField> createState() => TurkishBirthDateFieldState();
@@ -119,6 +122,10 @@ class TurkishBirthDateFieldState extends State<TurkishBirthDateField> {
   String? validate(String? _) {
     if (_selectedDate == null) {
       return 'Geçerli bir doğum tarihi girin';
+    }
+    final age = calculateAgeFromBirthDate(_selectedDate!);
+    if (age < widget.minimumAge) {
+      return 'Uygulamayı kullanmak için en az ${widget.minimumAge} yaşında olmalısınız';
     }
     return null;
   }

@@ -1,3 +1,4 @@
+import 'package:falora/config/legal_config.dart';
 import 'package:falora/config/manual_fortune_config.dart';
 import 'package:falora/image_upload_card.dart';
 import 'package:falora/models/fortune_models.dart';
@@ -359,10 +360,7 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Yaş gerekli';
                   final age = int.tryParse(v.trim());
-                  if (age == null || age < 1 || age > 120) {
-                    return 'Geçerli bir yaş girin';
-                  }
-                  return null;
+                  return validateFortuneSubjectAge(age);
                 },
               ),
 

@@ -2,6 +2,24 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "hosting": {
+    "public": "hosting",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/privacy",
+        "destination": "/privacy.html"
+      },
+      {
+        "source": "/terms",
+        "destination": "/terms.html"
+      }
+    ]
+  },
   "flutter": {
     "platforms": {
       "android": {

@@ -65,17 +65,15 @@ const homeCategorySections = <HomeCategorySection>[
   ),
 ];
 
-/// Serdar/Hatice teklif edilmeyen kategoriler.
+/// Serdar/Hatice yalnızca tarot, bakla ve kahve falında sunulur.
 bool supportsManualFortuneReaders(FortuneCategory category) {
   switch (category) {
-    case FortuneCategory.ciftUyumu:
-    case FortuneCategory.ruyaTabiri:
-    case FortuneCategory.numeroloji:
-    case FortuneCategory.burcYorumu:
-    case FortuneCategory.iliskiTavsiyesi:
-      return false;
-    default:
+    case FortuneCategory.tarot:
+    case FortuneCategory.bakla:
+    case FortuneCategory.kahve:
       return true;
+    default:
+      return false;
   }
 }
 

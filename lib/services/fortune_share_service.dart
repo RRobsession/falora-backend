@@ -3,6 +3,7 @@ import 'package:falora/config/app_branding.dart';
 import 'package:falora/config/app_links_config.dart';
 import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/models/fortune_models.dart';
+import 'package:falora/widgets/legal_disclaimer_banner.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -75,6 +76,12 @@ class FortuneShareService {
 
     buffer.writeln();
     buffer.writeln('—');
+    final disclaimer =
+        LegalDisclaimerBanner.shareFooterText(isManualPremium: reading.isManualPremium);
+    if (disclaimer.isNotEmpty) {
+      buffer.writeln(disclaimer);
+      buffer.writeln();
+    }
     buffer.writeln('$appDisplayName ile fal baktım.');
     if (playStoreUrl.trim().isNotEmpty) {
       buffer.writeln(playStoreUrl.trim());
