@@ -34,7 +34,7 @@ service cloud.firestore {
 
       return isSignedIn()
 
-        && request.auth.uid in ['DhBcumWgN0RLAHK8aSYb3S9jXEv1'];
+        && request.auth.uid in ['DhBcumWgN0RLAHK8aSYb3S9jXEv1', 'CV9g7RcjFbYu1wFYJJPNoCcxR3T2'];
 
     }
 
