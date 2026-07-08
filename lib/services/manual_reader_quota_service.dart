@@ -80,13 +80,17 @@ class ManualReaderQuotaService {
 
     final ref = _db.collection(_collection).doc(dayKey);
     final snap = await tx.get(ref);
-    final current = (snap.data()?[readerId] as num?)?.toInt() ?? 0;
+    final data = snap.data();
+    final serdar = (data?['serdar'] as num?)?.toInt() ?? 0;
+    final hatice = (data?['hatice'] as num?)?.toInt() ?? 0;
+    final current = readerId == 'hatice' ? hatice : serdar;
     if (current >= manualReaderDailyQuotaCloseAt) return false;
 
     tx.set(
       ref,
       {
-        readerId: current + 1,
+        'serdar': readerId == 'serdar' ? serdar + 1 : serdar,
+        'hatice': readerId == 'hatice' ? hatice + 1 : hatice,
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
