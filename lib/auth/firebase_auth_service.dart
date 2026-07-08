@@ -304,6 +304,18 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    final normalizedEmail = _normalizeEmail(email);
+    try {
+      await _auth.sendPasswordResetEmail(email: normalizedEmail);
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(mapFirebaseAuthError(e));
+    } catch (e) {
+      throw AuthException('Şifre sıfırlama bağlantısı gönderilemedi: $e');
+    }
+  }
+
+  @override
   Future<void> sendVerificationEmail() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {

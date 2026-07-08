@@ -26,6 +26,8 @@ abstract class AuthService {
     required String password,
   });
 
+  Future<void> sendPasswordResetEmail({required String email});
+
   Future<void> logout();
 
   /// Tüm kullanıcı verilerini ve Firebase Auth hesabını kalıcı olarak siler.

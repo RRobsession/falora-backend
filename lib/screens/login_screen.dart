@@ -3,7 +3,6 @@ import 'package:falora/auth/auth_validators.dart';
 import 'package:falora/screens/register_screen.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/falora_logo_header.dart';
-import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -26,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
   bool _obscure = true;
+  bool _showForgotPassword = false;
 
   @override
   void dispose() {
@@ -51,9 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
       if (!mounted) return;
+      setState(() => _showForgotPassword = false);
       widget.onLoggedIn();
     } on AuthException catch (e) {
       if (!mounted) return;
+      setState(() => _showForgotPassword = true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
@@ -61,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('Unknown login error: $e');
       debugPrint(stackTrace.toString());
       if (!mounted) return;
+      setState(() => _showForgotPassword = true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Giriş hatası: $e')),
       );
@@ -78,6 +81,41 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _sendPasswordReset() async {
+    final email = _emailCtrl.text.trim();
+    final emailError = AuthValidators.validateEmail(email);
+    if (emailError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Önce geçerli e-posta adresinizi girin.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await widget.authService.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$email adresine şifre sıfırlama bağlantısı gönderildi.',
+          ),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Şifre sıfırlama hatası: $e')),
+      );
+    }
   }
 
   @override
@@ -148,6 +186,23 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               validator: AuthValidators.validatePassword,
                             ),
+                            if (_showForgotPassword) ...[
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton(
+                                  onPressed: _loading ? null : _sendPasswordReset,
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: faloraBronzeDark,
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 0),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('Şifreni mi unuttun?'),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 28),
                             ElevatedButton(
                               onPressed: _loading ? null : _submit,
