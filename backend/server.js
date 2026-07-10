@@ -358,8 +358,17 @@ function logTokenUsage(kind, usage) {
     console.log(`[${kind}] token usage: unavailable`);
     return;
   }
+
+  const input_tokens = usage.input_tokens ?? usage.prompt_tokens;
+  const output_tokens = usage.output_tokens ?? usage.completion_tokens;
+  const total_tokens =
+    usage.total_tokens ??
+    (input_tokens != null && output_tokens != null
+      ? input_tokens + output_tokens
+      : undefined);
+
   console.log(
-    `[${kind}] tokens prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
+    `[${kind}] input_tokens=${input_tokens} output_tokens=${output_tokens} total_tokens=${total_tokens}`,
   );
 }
 

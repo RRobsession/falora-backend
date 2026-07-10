@@ -28,7 +28,7 @@ function resolveGooglePlayServiceAccount() {
     label: 'Google Play',
     jsonEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
     pathEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_PATH',
-    defaultPath: null,
+    defaultPath: path.join(__dirname, 'google-play-service-account.json'),
   });
   if (playLoaded) return playLoaded.credentials;
 

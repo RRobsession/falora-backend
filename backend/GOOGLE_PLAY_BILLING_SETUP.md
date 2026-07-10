@@ -1,24 +1,59 @@
 # Google Play Billing Setup
 
-## 1. Service account
+## Durum kontrolü
 
-1. Google Cloud Console'da bir service account oluşturun.
-2. JSON private key indirin.
-3. Play Console > `Setup` > `API access` altında bu service account'u bağlayın.
-4. Uygulama için en az ürün/satın alma görüntüleme yetkisi verin.
+```bash
+cd backend
+npm run billing:verify
+```
 
-## 2. Backend env
+Başarılı çıktı: `OK: Play billing doğrulama erişimi hazır.`
 
-`.env` içine aşağıdaki alanları ekleyin:
+## 1. Google Cloud API (bir kez)
+
+Google Play Android Developer API etkin olmalı:
+
+https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview?project=falora35
+
+## 2. Service account
+
+Billing için ayrı service account kullanın (ör. `falora-play-billing@falora35.iam.gserviceaccount.com`).
+
+JSON key dosyası: `backend/google-play-service-account.json` (git'e eklenmez).
+
+## 3. Play Console yetkisi (zorunlu)
+
+Play Console > **Users and permissions** > **Invite new users**
+
+- E-posta: billing service account adresi (`...@...iam.gserviceaccount.com`)
+- Uygulama: `com.rrlime.falora`
+- Yetkiler:
+  - **View financial data**
+  - **Manage orders and subscriptions**
+
+Service account davet onayı beklemez; kaydettikten sonra aktif olur.
+
+Otomatik (tarayıcı OAuth): `npm run billing:setup`  
+Manuel adımlar: `npm run billing:setup -- --manual`
+
+## 4. Backend env
+
+Yerel `.env`:
 
 ```env
 GOOGLE_PLAY_PACKAGE_NAME=com.rrlime.falora
 GOOGLE_PLAY_SERVICE_ACCOUNT_PATH=./google-play-service-account.json
 ```
 
-Alternatif olarak JSON içeriğini tek satır `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` olarak verebilirsiniz.
+Railway Variables (production):
 
-## 3. Play Console products
+```bash
+node scripts/print-railway-play-env.js
+```
+
+Çıktıdaki `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` değerini Railway'e ekleyin ve redeploy edin.
+
+## 5. Play Console products
 
 Managed product kimlikleri (yalnızca jeton paketleri):
 
