@@ -2,13 +2,7 @@ const { Resend } = require('resend');
 
 function resolveFromAddress() {
   const raw = (process.env.RESEND_FROM_EMAIL || '').trim();
-  if (!raw) {
-    return null;
-  }
-  if (raw.includes('<') && raw.includes('>')) {
-    return raw.replace(/^[^<]*/, 'Falora ');
-  }
-  return `Falora <${raw}>`;
+  return raw || null;
 }
 
 /**

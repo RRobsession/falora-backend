@@ -11,7 +11,7 @@ Flutter → Railway (`/auth/...`) → Firebase Admin (link) → Resend → kulla
 | Variable | Zorunlu | Örnek |
 |----------|---------|--------|
 | `RESEND_API_KEY` | Evet | `re_...` |
-| `RESEND_FROM_EMAIL` | Evet | `Falora <noreply@domain.com>` |
+| `RESEND_FROM_EMAIL` | Evet | `Tombik Teyze <noreply@domain.com>` |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Evet (zaten var) | service account JSON |
 | `FIREBASE_EMAIL_CONTINUE_URL` | Hayır | `https://falora35.firebaseapp.com` |
 
