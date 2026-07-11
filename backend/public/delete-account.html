@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hesap Silme Talebi — Tombik Teyze</title>
+  <meta
+    name="description"
+    content="Tombik Teyze (com.rrlime.falora) uygulaması için hesap ve kişisel veri silme talebi."
+  />
+  <style>
+    :root {
+      --bg: #f7f0e4;
+      --ink: #2a2118;
+      --muted: #6b5a45;
+      --card: #fffaf2;
+      --line: #e2d3bc;
+      --accent: #8b4513;
+      --accent-hover: #6e3610;
+      --ok: #1f6b3a;
+      --ok-bg: #e8f6ec;
+      --err: #8a1f1f;
+      --err-bg: #fdecec;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(139, 69, 19, 0.08), transparent 40%),
+        linear-gradient(180deg, #fbf6ec 0%, var(--bg) 100%);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    main {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+
+    .brand {
+      font-size: 0.95rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 2rem;
+      line-height: 1.2;
+    }
+
+    .lead {
+      margin: 0 0 28px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 1.05rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(42, 33, 24, 0.06);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    input[type="email"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.12);
+    }
+
+    .hint {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    button {
+      margin-top: 20px;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 14px 18px;
+      background: var(--accent);
+      color: #fffaf2;
+      font: inherit;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--accent-hover); }
+    button:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .message {
+      display: none;
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      line-height: 1.55;
+    }
+
+    .message.ok {
+      display: block;
+      background: var(--ok-bg);
+      color: var(--ok);
+      border: 1px solid #b9e0c5;
+    }
+
+    .message.err {
+      display: block;
+      background: var(--err-bg);
+      color: var(--err);
+      border: 1px solid #f0c2c2;
+    }
+
+    .info {
+      margin-top: 28px;
+      padding: 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .info h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      color: var(--ink);
+    }
+
+    .info ul {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+
+    .info li { margin: 0.4rem 0; }
+
+    footer {
+      margin-top: 32px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="brand">Tombik Teyze</p>
+    <h1>Hesap Silme Talebi</h1>
+    <p class="lead">
+      Bu sayfa, Google Play’de yayınlanan <strong>Tombik Teyze</strong>
+      (<code>com.rrlime.falora</code>) mobil uygulaması için hesap ve ilişkili
+      kişisel verilerin silinmesi talebini iletmenizi sağlar.
+    </p>
+
+    <section class="card" aria-labelledby="form-title">
+      <h2 id="form-title" style="margin:0 0 16px;font-size:1.15rem;">Silme talebi gönder</h2>
+      <form id="delete-form" novalidate>
+        <label for="email">Hesap e-posta adresi</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          required
+          placeholder="ornek@email.com"
+        />
+        <p class="hint">
+          Tombik Teyze hesabınıza kayıtlı e-posta adresini girin. Talebiniz
+          alındıktan sonra hesabınız ve ilişkili verileriniz silinir.
+        </p>
+        <button id="submit-btn" type="submit">Hesap Silme Talebi Gönder</button>
+        <div id="message" class="message" role="status" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section class="info">
+      <h2>Ne silinir?</h2>
+      <ul>
+        <li>Firebase Auth hesap kaydı</li>
+        <li>Profil ve jeton bakiyesi bilgileri</li>
+        <li>Fal, çift uyumu ve manuel fal talepleri</li>
+        <li>Bildirim token ve ilişkili hesap verileri</li>
+      </ul>
+      <p style="margin-top:14px;">
+        Uygulama içinden de silebilirsiniz: Profil → Hesabımı Sil.
+      </p>
+    </section>
+
+    <footer>
+      <p>
+        Destek:
+        <a href="mailto:prserdar.cakir@gmail.com">prserdar.cakir@gmail.com</a>
+      </p>
+      <p>
+        <a href="https://falora35.web.app/privacy.html">Gizlilik Politikası</a>
+        ·
+        <a href="https://falora35.web.app/terms.html">Kullanıcı Sözleşmesi</a>
+      </p>
+      <p>© Tombik Teyze</p>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var form = document.getElementById('delete-form');
+      var emailInput = document.getElementById('email');
+      var button = document.getElementById('submit-btn');
+      var message = document.getElementById('message');
+
+      function showMessage(type, text) {
+        message.className = 'message ' + type;
+        message.textContent = text;
+      }
+
+      form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var email = (emailInput.value || '').trim();
+
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showMessage('err', 'Lütfen geçerli bir e-posta adresi girin.');
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'Gönderiliyor...';
+        message.className = 'message';
+        message.textContent = '';
+
+        try {
+          var response = await fetch('/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email }),
+          });
+
+          var data = {};
+          try {
+            data = await response.json();
+          } catch (_) {}
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Talep gönderilemedi.');
+          }
+
+          showMessage(
+            'ok',
+            data.message ||
+              'Hesap silme talebiniz alındı. Tombik Teyze hesabınız ve ilişkili verileriniz silinmiştir veya işleme alınmıştır.',
+          );
+          form.reset();
+        } catch (error) {
+          showMessage(
+            'err',
+            error.message || 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.',
+          );
+        } finally {
+          button.disabled = false;
+          button.textContent = 'Hesap Silme Talebi Gönder';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

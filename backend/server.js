@@ -515,6 +515,7 @@ const {
   startFortuneRetentionCleanupLoop,
 } = require('./fortune_retention');
 const { sendVerificationEmailWithIdToken } = require('./auth_verification');
+const { processAccountDeletionRequest } = require('./account_deletion');
 
 async function saveGeneratedResult(req, result, collection) {
   const requestId = req.body?.requestId;
@@ -542,6 +543,28 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: false }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/delete-account', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'delete-account.html'));
+});
+
+app.post('/delete-account', async (req, res) => {
+  try {
+    const email = req.body?.email;
+    const result = await processAccountDeletionRequest({
+      email,
+      source: 'web',
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('account deletion error:', err.message);
+    return res
+      .status(err.statusCode || 500)
+      .json({ error: err.message || 'Hesap silme talebi işlenemedi.' });
+  }
+});
 
 app.get('/health', (_req, res) => {
   res.json({
