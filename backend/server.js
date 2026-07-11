@@ -514,7 +514,10 @@ const {
   RETENTION_DAYS,
   startFortuneRetentionCleanupLoop,
 } = require('./fortune_retention');
-const { sendVerificationEmailWithIdToken } = require('./auth_verification');
+const {
+  sendVerificationEmailForAuthUser,
+  sendPasswordResetEmailForAddress,
+} = require('./auth_verification');
 const { processAccountDeletionRequest } = require('./account_deletion');
 
 async function saveGeneratedResult(req, result, collection) {
@@ -577,28 +580,37 @@ app.get('/health', (_req, res) => {
 });
 
 app.post('/auth/send-verification-email', requireAuth, async (req, res) => {
-  if (req.auth?.emailVerified) {
-    return res.json({ ok: true, alreadyVerified: true });
-  }
-
-  const header = req.headers.authorization || '';
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  if (!match) {
-    return res.status(401).json({ ok: false, error: 'Kimlik doğrulama gerekli' });
-  }
-
   try {
-    const result = await sendVerificationEmailWithIdToken(match[1]);
-    if (!result.ok) {
-      return res.status(502).json({
-        ok: false,
-        error: result.reason || 'verification_send_failed',
-      });
-    }
-    return res.json({ ok: true, email: result.email });
+    const result = await sendVerificationEmailForAuthUser(req.auth);
+    return res.json(result);
   } catch (err) {
     console.error('AUTH VERIFY EMAIL ERROR:', err.message);
-    return res.status(500).json({ ok: false, error: 'verification_send_failed' });
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      error: err.message || 'verification_send_failed',
+    });
+  }
+});
+
+app.post('/auth/send-password-reset-email', async (req, res) => {
+  try {
+    const email = req.body?.email;
+    const clientKey =
+      req.ip ||
+      req.headers['x-forwarded-for'] ||
+      req.headers['x-real-ip'] ||
+      'unknown';
+    const result = await sendPasswordResetEmailForAddress({
+      email,
+      clientKey: String(clientKey),
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('AUTH RESET EMAIL ERROR:', err.message);
+    return res.status(err.statusCode || 500).json({
+      ok: false,
+      error: err.message || 'password_reset_send_failed',
+    });
   }
 });
 
@@ -1008,6 +1020,11 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('OpenAI yapılandırması hazır.');
   console.log(
     `Google Play Billing package: ${process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.rrlime.falora'}`,
+  );
+  console.log(
+    process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL
+      ? 'Resend auth e-posta servisi yapılandırıldı.'
+      : 'Resend auth e-posta env eksik (RESEND_API_KEY / RESEND_FROM_EMAIL).',
   );
   console.log(
     process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON ||

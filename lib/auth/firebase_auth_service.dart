@@ -7,6 +7,7 @@ import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
 import 'package:falora/services/referral_service.dart';
 import 'package:falora/services/notification_service.dart';
+import 'package:falora/services/auth_email_backend_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/token_config.dart';
 import 'package:flutter/foundation.dart';
@@ -307,9 +308,11 @@ class FirebaseAuthService implements AuthService {
   Future<void> sendPasswordResetEmail({required String email}) async {
     final normalizedEmail = _normalizeEmail(email);
     try {
-      await _auth.sendPasswordResetEmail(email: normalizedEmail);
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(mapFirebaseAuthError(e));
+      await AuthEmailBackendService.instance.sendPasswordResetEmail(
+        email: normalizedEmail,
+      );
+    } on AuthEmailBackendException catch (e) {
+      throw AuthException(e.message);
     } catch (e) {
       throw AuthException('Şifre sıfırlama bağlantısı gönderilemedi: $e');
     }
