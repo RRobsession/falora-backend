@@ -91,10 +91,16 @@ class NotificationBackendService {
 
   Future<void> scheduleNotify({
     required String userId,
-    required bool isCouple,
     required DateTime notifyAt,
     required String readingId,
+    bool isCouple = false,
+    bool isManual = false,
   }) async {
+    final type = isManual
+        ? 'manual'
+        : isCouple
+            ? 'couple'
+            : 'fortune';
     try {
       final uri = Uri.parse('$apiBaseUrl/schedule-notify');
       final response = await http
@@ -103,7 +109,7 @@ class NotificationBackendService {
             headers: await _headers(),
             body: jsonEncode({
               'userId': userId,
-              'type': isCouple ? 'couple' : 'fortune',
+              'type': type,
               'notifyAt': notifyAt.toUtc().toIso8601String(),
               'readingId': readingId,
             }),

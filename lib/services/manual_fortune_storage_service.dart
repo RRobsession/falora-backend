@@ -125,6 +125,34 @@ class ManualFortuneStorageService {
 
 
 
+  Future<FortuneReading?> fetchReadingById(String userId, String id) async {
+
+    try {
+
+      final doc = await _db.collection(_collection).doc(id).get();
+
+      if (!doc.exists) return null;
+
+      final data = doc.data();
+
+      if (data == null || data['userId'] != userId) return null;
+
+      return ManualFortuneRequest.fromFirestore(doc.id, data)
+
+          .toFortuneReading();
+
+    } catch (e) {
+
+      debugPrint('MANUAL fetchReadingById error: $e');
+
+      return null;
+
+    }
+
+  }
+
+
+
   Stream<List<ManualFortuneRequest>> watchPendingForAdmin() {
 
     debugPrint('ADMIN REQUESTS LISTEN START');
@@ -181,6 +209,8 @@ class ManualFortuneStorageService {
 
     required String zodiac,
 
+    required String maritalStatus,
+
     required String intention,
 
     required List<String> questions,
@@ -227,6 +257,7 @@ class ManualFortuneStorageService {
           'name': name,
           'age': age,
           'zodiac': zodiac,
+          'maritalStatus': maritalStatus,
           'intention': intention,
           'questions': questions,
           if (imageInfo.isNotEmpty) 'imageInfo': imageInfo,

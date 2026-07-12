@@ -10,8 +10,6 @@ import 'package:falora/picked_image.dart';
 
 import 'package:falora/services/manual_fortune_storage_service.dart';
 
-import 'package:falora/services/notification_backend_service.dart';
-
 import 'package:falora/services/notification_service.dart';
 
 import 'package:falora/theme/falora_theme.dart';
@@ -468,12 +466,6 @@ class _AdminPendingRequestCardState extends State<_AdminPendingRequestCard> {
         adminUid: adminUid,
 
         answerImage: _answerImage,
-
-      );
-
-      await NotificationBackendService.instance.notifyManualFortuneReady(
-
-        userId: widget.request.userId,
 
       );
 
@@ -1001,7 +993,8 @@ class _RequestSummaryHeader extends StatelessWidget {
 
         Text(
 
-          '${request.name}, ${request.age}, ${request.zodiac}',
+          '${request.name}, ${request.age}, ${request.zodiac}'
+          '${request.maritalStatus.isNotEmpty ? ', ${request.maritalStatus}' : ''}',
 
           style: const TextStyle(color: faloraTextSecondary),
 

@@ -347,6 +347,21 @@ function scheduleInMemoryTimer(scheduleId, userId, type, notifyAtMs) {
 async function isReadingReadyForNotification(type, readingId, notifyAtMs) {
   if (Date.now() < notifyAtMs) return false;
 
+  if (type === 'manual') {
+    const doc = await firestore
+      .collection('manual_fortune_requests')
+      .doc(readingId)
+      .get();
+    if (!doc.exists) return false;
+
+    const data = doc.data() || {};
+    const answerText =
+      typeof data.answerText === 'string' ? data.answerText.trim() : '';
+    if (!answerText) return false;
+    if (data.status !== 'answered') return false;
+    return true;
+  }
+
   const collection =
     type === 'couple'
       ? 'couple_compatibility_requests'

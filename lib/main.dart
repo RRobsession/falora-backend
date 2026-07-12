@@ -541,7 +541,9 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     final isCouple = identical(list, _coupleCompatibilityRequests);
     final fresh = isCouple
         ? await storage.fetchCoupleById(_userId, id)
-        : await storage.fetchFortuneById(_userId, id);
+        : await storage.fetchFortuneById(_userId, id) ??
+            await ManualFortuneStorageService.instance
+                .fetchReadingById(_userId, id);
     if (fresh == null) return;
 
     final idx = list.indexWhere((r) => r.id == id);
@@ -666,6 +668,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         name: data['name'] as String? ?? '',
         age: (data['age'] as num?)?.toInt() ?? 0,
         burc: data['zodiac'] as String? ?? '',
+        maritalStatus: data['maritalStatus'] as String? ?? '',
         niyet: data['intention'] as String? ?? '',
         photoNames: imageNames,
         selectedTarotCards: selectedTarotCards,
@@ -887,14 +890,16 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
   void _scheduleReadyPushNotification({
     required String readingId,
     required DateTime readyAt,
-    required bool isCouple,
+    bool isCouple = false,
+    bool isManual = false,
   }) {
     unawaited(
       NotificationBackendService.instance.scheduleNotify(
         userId: _userId,
-        isCouple: isCouple,
         notifyAt: readyAt,
         readingId: readingId,
+        isCouple: isCouple,
+        isManual: isManual,
       ),
     );
   }
@@ -1330,6 +1335,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     required String name,
     required int age,
     required String burc,
+    required String maritalStatus,
     required String niyet,
     List<String>? photoNames,
     List<TarotCardSelection>? selectedTarotCards,
@@ -1357,6 +1363,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         name: name,
         age: age,
         zodiac: burc,
+        maritalStatus: maritalStatus,
         intention: niyet,
         tellerId: tellerId,
         requestId: requestId,
@@ -1628,6 +1635,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     String name,
     int age,
     String burc,
+    String maritalStatus,
     String niyet, {
     List<String>? photoNames,
     List<TarotCardSelection>? selectedTarotCards,
@@ -1703,6 +1711,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           name: name,
           age: age,
           zodiac: burc,
+          maritalStatus: maritalStatus,
           intention: niyet,
           tokenCost: submitCost,
           imageNames: photoNames ?? const [],
@@ -1745,23 +1754,23 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
 
       final summary = cat == FortuneCategory.tarot &&
               (selectedTarotCards?.isNotEmpty ?? false)
-          ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+          ? '${cat.label} — ${teller.name} — $name, $age, $burc, $maritalStatus\n'
               'Niyet: $niyet\n'
               '${selectedTarotCards!.length} tarot kartı seçildi'
           : cat == FortuneCategory.iskambil &&
                   (selectedPlayingCards?.isNotEmpty ?? false)
-              ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+              ? '${cat.label} — ${teller.name} — $name, $age, $burc, $maritalStatus\n'
                   'Niyet: $niyet\n'
                   '${selectedPlayingCards!.length} iskambil kartı seçildi'
           : cat == FortuneCategory.bakla && baklaScatter != null
-              ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+              ? '${cat.label} — ${teller.name} — $name, $age, $burc, $maritalStatus\n'
                   'Niyet: $niyet\n'
                   '${baklaScatter.beanCount} bakla döküldü'
               : cat == FortuneCategory.su && waterScatter != null
-                  ? '${cat.label} — ${teller.name} — $name, $age, $burc\n'
+                  ? '${cat.label} — ${teller.name} — $name, $age, $burc, $maritalStatus\n'
                       'Niyet: $niyet\n'
                       'Semboller: ${waterScatter.symbols.join(', ')}'
-              : '${cat.label} — ${teller.name} — $name, $age, $burc\nNiyet: $niyet';
+              : '${cat.label} — ${teller.name} — $name, $age, $burc, $maritalStatus\nNiyet: $niyet';
       final reading = _newPendingReading(
         id: requestId,
         category: cat,
@@ -1786,6 +1795,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           name: name,
           age: age,
           burc: burc,
+          maritalStatus: maritalStatus,
           niyet: niyet,
           photoNames: photoNames,
           selectedTarotCards: selectedTarotCards,
@@ -1994,6 +2004,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     required String name,
     required int age,
     required String zodiac,
+    required String maritalStatus,
     required String intention,
     required List<String> questions,
     List<PickedImage>? images,
@@ -2038,6 +2049,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         name: name,
         age: age,
         zodiac: zodiac,
+        maritalStatus: maritalStatus,
         intention: intention,
         questions: questions,
         images: images,
@@ -2058,7 +2070,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       tokensDeducted = true;
 
       final summary =
-          '${category.label} — ${reader.name} (Özel)\n$name, $age, $zodiac\nNiyet: $intention';
+          '${category.label} — ${reader.name} (Özel)\n$name, $age, $zodiac, $maritalStatus\nNiyet: $intention';
       final reading = _newPendingReading(
         id: requestId,
         category: category,
@@ -2070,6 +2082,13 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       _registerReading(reading);
       _addFortuneRequest(reading);
       _scheduleReadyAtUnlock(reading, _fortuneRequests);
+      if (reading.readyAt != null) {
+        _scheduleReadyPushNotification(
+          readingId: requestId,
+          readyAt: reading.readyAt!,
+          isManual: true,
+        );
+      }
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'MANUAL',
@@ -2694,6 +2713,7 @@ typedef NormalSubmit = Future<void> Function(
   String name,
   int age,
   String burc,
+  String maritalStatus,
   String niyet, {
   List<String>? photoNames,
   List<TarotCardSelection>? selectedTarotCards,
@@ -2728,6 +2748,7 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
+  String _medeniDurum = maritalStatusOptions.first;
   bool _submitting = false;
   List<TarotCardSelection> _selectedTarotCards = const [];
   List<PlayingCardSelection> _selectedPlayingCards = const [];
@@ -2805,6 +2826,7 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
         _nameCtrl.text.trim(),
         int.parse(_ageCtrl.text.trim()),
         _burc,
+        _medeniDurum,
         _niyetCtrl.text.trim(),
         selectedTarotCards:
             _isTarot ? _selectedTarotCards : null,
@@ -2861,6 +2883,16 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
                 onChanged: (v) => setState(() => _burc = v ?? _burc),
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Medeni Durum',
+                value: _medeniDurum,
+                items: maritalStatusOptions
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => _medeniDurum = v ?? _medeniDurum),
               ),
               const SizedBox(height: 18),
               FaloraLabeledFormField(
@@ -2969,6 +3001,7 @@ class _KahveFormPageState extends State<KahveFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
+  String _medeniDurum = maritalStatusOptions.first;
   PickedImage? _fincan1;
   PickedImage? _fincan2;
   PickedImage? _tabak;
@@ -3015,6 +3048,7 @@ class _KahveFormPageState extends State<KahveFormPage> {
         _nameCtrl.text.trim(),
         int.parse(_ageCtrl.text.trim()),
         _burc,
+        _medeniDurum,
         _niyetCtrl.text.trim(),
         photoNames: [
           _fincan1!.name,
@@ -3075,6 +3109,16 @@ class _KahveFormPageState extends State<KahveFormPage> {
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
                 onChanged: (v) => setState(() => _burc = v ?? _burc),
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Medeni Durum',
+                value: _medeniDurum,
+                items: maritalStatusOptions
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => _medeniDurum = v ?? _medeniDurum),
               ),
               const SizedBox(height: 18),
               FaloraLabeledFormField(
@@ -3170,6 +3214,7 @@ class _BaklaFormPageState extends State<BaklaFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
+  String _medeniDurum = maritalStatusOptions.first;
   bool _submitting = false;
 
   @override
@@ -3205,6 +3250,7 @@ class _BaklaFormPageState extends State<BaklaFormPage> {
         _nameCtrl.text.trim(),
         int.parse(_ageCtrl.text.trim()),
         _burc,
+        _medeniDurum,
         _niyetCtrl.text.trim(),
         baklaScatter: scatter,
       );
@@ -3270,6 +3316,16 @@ class _BaklaFormPageState extends State<BaklaFormPage> {
                 onChanged: (v) => setState(() => _burc = v ?? _burc),
               ),
               const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Medeni Durum',
+                value: _medeniDurum,
+                items: maritalStatusOptions
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => _medeniDurum = v ?? _medeniDurum),
+              ),
+              const SizedBox(height: 18),
               FaloraLabeledFormField(
                 label: 'Niyet',
                 controller: _niyetCtrl,
@@ -3315,6 +3371,7 @@ class _SuFormPageState extends State<SuFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
+  String _medeniDurum = maritalStatusOptions.first;
   bool _submitting = false;
 
   @override
@@ -3350,6 +3407,7 @@ class _SuFormPageState extends State<SuFormPage> {
         _nameCtrl.text.trim(),
         int.parse(_ageCtrl.text.trim()),
         _burc,
+        _medeniDurum,
         _niyetCtrl.text.trim(),
         waterScatter: scatter,
       );
@@ -3413,6 +3471,16 @@ class _SuFormPageState extends State<SuFormPage> {
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
                 onChanged: (v) => setState(() => _burc = v ?? _burc),
+              ),
+              const SizedBox(height: 18),
+              FaloraLabeledDropdown<String>(
+                label: 'Medeni Durum',
+                value: _medeniDurum,
+                items: maritalStatusOptions
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => _medeniDurum = v ?? _medeniDurum),
               ),
               const SizedBox(height: 18),
               FaloraLabeledFormField(
