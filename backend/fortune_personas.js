@@ -382,15 +382,20 @@ function resolveRequestId(body, fallbackPrefix = 'fortune') {
   return `${fallbackPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function buildUniquenessDirective(requestId, { intention, name, category }) {
+function buildUniquenessDirective(
+  requestId,
+  { intention, name, category, maritalStatus },
+) {
   const intentSnippet = String(intention ?? '')
     .trim()
     .slice(0, 80);
   const namePart = String(name ?? '').trim();
   const categoryPart = String(category ?? '').trim();
+  const maritalPart = String(maritalStatus ?? '').trim();
   return `BENZERSİZLİK (oturum ${requestId}):
 - Bu yorum önceki tüm fallardan, şablon metinlerden ve tekrarlayan fal kalıplarından farklı olsun.
 - ${categoryPart ? `Kategori: ${categoryPart}.` : ''} ${namePart ? `Danışan: ${namePart}.` : ''}
+- ${maritalPart ? `Medeni durum: ${maritalPart} — aşk/ilişki bağlamını buna göre yorumla.` : ''}
 - Niyet: "${intentSnippet}" — bu niyete özel somut imgeler üret; jenerik metin yazma.
 - Aynı cümleyi veya cümle iskeletini birden fazla kez kullanma.
 - Giriş ve kapanış cümlelerini yalnızca bu oturuma özgü kur.`;
@@ -469,12 +474,24 @@ Kendini ${persona.name} olarak tut; başka isim veya persona kullanma.`;
 }
 
 function buildFortuneUserPrompt(body, teller, structure) {
-  const { category, name, age, zodiac, intention, imageNames, selectedCards } =
-    body;
+  const {
+    category,
+    name,
+    age,
+    zodiac,
+    maritalStatus,
+    intention,
+    imageNames,
+    selectedCards,
+  } = body;
   const requestId = resolveRequestId(body);
   const photos =
     Array.isArray(imageNames) && imageNames.length > 0
       ? `Fotoğraf: ${imageNames.length} adet.`
+      : '';
+  const marital =
+    typeof maritalStatus === 'string' && maritalStatus.trim()
+      ? maritalStatus.trim()
       : '';
 
   const tarotFlowHint = pickTarotCardFlowHint();
@@ -493,10 +510,15 @@ function buildFortuneUserPrompt(body, teller, structure) {
     intention,
     name,
     category,
+    maritalStatus: marital,
   });
+  const maritalLine = marital
+    ? `, medeni durum: ${marital}`
+    : '';
 
   return `${ritualSection}${guidance}
-Danışan: ${name}, ${age} yaş, ${zodiac}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
+Danışan: ${name}, ${age} yaş, ${zodiac}${maritalLine}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
+${marital ? `Medeni durumu (${marital}) aşk, bağ ve yakın gelecek yorumlarında dikkate al; buna aykırı varsayımlar kurma.` : ''}
 Falcı: ${teller.name} | Yapı: ${structure.name}
 ${cardsSection}${uniqueness}
 [id:${requestId}]
