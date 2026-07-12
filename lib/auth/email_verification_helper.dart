@@ -1,10 +1,31 @@
-import 'package:falora/auth/auth_service.dart';
-import 'package:falora/services/auth_email_backend_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:falora/auth/auth_service.dart';
+import 'package:falora/auth/firebase_auth_service.dart';
+import 'package:falora/firebase_options.dart';
 import 'package:flutter/foundation.dart';
 
-/// Doğrulama e-postası yalnızca Railway → Resend üzerinden gönderilir.
-/// Firebase varsayılan `sendEmailVerification` kullanılmaz.
+/// Firebase e-posta doğrulama bağlantısı için yetkili domain.
+const emailVerificationContinueUrl = 'https://falora35.firebaseapp.com';
+
+ActionCodeSettings buildEmailVerificationActionCodeSettings() {
+  if (kIsWeb) {
+    return ActionCodeSettings(
+      url: emailVerificationContinueUrl,
+      handleCodeInApp: true,
+    );
+  }
+
+  return ActionCodeSettings(
+    url: emailVerificationContinueUrl,
+    handleCodeInApp: true,
+    androidPackageName: 'com.rrlime.falora',
+    androidInstallApp: true,
+    androidMinimumVersion: '1',
+    iOSBundleId: DefaultFirebaseOptions.ios.iosBundleId,
+  );
+}
+
+/// Firebase Authentication üzerinden doğrulama e-postası gönderir.
 Future<void> sendVerificationEmail() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) {
@@ -12,14 +33,20 @@ Future<void> sendVerificationEmail() async {
   }
   if (user.emailVerified) return;
 
-  debugPrint('EMAIL_VERIFICATION_SEND_START uid=${user.uid} via=railway');
+  debugPrint('EMAIL_VERIFICATION_SEND_START uid=${user.uid} via=firebase_auth');
+
   try {
-    await AuthEmailBackendService.instance.sendVerificationEmail();
+    await user.sendEmailVerification(
+      buildEmailVerificationActionCodeSettings(),
+    );
     debugPrint('EMAIL_VERIFICATION_SEND_SUCCESS');
-  } on AuthEmailBackendException catch (e) {
-    throw AuthException(e.message);
+  } on FirebaseAuthException catch (e) {
+    debugPrint(
+      'EMAIL_VERIFICATION_FAILED code=${e.code} message=${e.message}',
+    );
+    throw AuthException(FirebaseAuthService.mapVerificationEmailError(e));
   } catch (e, stackTrace) {
-    debugPrint('EMAIL_VERIFICATION_BACKEND_FAILED: $e');
+    debugPrint('EMAIL_VERIFICATION_FAILED: $e');
     debugPrint(stackTrace.toString());
     throw AuthException(
       'Doğrulama e-postası gönderilemedi. Lütfen tekrar deneyin.',

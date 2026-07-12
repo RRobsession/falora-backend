@@ -514,10 +514,6 @@ const {
   RETENTION_DAYS,
   startFortuneRetentionCleanupLoop,
 } = require('./fortune_retention');
-const {
-  sendVerificationEmailForAuthUser,
-  sendPasswordResetEmailForAddress,
-} = require('./auth_verification');
 const { processAccountDeletionRequest } = require('./account_deletion');
 
 async function saveGeneratedResult(req, result, collection) {
@@ -574,48 +570,9 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     openAiConfigured: true,
     fcmConfigured: isFcmReady(),
-    resendConfigured: Boolean(
-      process.env.RESEND_API_KEY?.trim() &&
-        process.env.RESEND_FROM_EMAIL?.trim(),
-    ),
     model: MODEL,
     visionModel: VISION_MODEL,
   });
-});
-
-app.post('/auth/send-verification-email', requireAuth, async (req, res) => {
-  try {
-    const result = await sendVerificationEmailForAuthUser(req.auth);
-    return res.json(result);
-  } catch (err) {
-    console.error('AUTH VERIFY EMAIL ERROR:', err.message);
-    return res.status(err.statusCode || 500).json({
-      ok: false,
-      error: err.message || 'verification_send_failed',
-    });
-  }
-});
-
-app.post('/auth/send-password-reset-email', async (req, res) => {
-  try {
-    const email = req.body?.email;
-    const clientKey =
-      req.ip ||
-      req.headers['x-forwarded-for'] ||
-      req.headers['x-real-ip'] ||
-      'unknown';
-    const result = await sendPasswordResetEmailForAddress({
-      email,
-      clientKey: String(clientKey),
-    });
-    return res.json(result);
-  } catch (err) {
-    console.error('AUTH RESET EMAIL ERROR:', err.message);
-    return res.status(err.statusCode || 500).json({
-      ok: false,
-      error: err.message || 'password_reset_send_failed',
-    });
-  }
 });
 
 app.post('/send-notification', requireAuth, async (req, res) => {
@@ -1024,11 +981,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('OpenAI yapılandırması hazır.');
   console.log(
     `Google Play Billing package: ${process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.rrlime.falora'}`,
-  );
-  console.log(
-    process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL
-      ? 'Resend auth e-posta servisi yapılandırıldı.'
-      : 'Resend auth e-posta env eksik (RESEND_API_KEY / RESEND_FROM_EMAIL).',
   );
   console.log(
     process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON ||
