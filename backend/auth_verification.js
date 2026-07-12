@@ -140,13 +140,14 @@ async function sendVerificationEmailForAuthUser(auth) {
     return { ok: true, alreadyVerified: false, email };
   } catch (error) {
     console.error('AUTH VERIFY Resend failed:', error.message);
+    const isConfig = error.code === 'resend_not_configured';
     const wrapped = new Error(
-      error.code === 'resend_not_configured'
+      isConfig
         ? 'E-posta servisi yapılandırılmamış.'
-        : 'Doğrulama e-postası gönderilemedi.',
+        : error.message || 'Doğrulama e-postası gönderilemedi.',
     );
-    wrapped.statusCode = error.code === 'resend_not_configured' ? 503 : 502;
-    wrapped.code = error.code;
+    wrapped.statusCode = isConfig ? 503 : 502;
+    wrapped.code = error.code || 'resend_send_failed';
     throw wrapped;
   }
 }
@@ -211,13 +212,14 @@ async function sendPasswordResetEmailForAddress({ email, clientKey }) {
     return { ok: true };
   } catch (error) {
     console.error('AUTH RESET Resend failed:', error.message);
+    const isConfig = error.code === 'resend_not_configured';
     const wrapped = new Error(
-      error.code === 'resend_not_configured'
+      isConfig
         ? 'E-posta servisi yapılandırılmamış.'
-        : 'Şifre sıfırlama e-postası gönderilemedi.',
+        : error.message || 'Şifre sıfırlama e-postası gönderilemedi.',
     );
-    wrapped.statusCode = error.code === 'resend_not_configured' ? 503 : 502;
-    wrapped.code = error.code;
+    wrapped.statusCode = isConfig ? 503 : 502;
+    wrapped.code = error.code || 'resend_send_failed';
     throw wrapped;
   }
 }
