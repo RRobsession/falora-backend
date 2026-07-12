@@ -120,9 +120,21 @@ async function sendVerificationEmailForAuthUser(auth) {
       .auth()
       .generateEmailVerificationLink(email, buildActionCodeSettings());
   } catch (error) {
-    console.error('generateEmailVerificationLink failed:', error.message);
-    const wrapped = new Error('Doğrulama bağlantısı oluşturulamadı.');
-    wrapped.statusCode = 500;
+    console.error(
+      'generateEmailVerificationLink failed:',
+      error.code || '',
+      error.message,
+    );
+    const raw = String(error.message || '');
+    let detail = 'Doğrulama bağlantısı oluşturulamadı.';
+    if (raw.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
+      detail =
+        'Çok fazla doğrulama denemesi yapıldı. Lütfen 15–30 dakika sonra tekrar deneyin.';
+    } else if (error.code) {
+      detail = `Doğrulama bağlantısı oluşturulamadı (${error.code}).`;
+    }
+    const wrapped = new Error(detail);
+    wrapped.statusCode = raw.includes('TOO_MANY_ATTEMPTS') ? 429 : 500;
     throw wrapped;
   }
 
