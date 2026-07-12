@@ -574,6 +574,10 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     openAiConfigured: true,
     fcmConfigured: isFcmReady(),
+    resendConfigured: Boolean(
+      process.env.RESEND_API_KEY?.trim() &&
+        process.env.RESEND_FROM_EMAIL?.trim(),
+    ),
     model: MODEL,
     visionModel: VISION_MODEL,
   });
