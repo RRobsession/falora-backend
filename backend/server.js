@@ -124,7 +124,7 @@ const express = require('express');
 const OpenAI = require('openai');
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const VISION_MODEL = process.env.VISION_MODEL || 'gpt-4o-mini';
 const FORTUNE_MAX_COMPLETION_TOKENS =
   Number(process.env.FORTUNE_MAX_COMPLETION_TOKENS) || 650;
@@ -157,6 +157,7 @@ const {
   getFortuneTeller,
   pickFortunePersona,
   pickFortuneStructure,
+  pickFortuneStructureForTeller,
   pickCoupleStructure,
   buildFortuneSystemPrompt,
   buildCoupleSystemPrompt,
@@ -370,6 +371,87 @@ function logTokenUsage(kind, usage) {
   console.log(
     `[${kind}] input_tokens=${input_tokens} output_tokens=${output_tokens} total_tokens=${total_tokens}`,
   );
+}
+
+function countWords(text) {
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function expansionTokenBudget(teller, needed) {
+  const estimate = Math.ceil(needed * 2.8);
+  return Math.min(
+    Math.max(estimate, 120),
+    360,
+    teller.maxCompletionTokens,
+  );
+}
+
+async function generateFortuneForTeller(openai, teller, structure, body) {
+  const systemPrompt = buildFortuneSystemPrompt(teller, structure);
+  const baseUserPrompt = buildFortuneUserPrompt(body, teller, structure);
+  let lastWords = 0;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let userPrompt = baseUserPrompt;
+    if (attempt > 1) {
+      if (lastWords < teller.minWords) {
+        userPrompt = `${baseUserPrompt}
+
+YETERSİZ UZUNLUK: Önceki yanıt ${lastWords} kelimeydi; minimum ${teller.minWords} kelime şart. Aynı fal verisi ve ${teller.name} sesiyle metni baştan, daha kapsamlı ve en az ${teller.minWords} kelime olacak şekilde yeniden yaz. Maksimum ${teller.maxWords} kelime.`;
+      } else {
+        userPrompt = `${baseUserPrompt}
+
+FAZLA UZUN: Önceki yanıt ${lastWords} kelimeydi; maksimum ${teller.maxWords} kelime. Metni ${teller.minWords}-${teller.maxWords} aralığına sığdırarak yeniden yaz.`;
+      }
+    }
+
+    let result = await generate(
+      openai,
+      'fortune',
+      systemPrompt,
+      userPrompt,
+      teller.maxCompletionTokens,
+    );
+    let words = countWords(result);
+    lastWords = words;
+
+    if (words < teller.minWords) {
+      const needed = teller.minWords - words;
+      const expandPrompt = `Sen ${teller.name} olarak yazıyorsun. Mevcut fal yorumu ${words} kelime; en az ${teller.minWords} kelime olmalı.
+Aynı isim, niyet ve tonu koruyarak yoruma yaklaşık ${needed} kelimelik yoğun bir devam paragrafı ekle.
+Yalnızca eksik tamamlayıcı kısmı yaz; mevcut metni baştan yazma.
+Üst sınır: toplam ${teller.maxWords} kelimeyi aşma.
+
+MEVCUT YORUM:
+${result}`;
+      const addition = await generate(
+        openai,
+        'fortune-expand',
+        systemPrompt,
+        expandPrompt,
+        expansionTokenBudget(teller, needed),
+      );
+      result = sanitizeAiResult(`${result.trim()}\n\n${addition.trim()}`);
+      words = countWords(result);
+      lastWords = words;
+      console.log(
+        `[fortune] teller=${teller.id} expanded words=${words} target=${teller.minWords}-${teller.maxWords}`,
+      );
+    }
+
+    const inRange = words >= teller.minWords && words <= teller.maxWords;
+    console.log(
+      `[fortune] teller=${teller.id} words=${words} target=${teller.minWords}-${teller.maxWords} attempt=${attempt} ok=${inRange}`,
+    );
+    if (inRange || attempt === 3) {
+      return result;
+    }
+  }
+
+  throw new Error('Fortune generation failed');
 }
 
 async function generateCouple(openai, systemPrompt, userPrompt, images) {
@@ -822,19 +904,18 @@ app.post(
 
   try {
     const teller = getFortuneTeller(tellerId || 'gizem_ana');
-    const structure = pickFortuneStructure();
+    const structure = pickFortuneStructureForTeller(teller.id);
     logFortuneRequest(
       teller.id,
       structure.id,
       `${teller.minWords}-${teller.maxWords}`,
     );
 
-    const result = await generate(
+    const result = await generateFortuneForTeller(
       openai,
-      'fortune',
-      buildFortuneSystemPrompt(teller, structure),
-      buildFortuneUserPrompt(req.body, teller, structure),
-      teller.maxCompletionTokens,
+      teller,
+      structure,
+      req.body,
     );
     await saveGeneratedResult(req, result);
     return res.json({ result });

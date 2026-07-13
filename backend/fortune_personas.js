@@ -211,6 +211,17 @@ const COUPLE_STRUCTURE_VARIANTS = [
   },
 ];
 
+const COMPACT_OUTPUT_RULES = `KISA YORUM KALİTESİ:
+- Girişte uzun ön söz yok; doğrudan fal yorumuna gir.
+- Metin kısa görünmemeli: yoğun, akıcı, doğal Türkçe ve kişiye özel kalsın.`;
+
+const GIZEM_COMPACT_RULES = `KURALLAR:
+- İsim, yaş, burç, niyeti organik yedir.
+- Yoğun, kişiye özel, akıcı Türkçe; doğrudan yoruma gir.
+- Tamamlanmış cümleyle bitir; başlık, madde, emoji yok.
+- AI/model/algoritma deme; "Baktığımda", "Kartların dili" gibi klişe giriş yok.
+- Kesin kader, tıbbi/hukuki tavsiye yok.`;
+
 const SHARED_RULES = `ORTAK KURALLAR:
 - İsim, yaş, burç, niyet veya çift bilgilerini organik yedir; etiket listesi yapma.
 - Her cümle yeni bir içgörü sunsun; aynı fikri veya aynı cümle kalıbını tekrarlama.
@@ -309,9 +320,11 @@ const FORTUNE_TELLERS = {
       'Ton örneği (kopyalama): sıcak, sezgisel, net; duyguyu günlük dile indirgeme.',
     approach:
       'Önce duygusal ihtiyacı okur, sonra niyete somut bir yön verir. Sembolleri günlük hayata indirir.',
-    minWords: 300,
-    maxWords: 500,
-    maxCompletionTokens: 1000,
+    lengthDirective:
+      'Tam 150-200 kelime yaz; 150 kelimenin altına inme, 200 kelimenin üstüne çıkma.',
+    minWords: 150,
+    maxWords: 200,
+    maxCompletionTokens: 290,
   },
   medyum_aylin: {
     id: 'medyum_aylin',
@@ -322,9 +335,11 @@ const FORTUNE_TELLERS = {
       'Ton örneği (kopyalama): ruhsal rehberlik, empatik ritim, sembol-duygu bağlantısı.',
     approach:
       'Sembolleri duygu katmanına bağlar. Geçmiş-şimdi-gelecek akışını hissettirerek yedirir.',
-    minWords: 600,
-    maxWords: 900,
-    maxCompletionTokens: 1600,
+    lengthDirective:
+      'Tam 200-300 kelime yaz; 200 kelimenin altına inme, 300 kelimenin üstüne çıkma.',
+    minWords: 200,
+    maxWords: 300,
+    maxCompletionTokens: 500,
   },
   ustat_hakan: {
     id: 'ustat_hakan',
@@ -334,10 +349,12 @@ const FORTUNE_TELLERS = {
     vocabulary:
       'Ton örneği (kopyalama): kadim bilge, sakin danışman; neden-sonuç ve sembol derinliği.',
     approach:
-      'Neden-sonuç zinciri kurar ama ders verme tonunda değil. Detaylı sembol okuması ve kapsamlı kapanış.',
-    minWords: 1000,
-    maxWords: 1500,
-    maxCompletionTokens: 2800,
+      'Neden-sonuç zinciri kurar ama ders verme tonunda değil. Geçmiş, şimdi ve yakın gelecek katmanlarını detaylı sembol okumasıyla işle.',
+    lengthDirective:
+      'Tam 300-400 kelime yaz; 300 kelimenin altına inme, 400 kelimenin üstüne çıkma. Yoğun ve katmanlı kal.',
+    minWords: 300,
+    maxWords: 400,
+    maxCompletionTokens: 550,
   },
 };
 
@@ -351,7 +368,7 @@ const CATEGORY_GUIDANCE = {
   'Tarot Falı':
     'Tarot: kartlar, açılım, geçmiş-şimdi-yakın gelecek sembolleriyle niyeti bağla.',
   'Kahve Falı':
-    'Kahve: fincan, telve, yol, kuş, halka, kapı, göz, kalp sembolleriyle niyeti bağla.',
+    'Kahve: fincan ve telve imgelerini niyetle bağla.',
   'Su Falı':
     'Su: yüzey, yansıma, dalga, berraklık, akış sembolleriyle niyeti bağla.',
   'Bakla Falı':
@@ -367,12 +384,16 @@ function categoryGuidance(category) {
   );
 }
 
-function pickCategoryGuidance(category) {
-  const base = categoryGuidance(category);
+function pickCategoryGuidance(category, tellerId) {
   const pool = CATEGORY_SYMBOL_POOLS[category];
-  if (!pool || pool.length === 0) return base;
+  if (!pool || pool.length === 0) return categoryGuidance(category);
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  const hints = shuffled.slice(0, 3).join(', ');
+  const hintCount = tellerId === 'gizem_ana' ? 2 : 3;
+  const hints = shuffled.slice(0, hintCount).join(', ');
+  if (category === 'Kahve Falı' || tellerId === 'gizem_ana') {
+    return `${categoryGuidance(category)} Bu oturumda: ${hints}.`;
+  }
+  const base = categoryGuidance(category);
   return `${base} Bu oturumda özellikle şu imgeleri canlı ve özgün betimle: ${hints}.`;
 }
 
@@ -382,23 +403,16 @@ function resolveRequestId(body, fallbackPrefix = 'fortune') {
   return `${fallbackPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function buildUniquenessDirective(
-  requestId,
-  { intention, name, category, maritalStatus },
-) {
-  const intentSnippet = String(intention ?? '')
-    .trim()
-    .slice(0, 80);
-  const namePart = String(name ?? '').trim();
-  const categoryPart = String(category ?? '').trim();
-  const maritalPart = String(maritalStatus ?? '').trim();
+function buildUniquenessDirective(requestId, tellerId) {
+  if (tellerId === 'gizem_ana') {
+    return `BENZERSİZLİK (${requestId}):
+- Önceki fallardan farklı olsun; niyete özel somut imgeler üret.
+- Giriş ve kapanış yalnızca bu oturuma özgü olsun.`;
+  }
   return `BENZERSİZLİK (oturum ${requestId}):
-- Bu yorum önceki tüm fallardan, şablon metinlerden ve tekrarlayan fal kalıplarından farklı olsun.
-- ${categoryPart ? `Kategori: ${categoryPart}.` : ''} ${namePart ? `Danışan: ${namePart}.` : ''}
-- ${maritalPart ? `Medeni durum: ${maritalPart} — aşk/ilişki bağlamını buna göre yorumla.` : ''}
-- Niyet: "${intentSnippet}" — bu niyete özel somut imgeler üret; jenerik metin yazma.
-- Aynı cümleyi veya cümle iskeletini birden fazla kez kullanma.
-- Giriş ve kapanış cümlelerini yalnızca bu oturuma özgü kur.`;
+- Bu yorum önceki fallardan, şablon metinlerden ve tekrarlayan kalıplardan farklı olsun.
+- Danışanın niyetine özel somut imgeler üret; jenerik metin yazma.
+- Aynı cümle iskeletini tekrarlama; giriş ve kapanış yalnızca bu oturuma özgü olsun.`;
 }
 
 function pickTarotCardFlowHint() {
@@ -421,12 +435,45 @@ function pickFortuneStructure() {
   return pickRandom(FORTUNE_STRUCTURE_VARIANTS);
 }
 
+function pickFortuneStructureForTeller(tellerId) {
+  if (tellerId === 'ustat_hakan') {
+    const longStructures = FORTUNE_STRUCTURE_VARIANTS.filter((s) =>
+      ['time-thread', 'dual', 'heart-then-path', 'symbol-first'].includes(s.id),
+    );
+    return pickRandom(longStructures.length ? longStructures : FORTUNE_STRUCTURE_VARIANTS);
+  }
+  return pickFortuneStructure();
+}
+
+function compactRulesForTeller(teller) {
+  if (teller.id === 'ustat_hakan') {
+    return `DETAYLI YORUM KALİTESİ:
+- 300-400 kelime bandında yoğun kal; her paragraf yeni bir katman eklesin.
+- Geçmiş, şimdi, yakın gelecek, duygu ve niyet bağlantısını ayrı derinlikte işle.
+- Dolgu veya tekrar yok; detayı kısa kesme — yoğun ve profesyonel kal.`;
+  }
+  return COMPACT_OUTPUT_RULES;
+}
+
 function pickCoupleStructure() {
   return pickRandom(COUPLE_STRUCTURE_VARIANTS);
 }
 
 function buildFortuneSystemPrompt(teller, structure) {
-  const wordRule = `- Yorum uzunluğu: ${teller.minWords}-${teller.maxWords} kelime. Bu aralığa uy; gereksiz tekrar ekleme.`;
+  if (teller.id === 'gizem_ana') {
+    return `Sen ${teller.name}, deneyimli bir Türk falcısısın.
+
+SES VE YAKLAŞIM: ${teller.voice} ${teller.approach}
+
+UZUNLUK: ${teller.lengthDirective}
+
+YAPI — ${structure.name}: ${structure.instruction}
+
+${GIZEM_COMPACT_RULES}
+
+Kendini ${teller.name} olarak tut.`;
+  }
+
   return `Sen ${teller.name} adında deneyimli bir Türk falcısısın. Gerçek bir oturumda danışanın karşısındasın.
 
 KİŞİLİK VE SES:
@@ -438,15 +485,17 @@ ${teller.vocabulary}
 YORUMLAMA YAKLAŞIMIN:
 ${teller.approach}
 
+UZUNLUK TALİMATI:
+${teller.lengthDirective}
+
 BU YORUMUN YAPISI — ${structure.name}:
 ${structure.instruction}
 
 ${SHARED_RULES}
+${compactRulesForTeller(teller)}
 ${VOCABULARY_STYLE_RULE}
-${wordRule}
 
-Kendini ${teller.name} olarak tut; başka isim veya persona kullanma.
-Analiz kalitesi ve doğruluk seviyesi her zaman en yüksek düzeyde kalsın; yalnızca uzunluk değişir.`;
+Kendini ${teller.name} olarak tut; başka isim veya persona kullanma.`;
 }
 
 function buildCoupleSystemPrompt(persona, structure) {
@@ -481,14 +530,9 @@ function buildFortuneUserPrompt(body, teller, structure) {
     zodiac,
     maritalStatus,
     intention,
-    imageNames,
     selectedCards,
   } = body;
   const requestId = resolveRequestId(body);
-  const photos =
-    Array.isArray(imageNames) && imageNames.length > 0
-      ? `Fotoğraf: ${imageNames.length} adet.`
-      : '';
   const marital =
     typeof maritalStatus === 'string' && maritalStatus.trim()
       ? maritalStatus.trim()
@@ -505,25 +549,26 @@ function buildFortuneUserPrompt(body, teller, structure) {
   const ritualSection = baklaSection || waterSection;
   const guidance = ritualSection
     ? categoryGuidance(category)
-    : pickCategoryGuidance(category);
-  const uniqueness = buildUniquenessDirective(requestId, {
-    intention,
-    name,
-    category,
-    maritalStatus: marital,
-  });
-  const maritalLine = marital
-    ? `, medeni durum: ${marital}`
+    : pickCategoryGuidance(category, teller.id);
+  const uniqueness = buildUniquenessDirective(requestId, teller.id);
+  const maritalSuffix = marital
+    ? `, medeni durum: ${marital} (aşk ve ilişki yorumunda dikkate al)`
     : '';
 
+  const tierLengthBoost =
+    teller.id === 'ustat_hakan'
+      ? 'Detaylı tier: geçmiş, şimdi ve yakın gelecek katmanlarını; sembol, duygu ve niyet bağlantısını ayrı paragraflarla derinleştir.'
+      : '';
+  const structureReminder =
+    category === 'Tarot Falı' || category === 'İskambil Falı'
+      ? `\n${structure.instruction}`
+      : '';
+
   return `${ritualSection}${guidance}
-Danışan: ${name}, ${age} yaş, ${zodiac}${maritalLine}. Niyet: "${intention}"${photos ? ` ${photos}` : ''}
-${marital ? `Medeni durumu (${marital}) aşk, bağ ve yakın gelecek yorumlarında dikkate al; buna aykırı varsayımlar kurma.` : ''}
-Falcı: ${teller.name} | Yapı: ${structure.name}
+Danışan: ${name}, ${age} yaş, ${zodiac}${maritalSuffix}. Niyet: "${intention}"
 ${cardsSection}${uniqueness}
-[id:${requestId}]
-${teller.minWords}-${teller.maxWords} kelime. ${structure.instruction}
-Cevabı tamamlanmış cümleyle bitir.`;
+${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]
+${teller.minWords}-${teller.maxWords} kelime (kesin aralık; üst sınır ${teller.maxWords}).${structureReminder}`;
 }
 
 function formatBaklaScatter(baklaScatter) {
@@ -969,16 +1014,7 @@ Kendini ${persona.name} olarak tut.`;
 
 function buildAutoCategoryUserPrompt(categoryType, inputData, persona, structure) {
   const requestId = resolveRequestId({ requestId: inputData?.requestId }, 'auto');
-  const uniqueness = buildUniquenessDirective(requestId, {
-    intention:
-      inputData?.dreamText ||
-      inputData?.problemText ||
-      inputData?.focusArea ||
-      inputData?.name ||
-      '',
-    name: inputData?.name || inputData?.partnerName || '',
-    category: categoryType,
-  });
+  const uniqueness = buildUniquenessDirective(requestId);
 
   if (categoryType === 'relationship_advice') {
     return `${buildRelationshipAdviceUserPrompt(inputData, false)}
@@ -1041,6 +1077,7 @@ module.exports = {
   getFortuneTeller,
   pickFortunePersona,
   pickFortuneStructure,
+  pickFortuneStructureForTeller,
   pickCoupleStructure,
   buildFortuneSystemPrompt,
   buildCoupleSystemPrompt,
