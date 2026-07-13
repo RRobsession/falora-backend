@@ -1,3 +1,8 @@
+const {
+  buildFirstPassLengthBlock,
+  buildFinalLengthInstruction,
+} = require('./fortune_word_range');
+
 const FORTUNE_PERSONAS = [
   {
     id: 'aylin',
@@ -321,7 +326,7 @@ const FORTUNE_TELLERS = {
     approach:
       'Önce duygusal ihtiyacı okur, sonra niyete somut bir yön verir. Sembolleri günlük hayata indirir.',
     lengthDirective:
-      'Tam 150-200 kelime yaz; 150 kelimenin altına inme, 200 kelimenin üstüne çıkma.',
+      'Tam 150-200 kelime yaz. İlk yanıtında bu aralığa otur; 150 altı veya 200 üstü yazma.',
     minWords: 150,
     maxWords: 200,
     maxCompletionTokens: 290,
@@ -336,7 +341,7 @@ const FORTUNE_TELLERS = {
     approach:
       'Sembolleri duygu katmanına bağlar. Geçmiş-şimdi-gelecek akışını hissettirerek yedirir.',
     lengthDirective:
-      'Tam 200-300 kelime yaz; 200 kelimenin altına inme, 300 kelimenin üstüne çıkma.',
+      'Tam 200-300 kelime yaz. İlk yanıtında bu aralığa otur; 200 altı veya 300 üstü yazma.',
     minWords: 200,
     maxWords: 300,
     maxCompletionTokens: 500,
@@ -351,7 +356,7 @@ const FORTUNE_TELLERS = {
     approach:
       'Neden-sonuç zinciri kurar ama ders verme tonunda değil. Geçmiş, şimdi ve yakın gelecek katmanlarını detaylı sembol okumasıyla işle.',
     lengthDirective:
-      'Tam 300-400 kelime yaz; 300 kelimenin altına inme, 400 kelimenin üstüne çıkma. Yoğun ve katmanlı kal.',
+      'Tam 300-400 kelime yaz. İlk yanıtında bu aralığa otur; 300 altı veya 400 üstü yazma. Yoğun ve katmanlı kal.',
     minWords: 300,
     maxWords: 400,
     maxCompletionTokens: 550,
@@ -460,12 +465,16 @@ function pickCoupleStructure() {
 }
 
 function buildFortuneSystemPrompt(teller, structure) {
+  const lengthBlock = buildFirstPassLengthBlock(teller);
+
   if (teller.id === 'gizem_ana') {
     return `Sen ${teller.name}, deneyimli bir Türk falcısısın.
 
 SES VE YAKLAŞIM: ${teller.voice} ${teller.approach}
 
 UZUNLUK: ${teller.lengthDirective}
+
+${lengthBlock}
 
 YAPI — ${structure.name}: ${structure.instruction}
 
@@ -487,6 +496,8 @@ ${teller.approach}
 
 UZUNLUK TALİMATI:
 ${teller.lengthDirective}
+
+${lengthBlock}
 
 BU YORUMUN YAPISI — ${structure.name}:
 ${structure.instruction}
@@ -563,12 +574,14 @@ function buildFortuneUserPrompt(body, teller, structure) {
     category === 'Tarot Falı' || category === 'İskambil Falı'
       ? `\n${structure.instruction}`
       : '';
+  const finalLength = buildFinalLengthInstruction(teller);
 
   return `${ritualSection}${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}${maritalSuffix}. Niyet: "${intention}"
 ${cardsSection}${uniqueness}
-${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]
-${teller.minWords}-${teller.maxWords} kelime (kesin aralık; üst sınır ${teller.maxWords}).${structureReminder}`;
+${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]${structureReminder}
+
+${finalLength}`;
 }
 
 function formatBaklaScatter(baklaScatter) {

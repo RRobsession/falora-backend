@@ -170,6 +170,14 @@ const {
   buildRelationshipAdviceUserPrompt,
 } = require('./fortune_personas');
 const { sanitizeAiResult } = require('./ai_result_sanitize');
+const {
+  countWords,
+  trimToMaxWords,
+  expansionTokenBudget,
+  buildExpandPrompt,
+  isInWordRange,
+  firstPassCompletionTokens,
+} = require('./fortune_word_range');
 
 function newRequestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -373,85 +381,92 @@ function logTokenUsage(kind, usage) {
   );
 }
 
-function countWords(text) {
-  return String(text || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
+function fitFortuneLength(result, teller) {
+  let text = String(result || '').trim();
+  let words = countWords(text);
+  if (words > teller.maxWords) {
+    text = trimToMaxWords(text, teller.maxWords);
+    words = countWords(text);
+  }
+  return { result: text, words };
 }
 
-function expansionTokenBudget(teller, needed) {
-  const estimate = Math.ceil(needed * 2.8);
-  return Math.min(
-    Math.max(estimate, 120),
-    360,
-    teller.maxCompletionTokens,
+async function expandFortuneText(openai, teller, systemPrompt, result, words) {
+  const addition = await generate(
+    openai,
+    'fortune-expand',
+    systemPrompt,
+    buildExpandPrompt(teller, result, words),
+    expansionTokenBudget(teller, teller.minWords - words),
   );
+  return sanitizeAiResult(`${result.trim()}\n\n${addition.trim()}`);
 }
 
 async function generateFortuneForTeller(openai, teller, structure, body) {
   const systemPrompt = buildFortuneSystemPrompt(teller, structure);
   const baseUserPrompt = buildFortuneUserPrompt(body, teller, structure);
-  let lastWords = 0;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    let userPrompt = baseUserPrompt;
-    if (attempt > 1) {
-      if (lastWords < teller.minWords) {
-        userPrompt = `${baseUserPrompt}
+  let result = await generate(
+    openai,
+    'fortune',
+    systemPrompt,
+    baseUserPrompt,
+    firstPassCompletionTokens(teller),
+  );
+  let words;
+  ({ result, words } = fitFortuneLength(result, teller));
 
-YETERSİZ UZUNLUK: Önceki yanıt ${lastWords} kelimeydi; minimum ${teller.minWords} kelime şart. Aynı fal verisi ve ${teller.name} sesiyle metni baştan, daha kapsamlı ve en az ${teller.minWords} kelime olacak şekilde yeniden yaz. Maksimum ${teller.maxWords} kelime.`;
-      } else {
-        userPrompt = `${baseUserPrompt}
-
-FAZLA UZUN: Önceki yanıt ${lastWords} kelimeydi; maksimum ${teller.maxWords} kelime. Metni ${teller.minWords}-${teller.maxWords} aralığına sığdırarak yeniden yaz.`;
-      }
-    }
-
-    let result = await generate(
-      openai,
-      'fortune',
-      systemPrompt,
-      userPrompt,
-      teller.maxCompletionTokens,
-    );
-    let words = countWords(result);
-    lastWords = words;
-
-    if (words < teller.minWords) {
-      const needed = teller.minWords - words;
-      const expandPrompt = `Sen ${teller.name} olarak yazıyorsun. Mevcut fal yorumu ${words} kelime; en az ${teller.minWords} kelime olmalı.
-Aynı isim, niyet ve tonu koruyarak yoruma yaklaşık ${needed} kelimelik yoğun bir devam paragrafı ekle.
-Yalnızca eksik tamamlayıcı kısmı yaz; mevcut metni baştan yazma.
-Üst sınır: toplam ${teller.maxWords} kelimeyi aşma.
-
-MEVCUT YORUM:
-${result}`;
-      const addition = await generate(
-        openai,
-        'fortune-expand',
-        systemPrompt,
-        expandPrompt,
-        expansionTokenBudget(teller, needed),
-      );
-      result = sanitizeAiResult(`${result.trim()}\n\n${addition.trim()}`);
-      words = countWords(result);
-      lastWords = words;
-      console.log(
-        `[fortune] teller=${teller.id} expanded words=${words} target=${teller.minWords}-${teller.maxWords}`,
-      );
-    }
-
-    const inRange = words >= teller.minWords && words <= teller.maxWords;
+  if (isInWordRange(words, teller)) {
     console.log(
-      `[fortune] teller=${teller.id} words=${words} target=${teller.minWords}-${teller.maxWords} attempt=${attempt} ok=${inRange}`,
+      `[fortune] teller=${teller.id} first-pass words=${words} target=${teller.minWords}-${teller.maxWords} ok=true`,
     );
-    if (inRange || attempt === 3) {
+    return result;
+  }
+
+  if (words < teller.minWords) {
+    console.log(
+      `[fortune] teller=${teller.id} below-min words=${words} min=${teller.minWords} expanding`,
+    );
+    result = await expandFortuneText(openai, teller, systemPrompt, result, words);
+    ({ result, words } = fitFortuneLength(result, teller));
+    console.log(
+      `[fortune] teller=${teller.id} after-expand words=${words} target=${teller.minWords}-${teller.maxWords}`,
+    );
+    if (isInWordRange(words, teller)) {
       return result;
     }
   }
 
-  throw new Error('Fortune generation failed');
+  const retryPrompt =
+    words < teller.minWords
+      ? `${baseUserPrompt}
+
+YETERSİZ UZUNLUK: Önceki yanıt ${words} kelimeydi; minimum ${teller.minWords} kelime şart. Aynı fal verisi ve ${teller.name} sesiyle metni baştan, en az ${teller.minWords} kelime olacak şekilde yeniden yaz. Maksimum ${teller.maxWords} kelime.`
+      : `${baseUserPrompt}
+
+FAZLA UZUN: Önceki yanıt ${words} kelimeydi; maksimum ${teller.maxWords} kelime. Metni ${teller.minWords}-${teller.maxWords} aralığına sığdırarak yeniden yaz.`;
+  console.log(
+    `[fortune] teller=${teller.id} retry words=${words} target=${teller.minWords}-${teller.maxWords}`,
+  );
+
+  result = await generate(
+    openai,
+    'fortune-retry',
+    systemPrompt,
+    retryPrompt,
+    teller.maxCompletionTokens,
+  );
+  ({ result, words } = fitFortuneLength(result, teller));
+
+  if (words < teller.minWords) {
+    result = await expandFortuneText(openai, teller, systemPrompt, result, words);
+    ({ result, words } = fitFortuneLength(result, teller));
+  }
+
+  console.log(
+    `[fortune] teller=${teller.id} final words=${words} target=${teller.minWords}-${teller.maxWords} ok=${isInWordRange(words, teller)}`,
+  );
+  return result;
 }
 
 async function generateCouple(openai, systemPrompt, userPrompt, images) {
