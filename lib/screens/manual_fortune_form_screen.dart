@@ -8,6 +8,7 @@ import 'package:falora/models/manual_fortune_reader.dart';
 
 import 'package:falora/picked_image.dart';
 
+import 'package:falora/services/fortune_form_prefill.dart';
 import 'package:falora/services/marital_status_preference.dart';
 import 'package:falora/widgets/falora_labeled_form_field.dart';
 import 'package:falora/theme/falora_theme.dart';
