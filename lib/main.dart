@@ -13,6 +13,7 @@ import 'package:falora/config/app_branding.dart';
 import 'package:falora/ai_result_cache.dart';
 import 'package:falora/ai_service.dart';
 import 'package:falora/app/auth_gate.dart';
+import 'package:falora/auth/firebase_auth_service.dart';
 import 'package:falora/screens/app_intro_splash_screen.dart';
 import 'package:falora/category_icon.dart';
 import 'package:falora/config/category_fortune_config.dart';
@@ -43,7 +44,7 @@ import 'package:falora/screens/profile_screen.dart';
 import 'package:falora/services/ads/ad_service_bootstrap.dart';
 import 'package:falora/services/fortune_submit_support.dart';
 import 'package:falora/services/fortune_backend_service.dart';
-import 'package:falora/services/fortune_form_prefill.dart';
+import 'package:falora/services/marital_status_preference.dart';
 import 'package:falora/services/fortune_share_service.dart';
 import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
@@ -58,6 +59,7 @@ import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/screens/shop_screen.dart';
 import 'package:falora/token_config.dart';
+import 'package:falora/utils/format_tokens.dart';
 import 'package:falora/widgets/falora_labeled_form_field.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/live_token_builder.dart';
@@ -90,6 +92,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await FirebaseAuthService.initializeGoogleSignIn();
   if (!kIsWeb) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
@@ -99,6 +102,7 @@ void main() async {
     debugPrint('FCM INIT ERROR: $e');
   }
   await initApiConfig();
+  await MaritalStatusPreference.instance.load();
   await AdServiceBootstrap.init();
   runApp(const FaloraApp());
 }
@@ -773,8 +777,8 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     if (!mounted) return false;
     unawaited(
       _promptInsufficientTokensShop(
-        'Yetersiz jeton. Bu işlem $tokenCost jeton gerektirir.\n'
-        'Bakiyeniz: ${_liveUser.tokens}',
+        'Yetersiz jeton. Bu işlem ${formatTokenAmount(tokenCost)} jeton gerektirir.\n'
+        'Bakiyeniz: ${formatTokenAmount(_liveUser.tokens)}',
       ),
     );
     return false;
@@ -789,7 +793,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     if (!mounted) return false;
 
     await _promptInsufficientTokensShop(
-      'Bu özel yorum için 1500 jeton gerekiyor.\n'
+      'Bu özel yorum için ${formatTokenAmount(manualFortuneTokenCost)} jeton gerekiyor.\n'
       'Jeton bakiyeniz yetersiz.\n'
       'Jeton mağazasından paket satın alabilirsiniz.',
     );
@@ -805,7 +809,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     if (!mounted) return false;
 
     await _promptInsufficientTokensShop(
-      'Bu yorum için $tokenCost jeton gerekiyor.\n'
+      'Bu yorum için ${formatTokenAmount(tokenCost)} jeton gerekiyor.\n'
       'Jeton bakiyeniz yetersiz.\n'
       'Jeton mağazasından paket satın alabilirsiniz.',
     );
@@ -962,7 +966,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       ).withTokenCost(relationshipAdviceTokenCost);
       if (_liveUser.tokens < relationshipAdviceTokenCost) {
         _promptInsufficientTokensShop(
-          'Yetersiz jeton. İlişki Tavsiyesi $relationshipAdviceTokenCost jeton gerektirir.\n'
+          'Yetersiz jeton. İlişki Tavsiyesi ${formatTokenAmount(relationshipAdviceTokenCost)} jeton gerektirir.\n'
           'Mağazadan jeton satın alabilirsiniz.',
         );
         return;
@@ -1030,7 +1034,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     logFortuneSelectedCost(cat, teller.id);
     if (_liveUser.tokens < resolved.tokenCost) {
       _promptInsufficientTokensShop(
-        'Yetersiz jeton. ${resolved.name} ${resolved.tokenCost} jeton gerektirir.\n'
+        'Yetersiz jeton. ${resolved.name} ${formatTokenAmount(resolved.tokenCost)} jeton gerektirir.\n'
         'Mağazadan jeton satın alabilirsiniz.',
       );
       return;
@@ -1111,8 +1115,8 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     logFortuneSelectedCost(cat, teller.id);
     if (_liveUser.tokens < resolved.tokenCost) {
       await _promptInsufficientTokensShop(
-        'Yetersiz jeton. ${resolved.name} ${resolved.tokenCost} jeton gerektirir.\n'
-        'Bakiyeniz: ${_liveUser.tokens}',
+        'Yetersiz jeton. ${resolved.name} ${formatTokenAmount(resolved.tokenCost)} jeton gerektirir.\n'
+        'Bakiyeniz: ${formatTokenAmount(_liveUser.tokens)}',
       );
       return;
     }
@@ -1279,7 +1283,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     if (!mounted || amount <= 0) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$amount jeton hesabınıza iade edildi.'),
+        content: Text('${formatTokenAmount(amount)} jeton hesabınıza iade edildi.'),
       ),
     );
   }
@@ -2094,7 +2098,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         logPrefix: 'MANUAL',
         tabIndex: 1,
         successMessage:
-            'Özel fal talebin alındı. $tokenCost jeton hesabından düşüldü.',
+            'Özel fal talebin alındı. ${formatTokenAmount(tokenCost)} jeton hesabından düşüldü.',
         popToRoot: true,
       );
     } on ManualFortuneException catch (e) {
@@ -2748,7 +2752,7 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
-  String _medeniDurum = maritalStatusOptions.first;
+  String _medeniDurum = MaritalStatusPreference.instance.current;
   bool _submitting = false;
   List<TarotCardSelection> _selectedTarotCards = const [];
   List<PlayingCardSelection> _selectedPlayingCards = const [];
@@ -2891,8 +2895,11 @@ class _NormalFalFormPageState extends State<NormalFalFormPage> {
                 items: maritalStatusOptions
                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _medeniDurum = v ?? _medeniDurum),
+                onChanged: (v) {
+                  final next = v ?? _medeniDurum;
+                  setState(() => _medeniDurum = next);
+                  MaritalStatusPreference.instance.save(next);
+                },
               ),
               const SizedBox(height: 18),
               FaloraLabeledFormField(
@@ -3001,7 +3008,7 @@ class _KahveFormPageState extends State<KahveFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
-  String _medeniDurum = maritalStatusOptions.first;
+  String _medeniDurum = MaritalStatusPreference.instance.current;
   PickedImage? _fincan1;
   PickedImage? _fincan2;
   PickedImage? _tabak;
@@ -3117,8 +3124,11 @@ class _KahveFormPageState extends State<KahveFormPage> {
                 items: maritalStatusOptions
                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _medeniDurum = v ?? _medeniDurum),
+                onChanged: (v) {
+                  final next = v ?? _medeniDurum;
+                  setState(() => _medeniDurum = next);
+                  MaritalStatusPreference.instance.save(next);
+                },
               ),
               const SizedBox(height: 18),
               FaloraLabeledFormField(
@@ -3214,7 +3224,7 @@ class _BaklaFormPageState extends State<BaklaFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
-  String _medeniDurum = maritalStatusOptions.first;
+  String _medeniDurum = MaritalStatusPreference.instance.current;
   bool _submitting = false;
 
   @override
@@ -3322,8 +3332,11 @@ class _BaklaFormPageState extends State<BaklaFormPage> {
                 items: maritalStatusOptions
                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _medeniDurum = v ?? _medeniDurum),
+                onChanged: (v) {
+                  final next = v ?? _medeniDurum;
+                  setState(() => _medeniDurum = next);
+                  MaritalStatusPreference.instance.save(next);
+                },
               ),
               const SizedBox(height: 18),
               FaloraLabeledFormField(
@@ -3371,7 +3384,7 @@ class _SuFormPageState extends State<SuFormPage> {
   final _ageCtrl = TextEditingController();
   final _niyetCtrl = TextEditingController();
   String _burc = burclar.first;
-  String _medeniDurum = maritalStatusOptions.first;
+  String _medeniDurum = MaritalStatusPreference.instance.current;
   bool _submitting = false;
 
   @override
@@ -3479,8 +3492,11 @@ class _SuFormPageState extends State<SuFormPage> {
                 items: maritalStatusOptions
                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _medeniDurum = v ?? _medeniDurum),
+                onChanged: (v) {
+                  final next = v ?? _medeniDurum;
+                  setState(() => _medeniDurum = next);
+                  MaritalStatusPreference.instance.save(next);
+                },
               ),
               const SizedBox(height: 18),
               FaloraLabeledFormField(
@@ -3651,7 +3667,7 @@ class _CiftUyumuFormPageState extends State<CiftUyumuFormPage> {
                           color: Colors.white,
                         ),
                       )
-                    : Text('Analizi Gönder · $coupleTokenCost jeton'),
+                    : Text('Analizi Gönder · ${formatTokenAmount(coupleTokenCost)} jeton'),
               ),
             ],
           ),
@@ -3787,7 +3803,7 @@ class _FormHeader extends StatelessWidget {
               if (teller != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '${teller!.name} · ${resolveTellerTokenCost(category, teller!.id)} jeton',
+                  '${teller!.name} · ${formatTokenAmount(resolveTellerTokenCost(category, teller!.id))} jeton',
                   style: FaloraTypography.bodyMedium.copyWith(
                     color: faloraInkSoft,
                     fontWeight: FontWeight.w600,
@@ -3796,7 +3812,7 @@ class _FormHeader extends StatelessWidget {
               ] else if (tokenCost != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '$tokenCost jeton',
+                  '${formatTokenAmount(tokenCost!)} jeton',
                   style: FaloraTypography.bodyMedium.copyWith(
                     color: faloraInkSoft,
                     fontWeight: FontWeight.w600,

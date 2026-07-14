@@ -1,4 +1,5 @@
 import 'package:falora/config/legal_config.dart';
+import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/config/manual_fortune_config.dart';
 import 'package:falora/image_upload_card.dart';
 import 'package:falora/models/fortune_models.dart';
@@ -7,7 +8,7 @@ import 'package:falora/models/manual_fortune_reader.dart';
 
 import 'package:falora/picked_image.dart';
 
-import 'package:falora/services/fortune_form_prefill.dart';
+import 'package:falora/services/marital_status_preference.dart';
 import 'package:falora/widgets/falora_labeled_form_field.dart';
 import 'package:falora/theme/falora_theme.dart';
 
@@ -34,6 +35,8 @@ typedef ManualFortuneSubmit = Future<void> Function({
   required int age,
 
   required String zodiac,
+
+  required String maritalStatus,
 
   required String intention,
 
@@ -102,6 +105,8 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
   late final List<TextEditingController> _questionCtrls;
 
   String _burc = burclar.first;
+
+  String _medeniDurum = MaritalStatusPreference.instance.current;
 
   PickedImage? _fincan1;
 
@@ -227,6 +232,8 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
         age: int.parse(_ageCtrl.text.trim()),
 
         zodiac: _burc,
+
+        maritalStatus: _medeniDurum,
 
         intention: _niyetCtrl.text.trim(),
 
@@ -373,6 +380,21 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
                 onChanged: (v) => setState(() => _burc = v ?? _burc),
+              ),
+
+              const SizedBox(height: 18),
+
+              FaloraLabeledDropdown<String>(
+                label: 'Medeni Durum',
+                value: _medeniDurum,
+                items: maritalStatusOptions
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) {
+                  final next = v ?? _medeniDurum;
+                  setState(() => _medeniDurum = next);
+                  MaritalStatusPreference.instance.save(next);
+                },
               ),
 
               const SizedBox(height: 18),

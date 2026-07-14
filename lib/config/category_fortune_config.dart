@@ -4,9 +4,12 @@ import 'package:falora/models/fortune_models.dart';
 const autoCategoryTokenCost = 50;
 
 /// İlişki Tavsiyesi — sabit ücret.
-const relationshipAdviceTokenCost = 100;
+const relationshipAdviceTokenCost = 150;
 
 const partnerGenderOptions = ['Kadın', 'Erkek'];
+
+/// Fallar formları — medeni durum (fal yorumuna dahil edilir).
+const maritalStatusOptions = ['Evli', 'Bekar', 'Ayrı'];
 
 const horoscopeFocusAreas = ['Genel', 'Aşk', 'Para', 'Kariyer'];
 
