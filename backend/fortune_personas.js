@@ -321,7 +321,7 @@ const FORTUNE_TELLERS = {
     approach:
       'Önce duygusal ihtiyacı okur, sonra niyete somut bir yön verir. Sembolleri günlük hayata indirir.',
     maxWords: 200,
-    maxCompletionTokens: 300,
+    maxCompletionTokens: 450,
   },
   medyum_aylin: {
     id: 'medyum_aylin',
@@ -333,7 +333,7 @@ const FORTUNE_TELLERS = {
     approach:
       'Sembolleri duygu katmanına bağlar. Geçmiş-şimdi-gelecek akışını hissettirerek yedirir.',
     maxWords: 300,
-    maxCompletionTokens: 450,
+    maxCompletionTokens: 580,
   },
   ustat_hakan: {
     id: 'ustat_hakan',
@@ -529,7 +529,7 @@ function buildFortuneUserPrompt(body, teller, structure) {
   const cardsSection =
     category === 'İskambil Falı'
       ? formatSelectedPlayingCards(selectedCards, playingFlowHint)
-      : formatSelectedTarotCards(selectedCards, tarotFlowHint);
+      : formatSelectedTarotCards(selectedCards, tarotFlowHint, teller.id);
   const baklaSection = formatBaklaScatter(body.baklaScatter);
   const waterSection = formatWaterScatter(body.waterScatter);
   const ritualSection = baklaSection || waterSection;
@@ -549,10 +549,21 @@ function buildFortuneUserPrompt(body, teller, structure) {
     category === 'Tarot Falı' || category === 'İskambil Falı'
       ? `\n${structure.instruction}`
       : '';
+  const tarotChecklist =
+    category === 'Tarot Falı' && Array.isArray(selectedCards) && selectedCards.length
+      ? `\nTAROT SON KONTROL: Kartları sırayla (1→${Math.min(selectedCards.length, 8)}) işle; şu adların tamamı metinde geçmeli: ${selectedCards
+          .slice(0, 8)
+          .map((card, index) => `${index + 1}.${resolveTarotCardLabel(card)}`)
+          .join(' | ')}.`
+      : '';
+  const closingRule =
+    category === 'Tarot Falı' || category === 'İskambil Falı'
+      ? `\nSON TALİMAT: Yanıtını mutlaka tamamlanmış bir cümleyle bitir; yarım cümle veya kesik ifade bırakma.${tarotChecklist}`
+      : '\nSON TALİMAT: Yanıtını mutlaka tamamlanmış bir cümleyle bitir; yarım cümle bırakma.';
   return `${ritualSection}${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}${maritalSuffix}. Niyet: "${intention}"
 ${cardsSection}${uniqueness}
-${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]${structureReminder}`;
+${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]${structureReminder}${closingRule}`;
 }
 
 function formatBaklaScatter(baklaScatter) {
@@ -641,13 +652,14 @@ SU FALI YORUM KURALLARI:
 `;
 }
 
-function formatSelectedTarotCards(selectedCards, tarotFlowHint) {
+function formatSelectedTarotCards(selectedCards, tarotFlowHint, tellerId) {
   if (!Array.isArray(selectedCards) || selectedCards.length === 0) {
     return '';
   }
 
   const cards = selectedCards.slice(0, 8);
   const count = cards.length;
+  const cardLabels = cards.map((card) => resolveTarotCardLabel(card));
 
   const lines = cards.map((card, index) => {
     const pos = card.positionIndex ?? index + 1;
@@ -656,16 +668,23 @@ function formatSelectedTarotCards(selectedCards, tarotFlowHint) {
     return `${pos}. ${label} (${orientation})`;
   });
 
+  const perCardRule =
+    tellerId === 'gizem_ana'
+      ? 'Kısa tut ama her karta en az bir cümle ayır; 8 kartın tamamını adıyla an.'
+      : 'Her karta anlamlı yorum bağla; kartları atlama.';
+
   return `SEÇİLEN ${count} TAROT KARTI (mutlaka dikkate al — falın omurgası):
 ${lines.join('\n')}
 
 TAROT YORUM KURALLARI:
 - Kartları dosya adıyla (p03, c03, w12 gibi) ASLA anma; yalnızca yukarıdaki Türkçe kart isimlerini kullan.
+- ZORUNLU: Yukarıdaki ${count} kartın HER BİRİNİN Türkçe adı metinde ayrı ayrı geçmeli: ${cardLabels.join(', ')}.
 - ${tarotFlowHint || TAROT_CARD_FLOW_VARIANTS[0]}
-- Sekiz kartın tamamının Türkçe adı metinde geçmeli; eksik kart bırakma.
+- ${perCardRule}
 - Kartları danışanın niyeti/sorusu ile ilişkilendir.
 - Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
 - Premium, sezgisel ve doğal bir dil kullan; her kart için aynı cümle kalıbını tekrarlama.
+- ZORUNLU KONTROL: Bitirmeden önce şu kart adlarının tamamının metinde geçtiğini doğrula: ${cardLabels.join(' | ')}.
 
 `;
 }

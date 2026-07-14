@@ -374,21 +374,33 @@ function logTokenUsage(kind, usage) {
   );
 }
 
+function resolveFortuneCompletionTokens(teller, body) {
+  let tokens = teller.maxCompletionTokens;
+  if (body?.category === 'Tarot Falı') {
+    if (teller.id === 'gizem_ana') tokens = Math.max(tokens, 780);
+    else if (teller.id === 'medyum_aylin') tokens = Math.max(tokens, 820);
+    else tokens = Math.max(tokens, 900);
+  }
+  return tokens;
+}
+
 async function generateFortuneForTeller(openai, teller, structure, body) {
   const systemPrompt = buildFortuneSystemPrompt(teller, structure);
   const userPrompt = buildFortuneUserPrompt(body, teller, structure);
+  const maxTokens = resolveFortuneCompletionTokens(teller, body);
 
   const result = await generate(
     openai,
     'fortune',
     systemPrompt,
     userPrompt,
-    teller.maxCompletionTokens,
+    maxTokens,
   );
 
   const words = countWords(result);
+  const endsComplete = /[.!?…]["')\]]*\s*$/.test(result.trim());
   console.log(
-    `[fortune] teller=${teller.id} words=${words} max=${teller.maxWords}`,
+    `[fortune] teller=${teller.id} words=${words} max=${teller.maxWords} completion_tokens=${maxTokens} complete_end=${endsComplete}`,
   );
   return result;
 }
