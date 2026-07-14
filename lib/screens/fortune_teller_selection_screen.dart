@@ -6,6 +6,7 @@ import 'package:falora/models/fortune_models.dart';
 import 'package:falora/models/fortune_teller_models.dart';
 import 'package:falora/models/manual_fortune_reader.dart';
 import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/utils/format_tokens.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
@@ -123,7 +124,7 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                               ? 'Yorumcular jeton ile kişisel yorum hazırlar. '
                                   'Serdar ve Hatice birebir özel yorum sunar; '
                                   '${_manualOffer!.questionLimit} soru '
-                                  '${_manualOffer!.tokenCost} jeton.'
+                                  '${formatTokenAmount(_manualOffer!.tokenCost)} jeton.'
                               : 'Yorumcular jeton ile kişisel yorum hazırlar.',
                           style: FaloraTypography.bodyMedium,
                         ),
@@ -490,7 +491,7 @@ class _CompactTokenPriceBadge extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            '$amount',
+            formatTokenAmount(amount),
             style: FaloraTypography.labelLarge.copyWith(
               color: faloraInk,
               fontSize: 12,
@@ -687,14 +688,16 @@ class _FortuneTellerCard extends StatelessWidget {
                   height: 1.45,
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                teller.lengthLabel,
-                style: FaloraTypography.labelSmall.copyWith(
-                  color: faloraInkMuted,
-                  fontSize: 12,
+              if (teller.lengthLabel.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  teller.lengthLabel,
+                  style: FaloraTypography.labelSmall.copyWith(
+                    color: faloraInkMuted,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 14),
               Container(
                 height: 52,
@@ -716,7 +719,7 @@ class _FortuneTellerCard extends StatelessWidget {
                 child: Text(
                   _canAfford
                       ? '${teller.name} ile Devam Et'
-                      : 'Yetersiz jeton (${teller.tokenCost} gerekli)',
+                      : 'Yetersiz jeton (${formatTokenAmount(teller.tokenCost)} gerekli)',
                   style: FaloraTypography.labelLarge.copyWith(
                     color: _canAfford ? faloraParchmentRaised : faloraInkMuted,
                     fontSize: 14,

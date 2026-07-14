@@ -170,14 +170,7 @@ const {
   buildRelationshipAdviceUserPrompt,
 } = require('./fortune_personas');
 const { sanitizeAiResult } = require('./ai_result_sanitize');
-const {
-  countWords,
-  trimToMaxWords,
-  expansionTokenBudget,
-  buildExpandPrompt,
-  isInWordRange,
-  firstPassCompletionTokens,
-} = require('./fortune_word_range');
+const { countWords } = require('./fortune_word_range');
 
 function newRequestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -381,90 +374,21 @@ function logTokenUsage(kind, usage) {
   );
 }
 
-function fitFortuneLength(result, teller) {
-  let text = String(result || '').trim();
-  let words = countWords(text);
-  if (words > teller.maxWords) {
-    text = trimToMaxWords(text, teller.maxWords);
-    words = countWords(text);
-  }
-  return { result: text, words };
-}
-
-async function expandFortuneText(openai, teller, systemPrompt, result, words) {
-  const addition = await generate(
-    openai,
-    'fortune-expand',
-    systemPrompt,
-    buildExpandPrompt(teller, result, words),
-    expansionTokenBudget(teller, teller.minWords - words),
-  );
-  return sanitizeAiResult(`${result.trim()}\n\n${addition.trim()}`);
-}
-
 async function generateFortuneForTeller(openai, teller, structure, body) {
   const systemPrompt = buildFortuneSystemPrompt(teller, structure);
-  const baseUserPrompt = buildFortuneUserPrompt(body, teller, structure);
+  const userPrompt = buildFortuneUserPrompt(body, teller, structure);
 
-  let result = await generate(
+  const result = await generate(
     openai,
     'fortune',
     systemPrompt,
-    baseUserPrompt,
-    firstPassCompletionTokens(teller),
-  );
-  let words;
-  ({ result, words } = fitFortuneLength(result, teller));
-
-  if (isInWordRange(words, teller)) {
-    console.log(
-      `[fortune] teller=${teller.id} first-pass words=${words} target=${teller.minWords}-${teller.maxWords} ok=true`,
-    );
-    return result;
-  }
-
-  if (words < teller.minWords) {
-    console.log(
-      `[fortune] teller=${teller.id} below-min words=${words} min=${teller.minWords} expanding`,
-    );
-    result = await expandFortuneText(openai, teller, systemPrompt, result, words);
-    ({ result, words } = fitFortuneLength(result, teller));
-    console.log(
-      `[fortune] teller=${teller.id} after-expand words=${words} target=${teller.minWords}-${teller.maxWords}`,
-    );
-    if (isInWordRange(words, teller)) {
-      return result;
-    }
-  }
-
-  const retryPrompt =
-    words < teller.minWords
-      ? `${baseUserPrompt}
-
-YETERSİZ UZUNLUK: Önceki yanıt ${words} kelimeydi; minimum ${teller.minWords} kelime şart. Aynı fal verisi ve ${teller.name} sesiyle metni baştan, en az ${teller.minWords} kelime olacak şekilde yeniden yaz. Maksimum ${teller.maxWords} kelime.`
-      : `${baseUserPrompt}
-
-FAZLA UZUN: Önceki yanıt ${words} kelimeydi; maksimum ${teller.maxWords} kelime. Metni ${teller.minWords}-${teller.maxWords} aralığına sığdırarak yeniden yaz.`;
-  console.log(
-    `[fortune] teller=${teller.id} retry words=${words} target=${teller.minWords}-${teller.maxWords}`,
-  );
-
-  result = await generate(
-    openai,
-    'fortune-retry',
-    systemPrompt,
-    retryPrompt,
+    userPrompt,
     teller.maxCompletionTokens,
   );
-  ({ result, words } = fitFortuneLength(result, teller));
 
-  if (words < teller.minWords) {
-    result = await expandFortuneText(openai, teller, systemPrompt, result, words);
-    ({ result, words } = fitFortuneLength(result, teller));
-  }
-
+  const words = countWords(result);
   console.log(
-    `[fortune] teller=${teller.id} final words=${words} target=${teller.minWords}-${teller.maxWords} ok=${isInWordRange(words, teller)}`,
+    `[fortune] teller=${teller.id} words=${words} max=${teller.maxWords}`,
   );
   return result;
 }
@@ -920,11 +844,7 @@ app.post(
   try {
     const teller = getFortuneTeller(tellerId || 'gizem_ana');
     const structure = pickFortuneStructureForTeller(teller.id);
-    logFortuneRequest(
-      teller.id,
-      structure.id,
-      `${teller.minWords}-${teller.maxWords}`,
-    );
+    logFortuneRequest(teller.id, structure.id, `max=${teller.maxWords}`);
 
     const result = await generateFortuneForTeller(
       openai,

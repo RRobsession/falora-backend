@@ -59,7 +59,7 @@ const fortuneTellers = <FortuneTeller>[
     bio:
         'Kısa ve öz yorumlarıyla niyetinize odaklanır. Hızlı ama derin bir bakış sunar.',
     tokenCost: 100,
-    lengthLabel: 'Kısa yorum · ~300–500 kelime',
+    lengthLabel: '',
     accentColor: Color(0xFF6B4F2A),
     avatarAsset: 'assets/avatars/gizem_ana.png',
   ),
@@ -70,7 +70,7 @@ const fortuneTellers = <FortuneTeller>[
     bio:
         'Duygusal katmanları ve sembolleri dengeli şekilde açar. Orta uzunlukta, akıcı bir seans.',
     tokenCost: 150,
-    lengthLabel: 'Orta yorum · ~600–900 kelime',
+    lengthLabel: '',
     accentColor: Color(0xFF8B6A3E),
     avatarAsset: 'assets/avatars/medyum_aylin.png',
     highlight: true,
@@ -83,7 +83,7 @@ const fortuneTellers = <FortuneTeller>[
     bio:
         'En kapsamlı analiz. Geçmiş, şimdi ve yakın geleceği detaylı bir dille harmanlar.',
     tokenCost: 200,
-    lengthLabel: 'Detaylı yorum · ~1000–1500 kelime',
+    lengthLabel: '',
     accentColor: Color(0xFFD4AF37),
     avatarAsset: 'assets/avatars/ustat_hakan.png',
     badge: 'Premium',

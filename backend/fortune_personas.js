@@ -1,8 +1,3 @@
-const {
-  buildFirstPassLengthBlock,
-  buildFinalLengthInstruction,
-} = require('./fortune_word_range');
-
 const FORTUNE_PERSONAS = [
   {
     id: 'aylin',
@@ -325,11 +320,8 @@ const FORTUNE_TELLERS = {
       'Ton örneği (kopyalama): sıcak, sezgisel, net; duyguyu günlük dile indirgeme.',
     approach:
       'Önce duygusal ihtiyacı okur, sonra niyete somut bir yön verir. Sembolleri günlük hayata indirir.',
-    lengthDirective:
-      'Tam 150-200 kelime yaz. İlk yanıtında bu aralığa otur; 150 altı veya 200 üstü yazma.',
-    minWords: 150,
     maxWords: 200,
-    maxCompletionTokens: 290,
+    maxCompletionTokens: 300,
   },
   medyum_aylin: {
     id: 'medyum_aylin',
@@ -340,11 +332,8 @@ const FORTUNE_TELLERS = {
       'Ton örneği (kopyalama): ruhsal rehberlik, empatik ritim, sembol-duygu bağlantısı.',
     approach:
       'Sembolleri duygu katmanına bağlar. Geçmiş-şimdi-gelecek akışını hissettirerek yedirir.',
-    lengthDirective:
-      'Tam 200-300 kelime yaz. İlk yanıtında bu aralığa otur; 200 altı veya 300 üstü yazma.',
-    minWords: 200,
     maxWords: 300,
-    maxCompletionTokens: 500,
+    maxCompletionTokens: 450,
   },
   ustat_hakan: {
     id: 'ustat_hakan',
@@ -355,11 +344,8 @@ const FORTUNE_TELLERS = {
       'Ton örneği (kopyalama): kadim bilge, sakin danışman; neden-sonuç ve sembol derinliği.',
     approach:
       'Neden-sonuç zinciri kurar ama ders verme tonunda değil. Geçmiş, şimdi ve yakın gelecek katmanlarını detaylı sembol okumasıyla işle.',
-    lengthDirective:
-      'Tam 300-400 kelime yaz. İlk yanıtında bu aralığa otur; 300 altı veya 400 üstü yazma. Yoğun ve katmanlı kal.',
-    minWords: 300,
-    maxWords: 400,
-    maxCompletionTokens: 550,
+    maxWords: 500,
+    maxCompletionTokens: 700,
   },
 };
 
@@ -453,9 +439,9 @@ function pickFortuneStructureForTeller(tellerId) {
 function compactRulesForTeller(teller) {
   if (teller.id === 'ustat_hakan') {
     return `DETAYLI YORUM KALİTESİ:
-- 300-400 kelime bandında yoğun kal; her paragraf yeni bir katman eklesin.
+- Her paragraf yeni bir katman eklesin; yoğun ve katmanlı kal.
 - Geçmiş, şimdi, yakın gelecek, duygu ve niyet bağlantısını ayrı derinlikte işle.
-- Dolgu veya tekrar yok; detayı kısa kesme — yoğun ve profesyonel kal.`;
+- Dolgu veya tekrar yok; detayı kısa kesme — profesyonel kal.`;
   }
   return COMPACT_OUTPUT_RULES;
 }
@@ -465,16 +451,10 @@ function pickCoupleStructure() {
 }
 
 function buildFortuneSystemPrompt(teller, structure) {
-  const lengthBlock = buildFirstPassLengthBlock(teller);
-
   if (teller.id === 'gizem_ana') {
     return `Sen ${teller.name}, deneyimli bir Türk falcısısın.
 
 SES VE YAKLAŞIM: ${teller.voice} ${teller.approach}
-
-UZUNLUK: ${teller.lengthDirective}
-
-${lengthBlock}
 
 YAPI — ${structure.name}: ${structure.instruction}
 
@@ -493,11 +473,6 @@ ${teller.vocabulary}
 
 YORUMLAMA YAKLAŞIMIN:
 ${teller.approach}
-
-UZUNLUK TALİMATI:
-${teller.lengthDirective}
-
-${lengthBlock}
 
 BU YORUMUN YAPISI — ${structure.name}:
 ${structure.instruction}
@@ -574,14 +549,10 @@ function buildFortuneUserPrompt(body, teller, structure) {
     category === 'Tarot Falı' || category === 'İskambil Falı'
       ? `\n${structure.instruction}`
       : '';
-  const finalLength = buildFinalLengthInstruction(teller);
-
   return `${ritualSection}${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}${maritalSuffix}. Niyet: "${intention}"
 ${cardsSection}${uniqueness}
-${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]${structureReminder}
-
-${finalLength}`;
+${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]${structureReminder}`;
 }
 
 function formatBaklaScatter(baklaScatter) {
