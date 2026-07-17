@@ -8,6 +8,30 @@ const { google } = require('googleapis');
 const { loadServiceAccount } = require('../service_account_config');
 
 const PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.rrlime.falora';
+const PLAY_VERIFY_API_METHOD = 'androidpublisher.purchases.products.get';
+
+function logGooglePlayApiError(label, error) {
+  const response = error?.response;
+  const status = response?.status ?? null;
+  const responseBody = response?.data ?? null;
+  const apiError = responseBody?.error ?? null;
+  const nestedErrors = Array.isArray(apiError?.errors) ? apiError.errors : [];
+  const reason = apiError?.reason ?? nestedErrors[0]?.reason ?? null;
+  const details = apiError?.details ?? nestedErrors;
+
+  console.error(`PLAY BILLING API ERROR ${label}`);
+  console.error(`PLAY BILLING API method=${PLAY_VERIFY_API_METHOD}`);
+  console.error(`PLAY BILLING API httpStatus=${status ?? 'n/a'}`);
+  if (apiError) {
+    console.error(`PLAY BILLING API error.code=${apiError.code ?? 'n/a'}`);
+    console.error(`PLAY BILLING API error.message=${apiError.message ?? 'n/a'}`);
+    console.error(`PLAY BILLING API error.reason=${reason ?? 'n/a'}`);
+    console.error(`PLAY BILLING API error.details=${JSON.stringify(details ?? null)}`);
+  }
+  console.error(
+    `PLAY BILLING API responseBody=${JSON.stringify(responseBody ?? { message: error?.message ?? null })}`,
+  );
+}
 
 async function main() {
   const candidates = [];
@@ -52,6 +76,9 @@ async function testAccount(credentials) {
   const publisher = google.androidpublisher({ version: 'v3', auth });
 
   try {
+    console.log(
+      `PLAY BILLING API call method=${PLAY_VERIFY_API_METHOD} packageName=${PACKAGE_NAME} productId=tokens_100 purchaseToken=invalid-test-token`,
+    );
     await publisher.purchases.products.get({
       packageName: PACKAGE_NAME,
       productId: 'tokens_100',
@@ -63,9 +90,12 @@ async function testAccount(credentials) {
     const status = error?.response?.status;
     const message = error?.response?.data?.error?.message || error.message;
     if (status === 400 || status === 404) {
+      console.log(
+        `PLAY BILLING API expected failure (${credentials.client_email}) httpStatus=${status} message=${message}`,
+      );
       return true;
     }
-    console.error(`HATA (${credentials.client_email}) ${status}: ${message}`);
+    logGooglePlayApiError(`verify-play-billing (${credentials.client_email})`, error);
     return false;
   }
 }

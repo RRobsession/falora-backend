@@ -71,6 +71,62 @@ function logPlayBillingAccountUsage(context) {
   );
 }
 
+const PLAY_VERIFY_API_METHOD = 'androidpublisher.purchases.products.get';
+
+function maskPurchaseToken(token) {
+  if (!isNonEmptyString(token)) return 'missing';
+  const trimmed = token.trim();
+  if (trimmed.length <= 10) return `${trimmed.slice(0, 3)}...`;
+  return `${trimmed.slice(0, 8)}...${trimmed.slice(-4)}`;
+}
+
+function extractGoogleApiErrorFields(responseData) {
+  const apiError = responseData?.error;
+  if (!apiError) {
+    return { reason: null, details: null };
+  }
+
+  const nestedErrors = Array.isArray(apiError.errors) ? apiError.errors : [];
+  const firstNested = nestedErrors[0] ?? null;
+
+  return {
+    reason: apiError.reason ?? firstNested?.reason ?? null,
+    details: apiError.details ?? nestedErrors,
+  };
+}
+
+function logGooglePlayApiCall({ productId, purchaseToken }) {
+  console.log(
+    `PLAY BILLING API call method=${PLAY_VERIFY_API_METHOD} packageName=${PACKAGE_NAME} productId=${productId} purchaseToken=${maskPurchaseToken(purchaseToken)}`,
+  );
+}
+
+function logGooglePlayApiError(context, error) {
+  const response = error?.response;
+  const status = response?.status ?? null;
+  const responseBody = response?.data ?? null;
+  const apiError = responseBody?.error ?? null;
+  const { reason, details } = extractGoogleApiErrorFields(responseBody);
+
+  console.error(`PLAY BILLING API ERROR ${context}`);
+  console.error(`PLAY BILLING API method=${PLAY_VERIFY_API_METHOD}`);
+  console.error(`PLAY BILLING API httpStatus=${status ?? 'n/a'}`);
+
+  if (apiError) {
+    console.error(`PLAY BILLING API error.code=${apiError.code ?? 'n/a'}`);
+    console.error(`PLAY BILLING API error.message=${apiError.message ?? 'n/a'}`);
+    console.error(`PLAY BILLING API error.reason=${reason ?? 'n/a'}`);
+    console.error(`PLAY BILLING API error.details=${JSON.stringify(details ?? null)}`);
+  } else {
+    console.error(`PLAY BILLING API error.reason=n/a`);
+    console.error(`PLAY BILLING API error.details=${JSON.stringify(null)}`);
+  }
+
+  console.error(
+    `PLAY BILLING API responseBody=${JSON.stringify(responseBody ?? { message: error?.message ?? null })}`,
+  );
+}
+
 function getAndroidPublisher() {
   if (androidPublisher) return androidPublisher;
 
@@ -116,6 +172,7 @@ function getFirestoreOrThrow() {
 
 async function verifyProductPurchase(productId, purchaseToken) {
   logPlayBillingAccountUsage(`verify productId=${productId}`);
+  logGooglePlayApiCall({ productId, purchaseToken });
   try {
     const publisher = getAndroidPublisher();
     const response = await publisher.purchases.products.get({
@@ -124,17 +181,15 @@ async function verifyProductPurchase(productId, purchaseToken) {
       token: purchaseToken,
     });
     console.log(
-      `PLAY BILLING verify OK: productId=${productId} orderId=${response.data?.orderId || 'n/a'}`,
+      `PLAY BILLING API success method=${PLAY_VERIFY_API_METHOD} productId=${productId} orderId=${response.data?.orderId || 'n/a'}`,
     );
     return response.data;
   } catch (error) {
+    logGooglePlayApiError(`verify productId=${productId}`, error);
     const reason =
       error?.response?.data?.error?.message ||
       error?.message ||
       'Google Play doğrulaması başarısız.';
-    console.error(
-      `PLAY BILLING verify FAILED: productId=${productId} reason=${reason}`,
-    );
     const wrapped = new Error(`Google Play doğrulaması başarısız: ${reason}`);
     wrapped.statusCode = error?.response?.status || 400;
     throw wrapped;
