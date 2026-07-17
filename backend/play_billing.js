@@ -18,19 +18,29 @@ const TOKEN_PRODUCTS = {
 };
 
 let androidPublisher = null;
+let resolvedPlayBillingAccount = null;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
 function resolveGooglePlayServiceAccount() {
+  if (resolvedPlayBillingAccount) return resolvedPlayBillingAccount;
+
   const playLoaded = loadServiceAccount({
     label: 'Google Play',
     jsonEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
     pathEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_PATH',
     defaultPath: path.join(__dirname, 'google-play-service-account.json'),
   });
-  if (playLoaded) return playLoaded.credentials;
+  if (playLoaded) {
+    resolvedPlayBillingAccount = {
+      credentials: playLoaded.credentials,
+      source: playLoaded.source,
+      clientEmail: playLoaded.credentials.client_email,
+    };
+    return resolvedPlayBillingAccount;
+  }
 
   const firebaseLoaded = loadServiceAccount({
     label: 'Google Play (Firebase fallback)',
@@ -38,14 +48,34 @@ function resolveGooglePlayServiceAccount() {
     pathEnv: 'FIREBASE_SERVICE_ACCOUNT_PATH',
     defaultPath: path.join(__dirname, 'firebase-service-account.json'),
   });
-  return firebaseLoaded?.credentials ?? null;
+  if (firebaseLoaded) {
+    resolvedPlayBillingAccount = {
+      credentials: firebaseLoaded.credentials,
+      source: firebaseLoaded.source,
+      clientEmail: firebaseLoaded.credentials.client_email,
+    };
+    return resolvedPlayBillingAccount;
+  }
+
+  return null;
+}
+
+function logPlayBillingAccountUsage(context) {
+  const resolved = resolveGooglePlayServiceAccount();
+  if (!resolved) {
+    console.error(`PLAY BILLING ${context}: servis hesabı yapılandırılmadı.`);
+    return;
+  }
+  console.log(
+    `PLAY BILLING ${context}: client_email=${resolved.clientEmail} source=${resolved.source} package=${PACKAGE_NAME}`,
+  );
 }
 
 function getAndroidPublisher() {
   if (androidPublisher) return androidPublisher;
 
-  const serviceAccount = resolveGooglePlayServiceAccount();
-  if (!serviceAccount) {
+  const resolved = resolveGooglePlayServiceAccount();
+  if (!resolved) {
     const error = new Error(
       'Google Play servis hesabı yapılandırılmadı. GOOGLE_PLAY_SERVICE_ACCOUNT_JSON veya GOOGLE_PLAY_SERVICE_ACCOUNT_PATH ekleyin.',
     );
@@ -53,8 +83,10 @@ function getAndroidPublisher() {
     throw error;
   }
 
+  logPlayBillingAccountUsage('init');
+
   const auth = new google.auth.GoogleAuth({
-    credentials: serviceAccount,
+    credentials: resolved.credentials,
     scopes: ['https://www.googleapis.com/auth/androidpublisher'],
   });
 
@@ -83,6 +115,7 @@ function getFirestoreOrThrow() {
 }
 
 async function verifyProductPurchase(productId, purchaseToken) {
+  logPlayBillingAccountUsage(`verify productId=${productId}`);
   try {
     const publisher = getAndroidPublisher();
     const response = await publisher.purchases.products.get({
@@ -90,12 +123,18 @@ async function verifyProductPurchase(productId, purchaseToken) {
       productId,
       token: purchaseToken,
     });
+    console.log(
+      `PLAY BILLING verify OK: productId=${productId} orderId=${response.data?.orderId || 'n/a'}`,
+    );
     return response.data;
   } catch (error) {
     const reason =
       error?.response?.data?.error?.message ||
       error?.message ||
       'Google Play doğrulaması başarısız.';
+    console.error(
+      `PLAY BILLING verify FAILED: productId=${productId} reason=${reason}`,
+    );
     const wrapped = new Error(`Google Play doğrulaması başarısız: ${reason}`);
     wrapped.statusCode = error?.response?.status || 400;
     throw wrapped;
