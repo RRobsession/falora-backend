@@ -530,6 +530,36 @@ const {
   completeTokenPurchase,
   restorePurchasesForUser,
 } = require('./play_billing');
+const { parseServiceAccountJson } = require('./service_account_config');
+
+function resolveDeployGitCommit() {
+  return (
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    process.env.RAILWAY_GIT_COMMIT ||
+    process.env.GIT_COMMIT ||
+    'local'
+  );
+}
+
+function readFirebaseServiceAccountClientEmail() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw?.trim()) return null;
+  try {
+    return parseServiceAccountJson(String(raw)).client_email;
+  } catch (_) {
+    return null;
+  }
+}
+
+function logFirebaseServiceAccountClientEmail() {
+  const clientEmail = readFirebaseServiceAccountClientEmail();
+  if (clientEmail) {
+    console.log(`FIREBASE_SERVICE_ACCOUNT_JSON client_email=${clientEmail}`);
+    return clientEmail;
+  }
+  console.error('FIREBASE_SERVICE_ACCOUNT_JSON client_email=missing');
+  return null;
+}
 const { claimReferral } = require('./referrals');
 const {
   requireAuth,
@@ -605,6 +635,8 @@ app.get('/health', (_req, res) => {
     fcmConfigured: isFcmReady(),
     model: MODEL,
     visionModel: VISION_MODEL,
+    deployGitCommit: resolveDeployGitCommit(),
+    firebaseClientEmail: readFirebaseServiceAccountClientEmail(),
   });
 });
 
@@ -994,6 +1026,8 @@ app.post(
 
 app.listen(PORT, '0.0.0.0', () => {
   const fcmReady = initFirebaseAdmin();
+  logFirebaseServiceAccountClientEmail();
+  console.log(`DEPLOY git_commit=${resolveDeployGitCommit()}`);
   console.log(`Falora AI backend http://0.0.0.0:${PORT}`);
   console.log(`Yerel erişim: http://127.0.0.1:${PORT}`);
   console.log(`LAN erişim: http://192.168.1.101:${PORT}`);
