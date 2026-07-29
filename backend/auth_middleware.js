@@ -53,8 +53,18 @@ function requireMatchingUserId(req, res, next) {
   return next();
 }
 
+/** Oturum admin allowlist'te olmalı (admin_config.js). */
+function requireAdmin(req, res, next) {
+  const { isAdminUser } = require('./admin_config');
+  if (!isAdminUser(req.auth?.uid, req.auth?.email)) {
+    return res.status(403).json({ error: 'Admin yetkisi gerekli' });
+  }
+  return next();
+}
+
 module.exports = {
   requireAuth,
   requireVerifiedEmail,
   requireMatchingUserId,
+  requireAdmin,
 };

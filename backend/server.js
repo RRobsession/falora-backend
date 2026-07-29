@@ -565,7 +565,16 @@ const {
   requireAuth,
   requireVerifiedEmail,
   requireMatchingUserId,
+  requireAdmin,
 } = require('./auth_middleware');
+const {
+  publishDailyHoroscope,
+  getDailyHoroscope,
+  istanbulDateKey,
+  ZODIACS: HOROSCOPE_ZODIACS,
+} = require('./daily_horoscope');
+const { broadcastNotification } = require('./broadcast_notification');
+const { grantTokensByEmail } = require('./admin_grant_tokens');
 const { safeLog, safeError, logFortuneRequest, logCoupleRequest } = require('./safe_log');
 const {
   FORTUNE_COLLECTION,
@@ -657,6 +666,126 @@ app.post('/send-notification', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'Bildirim gönderilemedi' });
   }
 });
+
+app.get('/admin/daily-horoscope', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const dateKey =
+      typeof req.query.date === 'string' && req.query.date.trim()
+        ? req.query.date.trim()
+        : istanbulDateKey();
+    const doc = await getDailyHoroscope(dateKey);
+    return res.json({
+      date: dateKey,
+      zodiacs: HOROSCOPE_ZODIACS,
+      horoscope: doc,
+    });
+  } catch (err) {
+    console.error('DAILY HOROSCOPE GET ERROR:', err.message);
+    return res.status(500).json({ error: 'Günlük burç okunamadı' });
+  }
+});
+
+app.post(
+  '/admin/daily-horoscope',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { signs, date, sendNotifications } = req.body ?? {};
+      const result = await publishDailyHoroscope({
+        signs,
+        adminUid: req.auth.uid,
+        dateKey: date,
+        sendNotifications: sendNotifications !== false,
+      });
+      console.log(
+        `DAILY HOROSCOPE PUBLISHED date=${result.date} by=${req.auth.uid}`,
+      );
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error('DAILY HOROSCOPE PUBLISH ERROR:', err.message);
+      if (
+        err.code === 'invalid_signs' ||
+        err.code === 'empty_sign' ||
+        err.code === 'sign_too_long'
+      ) {
+        return res.status(400).json({
+          error: err.message,
+          code: err.code,
+          zodiac: err.zodiac,
+        });
+      }
+      return res.status(500).json({ error: 'Günlük burç yayınlanamadı' });
+    }
+  },
+);
+
+app.post(
+  '/admin/broadcast-notification',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { title, body } = req.body ?? {};
+      const result = await broadcastNotification({
+        title,
+        body,
+        adminUid: req.auth.uid,
+      });
+      console.log(
+        `ADMIN BROADCAST sent=${result.sent} failed=${result.failed} by=${req.auth.uid}`,
+      );
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error('ADMIN BROADCAST ERROR:', err.message);
+      if (
+        err.code === 'invalid_title' ||
+        err.code === 'invalid_body' ||
+        err.code === 'title_too_long' ||
+        err.code === 'body_too_long'
+      ) {
+        return res.status(400).json({ error: err.message, code: err.code });
+      }
+      if (err.code === 'fcm_not_configured') {
+        return res.status(503).json({ error: err.message, code: err.code });
+      }
+      return res.status(500).json({ error: 'Toplu bildirim gönderilemedi' });
+    }
+  },
+);
+
+app.post(
+  '/admin/grant-tokens',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { email, amount } = req.body ?? {};
+      const result = await grantTokensByEmail({
+        email,
+        amount,
+        adminUid: req.auth.uid,
+      });
+      console.log(
+        `ADMIN GRANT TOKENS email=${result.email} +${result.amount} ` +
+          `${result.before}->${result.after} by=${req.auth.uid}`,
+      );
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error('ADMIN GRANT TOKENS ERROR:', err.message);
+      if (
+        err.code === 'invalid_email' ||
+        err.code === 'invalid_amount' ||
+        err.code === 'amount_too_large' ||
+        err.code === 'user_not_found' ||
+        err.code === 'user_doc_missing'
+      ) {
+        return res.status(400).json({ error: err.message, code: err.code });
+      }
+      return res.status(500).json({ error: 'Jeton yüklenemedi' });
+    }
+  },
+);
 
 app.post(
   '/notify-ready',
