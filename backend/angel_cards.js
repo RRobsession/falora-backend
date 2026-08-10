@@ -4,7 +4,7 @@ const { getFirestore, isFcmReady, sendNotification } = require('./fcm');
 
 const ALLOWED_GROUP_SIZES = [10, 20];
 const MIN_CARDS = 2;
-const MAX_CARDS = 12;
+const MAX_CARDS = 50;
 const MAX_CARD_LEN = 500;
 const MAX_TITLE_LEN = 80;
 
