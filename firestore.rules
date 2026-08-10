@@ -34,7 +34,11 @@ service cloud.firestore {
 
       return isSignedIn()
 
-        && request.auth.uid in ['DhBcumWgN0RLAHK8aSYb3S9jXEv1', 'CV9g7RcjFbYu1wFYJJPNoCcxR3T2'];
+        && request.auth.uid in [
+          'l2vjDZXUbcOifjumq1q7HTubFxu2',
+          'o0AyRibzJFfNb6BNYxUweM4RqAs2',
+          'LmcMFwbp3eaLRrFRD2IURLW3reg1',
+        ];
 
     }
 
@@ -42,11 +46,14 @@ service cloud.firestore {
 
     function protectedUserFieldsUnchanged() {
 
-      return request.resource.data.uid == resource.data.uid
+      return request.resource.data.get('uid', request.auth.uid)
+          == resource.data.get('uid', request.auth.uid)
 
-        && request.resource.data.email == resource.data.email
+        && request.resource.data.get('email', '') == resource.data.get('email', '')
 
-        && request.resource.data.createdAt == resource.data.createdAt
+        && (!('createdAt' in resource.data)
+
+          || request.resource.data.createdAt == resource.data.createdAt)
 
         && (!('referralCode' in resource.data)
 
@@ -356,6 +363,25 @@ service cloud.firestore {
 
     }
 
+    match /manual_reader_status/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(
+          ['serdar', 'hatice', 'updatedAt', 'updatedBy']
+        )
+        && (!('serdar' in request.resource.data)
+          || request.resource.data.serdar in [
+            'auto', 'molada', 'fal_bakiyor',
+            'mesai_saati_disinda', 'gunluk_fal_limiti_doldu'
+          ])
+        && (!('hatice' in request.resource.data)
+          || request.resource.data.hatice in [
+            'auto', 'molada', 'fal_bakiyor',
+            'mesai_saati_disinda', 'gunluk_fal_limiti_doldu'
+          ]);
+      allow delete: if isAdmin();
+    }
+
     match /play_purchases/{purchaseToken} {
 
       allow read: if isAdmin()
@@ -370,6 +396,41 @@ service cloud.firestore {
 
       allow read, write: if false;
 
+    }
+
+    match /daily_horoscopes/{dateId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /admin_broadcasts/{broadcastId} {
+      allow read, write: if false;
+    }
+
+    match /admin_angel_cards/{docId} {
+      allow read, write: if false;
+    }
+
+    match /admin_token_grants/{grantId} {
+      allow read, write: if false;
+    }
+
+    match /problem_reports/{reportId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      allow create: if isEmailVerified()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.userEmail is string
+        && request.resource.data.displayName is string
+        && request.resource.data.platform is string;
+
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
   }

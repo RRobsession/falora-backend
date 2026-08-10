@@ -574,6 +574,7 @@ const {
   ZODIACS: HOROSCOPE_ZODIACS,
 } = require('./daily_horoscope');
 const { broadcastNotification } = require('./broadcast_notification');
+const { sendAngelCardNotifications } = require('./angel_cards');
 const { grantTokensByEmail } = require('./admin_grant_tokens');
 const { safeLog, safeError, logFortuneRequest, logCoupleRequest } = require('./safe_log');
 const {
@@ -750,6 +751,46 @@ app.post(
         return res.status(503).json({ error: err.message, code: err.code });
       }
       return res.status(500).json({ error: 'Toplu bildirim gönderilemedi' });
+    }
+  },
+);
+
+app.post(
+  '/admin/angel-cards',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { title, cards, groupSize } = req.body ?? {};
+      const result = await sendAngelCardNotifications({
+        title,
+        cards,
+        groupSize,
+        adminUid: req.auth.uid,
+      });
+      console.log(
+        `ADMIN ANGEL CARDS sent=${result.sent} failed=${result.failed} ` +
+          `groups=${result.groupCount} size=${result.groupSize} ` +
+          `cards=${result.cardCount} by=${req.auth.uid}`,
+      );
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error('ADMIN ANGEL CARDS ERROR:', err.message);
+      if (
+        err.code === 'invalid_title' ||
+        err.code === 'title_too_long' ||
+        err.code === 'invalid_cards' ||
+        err.code === 'too_few_cards' ||
+        err.code === 'too_many_cards' ||
+        err.code === 'card_too_long' ||
+        err.code === 'invalid_group_size'
+      ) {
+        return res.status(400).json({ error: err.message, code: err.code });
+      }
+      if (err.code === 'fcm_not_configured') {
+        return res.status(503).json({ error: err.message, code: err.code });
+      }
+      return res.status(500).json({ error: 'Melek kartı gönderilemedi' });
     }
   },
 );
