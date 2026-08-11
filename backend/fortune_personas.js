@@ -215,12 +215,20 @@ const COMPACT_OUTPUT_RULES = `KISA YORUM KALİTESİ:
 - Girişte uzun ön söz yok; doğrudan fal yorumuna gir.
 - Metin kısa görünmemeli: yoğun, akıcı, doğal Türkçe ve kişiye özel kalsın.`;
 
+const INTENTION_ANSWER_RULES = `NIYET / SORU CEVABI:
+- Niyet genel bir tema ise (aşk, para, iş, sağlık) o temayı yorumla.
+- Niyet spesifik bir soru ise (isim + soru, "mi/mı/mu/mü", "?", "dönecek mi", "olur mu" vb.) yorumun OMURGASI o sorunun cevabına giden yön olsun; genel aşk/para/iş dolgusuyla geçiştirme.
+- Niyette geçen kişi isimlerini (ör. Ahmet) doğal kullan; soruyu anonim ilişki enerjisine indirgeme.
+- Net bir yön ver: güçlü olumlu eğilim / zayıf / bekleme / kapanış — sembollerle destekle.
+- "Kesin dönecek", "kesin barışacaksınız", kesin tarih veya garanti dilini ASLA kullanma; yön ver, kader kesme.`;
+
 const GIZEM_COMPACT_RULES = `KURALLAR:
 - İsim, yaş, burç, niyeti organik yedir.
 - Yoğun, kişiye özel, akıcı Türkçe; doğrudan yoruma gir.
 - Tamamlanmış cümleyle bitir; başlık, madde, emoji yok.
 - AI/model/algoritma deme; "Baktığımda", "Kartların dili" gibi klişe giriş yok.
-- Kesin kader, tıbbi/hukuki tavsiye yok.`;
+- Kesin kader, tıbbi/hukuki tavsiye yok.
+${INTENTION_ANSWER_RULES}`;
 
 const SHARED_RULES = `ORTAK KURALLAR:
 - İsim, yaş, burç, niyet veya çift bilgilerini organik yedir; etiket listesi yapma.
@@ -229,11 +237,12 @@ const SHARED_RULES = `ORTAK KURALLAR:
 - Son kapanış kısa ve net olsun; kapanış cümlesi önceki fallardan farklı olsun.
 - Başlık, madde, numara, emoji kullanma.
 - "AI", "model", "algoritma", "veri", "analiz ettim" gibi ifadeler yasak.
-- "Genel olarak", "bu dönemde", "olabilir", "yolun açılıyor", "kartların dili" klişelerinden kaçın.
+- "Genel olarak", "bu dönemde", "yolun açılıyor", "kartların dili" klişelerinden kaçın.
 - Kesin kader, tıbbi/hukuki tavsiye, evlilik/aldatma garantisi yok.
 - Makale veya Google metni gibi jenerik burç kalıpları yok.
 - Robotik, şablon veya her seferinde aynı giriş cümlesi kullanma.
-- Şu açılışları varsayılan giriş olarak kullanma: "Baktığımda...", "Şu an gördüğüm...", "Kartların dili...", "Genel olarak...".`;
+- Şu açılışları varsayılan giriş olarak kullanma: "Baktığımda...", "Şu an gördüğüm...", "Kartların dili...", "Genel olarak...".
+${INTENTION_ANSWER_RULES}`;
 
 const VOCABULARY_STYLE_RULE = `KELİME HAVUZU KURALI:
 - Aşağıdaki kelime örnekleri yalnızca TON rehberidir; kelimesi kelimesine kopyalama.
@@ -508,6 +517,47 @@ ${coupleShared}
 Kendini ${persona.name} olarak tut; başka isim veya persona kullanma.`;
 }
 
+function looksLikeSpecificQuestion(intention) {
+  const t = String(intention || '').trim();
+  if (!t) return false;
+  if (t.includes('?') || t.includes('؟')) return true;
+  if (
+    /\b(mi|mı|mu|mü|midir|mıdır|mudur|müdür|miyim|mıyım|musun|müsün|misin|mısın)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  if (/\b(nasıl|ne zaman|kim|nereye|kaç|acaba|olur mu|olacak mı)\b/i.test(t)) {
+    return true;
+  }
+  if (
+    /\b(dönecek|döner mi|geri gelir|barışır|barışacak|beni sever|birlikte olur|evlenir|arar mı)\b/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function buildIntentionFocusDirective(intention) {
+  const text = String(intention || '').trim();
+  if (!text) return '';
+  if (!looksLikeSpecificQuestion(text)) {
+    return `NIYET NOTU: Niyet genel tema; temayı sembollerle işle. Spesifik bir soru yoksa zorunlu kişi ismi arama.\n`;
+  }
+  return `SPESİFİK SORU (ZORUNLU):
+Danışanın niyeti bir sorudur: "${text}"
+- Yorumun omurgası bu sorunun cevabına giden yön olsun.
+- Niyette geçen kişi isimlerini doğal kullan; soruyu genel "aşk enerjisi"ne indirgeme.
+- Net yön ver (güçlü olumlu / zayıf / bekleme / kapanış); "kesin olacak" deme.
+- Aşk, iş, para gibi niyet dışı başlıkları doldurma zorunluluğu yok; yalnızca soru gerektiriyorsa değin.
+- Sembol, kart veya ritüel verisini bu soruya bağla.
+
+`;
+}
+
 function buildFortuneUserPrompt(body, teller, structure) {
   const {
     category,
@@ -523,6 +573,8 @@ function buildFortuneUserPrompt(body, teller, structure) {
     typeof maritalStatus === 'string' && maritalStatus.trim()
       ? maritalStatus.trim()
       : '';
+  const specificQuestion = looksLikeSpecificQuestion(intention);
+  const intentionFocus = buildIntentionFocusDirective(intention);
 
   const tarotFlowHint = pickTarotCardFlowHint();
   const playingFlowHint = pickPlayingCardFlowHint();
@@ -531,7 +583,9 @@ function buildFortuneUserPrompt(body, teller, structure) {
       ? formatSelectedPlayingCards(selectedCards, playingFlowHint)
       : formatSelectedTarotCards(selectedCards, tarotFlowHint, teller.id);
   const baklaSection = formatBaklaScatter(body.baklaScatter);
-  const waterSection = formatWaterScatter(body.waterScatter);
+  const waterSection = formatWaterScatter(body.waterScatter, {
+    specificQuestion,
+  });
   const ritualSection = baklaSection || waterSection;
   const guidance = ritualSection
     ? categoryGuidance(category)
@@ -562,7 +616,7 @@ function buildFortuneUserPrompt(body, teller, structure) {
       : '\nSON TALİMAT: Yanıtını mutlaka tamamlanmış bir cümleyle bitir; yarım cümle bırakma.';
   return `${ritualSection}${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}${maritalSuffix}. Niyet: "${intention}"
-${cardsSection}${uniqueness}
+${intentionFocus}${cardsSection}${uniqueness}
 ${tierLengthBoost ? `${tierLengthBoost}\n` : ''}[id:${requestId}]${structureReminder}${closingRule}`;
 }
 
@@ -611,7 +665,7 @@ BAKLA YORUM KURALLARI:
 `;
 }
 
-function formatWaterScatter(waterScatter) {
+function formatWaterScatter(waterScatter, options = {}) {
   if (!waterScatter || typeof waterScatter !== 'object') {
     return '';
   }
@@ -630,6 +684,10 @@ function formatWaterScatter(waterScatter) {
     ? symbols.join(', ')
     : 'belirgin sembol yok';
 
+  const themeRule = options.specificQuestion
+    ? '- Niyet spesifik bir soruysa yorumu o soruya odakla; zorunlu aşk/iş/para bölümleri açma. Yalnızca sorunun gerektirdiği alana değin.'
+    : '- Aşk, iş, para ve yakın gelecek başlıklarında yorum üret.';
+
   return `SU FALI RİTÜEL VERİSİ (mutlaka dikkate al — falın omurgası):
 fortuneType: ${fortuneType || 'water'}
 Semboller (su yüzeyinde belirdi): ${symbolList}
@@ -644,7 +702,7 @@ SU FALI YORUM KURALLARI:
 - Aşağıdaki su falı verisine göre yorum yap.
 - Yorum tamamen eğlence amaçlıdır.
 - Sembolleri, suyun berraklığını, dalga sayısını ve hareketini yorumla.
-- Aşk, iş, para ve yakın gelecek başlıklarında yorum üret.
+${themeRule}
 - Genel ve rastgele konuşma; mutlaka verilen sembollere göre yorum yap.
 - Başka fal türü sembolleri veya rastgele imge uydurma.
 - Kesin gelecek vaadi, tıbbi veya finansal garanti verme.
