@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:falora/models/app_user.dart';
+import 'package:falora/services/ads/ad_config.dart';
 import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
 import 'package:falora/services/token_service.dart';
@@ -21,6 +22,8 @@ Future<void> showRewardAdSheet(
   BuildContext context, {
   required AppUser user,
 }) {
+  if (!showRewardedAdUi) return Future.value();
+
   final adService = RewardedAdService.instance;
   _logRewardService(adService);
   final rewardAdsUsed = TokenService.instance.rewardedAdsUsedToday(user);
@@ -105,8 +108,15 @@ Future<void> watchRewardAdFlow(
 
   switch (result) {
     case RewardedAdResult.rewarded:
+      final grace = adService.lastErrorMessage == rewardGrantedWithoutAdMessage;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('+$rewardAdTokenGrant jeton kazandınız!')),
+        SnackBar(
+          content: Text(
+            grace
+                ? rewardGrantedWithoutAdMessage
+                : '+$rewardAdTokenGrant jeton kazandınız!',
+          ),
+        ),
       );
     case RewardedAdResult.limitReached:
       ScaffoldMessenger.of(context).showSnackBar(

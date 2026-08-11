@@ -24,6 +24,7 @@ abstract class AiService {
     required String name,
     required int age,
     required String zodiac,
+    required String maritalStatus,
     required String intention,
     required String tellerId,
     String? requestId,

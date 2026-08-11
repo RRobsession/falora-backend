@@ -19,6 +19,8 @@ class AppUser {
     this.birthDate,
     this.profileCompleted = false,
     this.avatarAsset,
+    this.referralRewardClaimed = false,
+    this.referredBy,
   });
 
   final String userId;
@@ -34,6 +36,13 @@ class AppUser {
   final DateTime? birthDate;
   final bool profileCompleted;
   final String? avatarAsset;
+  final bool referralRewardClaimed;
+  final String? referredBy;
+
+  /// Davet kodu girme hakkı (kayıt veya profil — ömür boyu 1).
+  bool get canEnterReferralCode =>
+      !referralRewardClaimed &&
+      (referredBy == null || referredBy!.trim().isEmpty);
 
   String get effectiveDisplayName {
     final fromDisplay = displayName.trim();
@@ -65,6 +74,8 @@ class AppUser {
     DateTime? birthDate,
     bool? profileCompleted,
     String? avatarAsset,
+    bool? referralRewardClaimed,
+    String? referredBy,
   }) {
     return AppUser(
       userId: userId,
@@ -80,6 +91,9 @@ class AppUser {
       birthDate: birthDate ?? this.birthDate,
       profileCompleted: profileCompleted ?? this.profileCompleted,
       avatarAsset: avatarAsset ?? this.avatarAsset,
+      referralRewardClaimed:
+          referralRewardClaimed ?? this.referralRewardClaimed,
+      referredBy: referredBy ?? this.referredBy,
     );
   }
 
@@ -125,6 +139,8 @@ class AppUser {
       avatarAsset: _parseOptionalString(
         _normalizeAvatarFromFirestore(json['avatarAsset'] as String?),
       ),
+      referralRewardClaimed: json['referralRewardClaimed'] == true,
+      referredBy: _parseOptionalString(json['referredBy']),
     );
   }
 

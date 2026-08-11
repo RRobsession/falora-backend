@@ -40,6 +40,8 @@ class ManualFortuneRequest {
 
     required this.zodiac,
 
+    this.maritalStatus = '',
+
     required this.intention,
 
     required this.questions,
@@ -97,6 +99,8 @@ class ManualFortuneRequest {
   final int age;
 
   final String zodiac;
+
+  final String maritalStatus;
 
   final String intention;
 
@@ -277,6 +281,8 @@ class ManualFortuneRequest {
       age: (data['age'] as num?)?.toInt() ?? 0,
 
       zodiac: data['zodiac'] as String? ?? '',
+
+      maritalStatus: data['maritalStatus'] as String? ?? '',
 
       intention: data['intention'] as String? ?? '',
 

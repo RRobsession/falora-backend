@@ -8,6 +8,8 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 class AdConsentService {
   AdConsentService._();
 
+  static bool? lastCanRequestAds;
+
   static Future<void> requestConsentIfNeeded() async {
     if (kIsWeb) return;
     if (defaultTargetPlatform != TargetPlatform.android &&
@@ -17,58 +19,47 @@ class AdConsentService {
 
     try {
       final params = ConsentRequestParameters();
-      final completer = Completer<void>();
+      final updateDone = Completer<void>();
 
       ConsentInformation.instance.requestConsentInfoUpdate(
         params,
-        () async {
-          try {
-            final available =
-                await ConsentInformation.instance.isConsentFormAvailable();
-            if (!available) {
-              if (!completer.isCompleted) completer.complete();
-              return;
-            }
-
-            ConsentForm.loadConsentForm(
-              (ConsentForm form) async {
-                try {
-                  final status =
-                      await ConsentInformation.instance.getConsentStatus();
-                  if (status == ConsentStatus.required) {
-                    form.show((_) {
-                      if (!completer.isCompleted) completer.complete();
-                    });
-                  } else if (!completer.isCompleted) {
-                    completer.complete();
-                  }
-                } catch (e) {
-                  AdMobLogger.log('AD CONSENT SHOW ERROR: $e');
-                  if (!completer.isCompleted) completer.complete();
-                }
-              },
-              (FormError error) {
-                AdMobLogger.log('AD CONSENT FORM LOAD ERROR: ${error.message}');
-                if (!completer.isCompleted) completer.complete();
-              },
-            );
-          } catch (e) {
-            AdMobLogger.log('AD CONSENT CHECK ERROR: $e');
-            if (!completer.isCompleted) completer.complete();
-          }
+        () {
+          if (!updateDone.isCompleted) updateDone.complete();
         },
         (FormError error) {
           AdMobLogger.log('AD CONSENT INFO ERROR: ${error.message}');
-          if (!completer.isCompleted) completer.complete();
+          if (!updateDone.isCompleted) updateDone.complete();
         },
       );
 
-      await completer.future.timeout(
+      await updateDone.future.timeout(
         const Duration(seconds: 12),
-        onTimeout: () => AdMobLogger.log('AD CONSENT TIMEOUT'),
+        onTimeout: () => AdMobLogger.log('AD CONSENT INFO TIMEOUT'),
+      );
+
+      final formDone = Completer<void>();
+      await ConsentForm.loadAndShowConsentFormIfRequired((formError) {
+        if (formError != null) {
+          AdMobLogger.log(
+            'AD CONSENT FORM ERROR: ${formError.errorCode} ${formError.message}',
+          );
+        }
+        if (!formDone.isCompleted) formDone.complete();
+      });
+      await formDone.future.timeout(
+        const Duration(seconds: 60),
+        onTimeout: () => AdMobLogger.log('AD CONSENT FORM TIMEOUT'),
+      );
+
+      lastCanRequestAds =
+          await ConsentInformation.instance.canRequestAds();
+      final status = await ConsentInformation.instance.getConsentStatus();
+      AdMobLogger.log(
+        'AD CONSENT STATUS: $status canRequestAds=$lastCanRequestAds',
       );
     } catch (e) {
       AdMobLogger.log('AD CONSENT SKIPPED: $e');
+      lastCanRequestAds = null;
     }
   }
 }

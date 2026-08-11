@@ -77,7 +77,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       debugPrint('SEND VERIFICATION START');
       try {
-        await sendVerificationEmail();
+        await sendAppEmailVerification(user);
         debugPrint('SEND VERIFICATION SUCCESS');
       } on AuthException catch (e) {
         debugPrint('SEND VERIFICATION ERROR: ${e.message}');

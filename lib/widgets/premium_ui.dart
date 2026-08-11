@@ -1,7 +1,9 @@
 import 'package:falora/config/app_branding.dart';
 import 'package:falora/models/fortune_models.dart';
+import 'package:falora/services/ads/ad_config.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/token_config.dart';
+import 'package:falora/utils/format_tokens.dart';
 import 'package:falora/widgets/falora_component_library.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -161,7 +163,7 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
                 ),
               ),
               Text(
-                '${widget.tokens}',
+                formatTokenAmount(widget.tokens),
                 style: TextStyle(
                   color: faloraInk,
                   fontSize: widget.compact ? 22 : 28,
@@ -265,13 +267,10 @@ class HomeQuickActions extends StatelessWidget {
           compact: true,
           showHint: false,
         ),
-        const SizedBox(width: 8),
-        _QuickIconButton(
-          icon: Icons.card_giftcard_rounded,
-          tooltip: 'Ücretsiz jeton',
-          onTap: onOpenReward,
-          accent: faloraGold,
-        ),
+        if (showRewardedAdUi) ...[
+          const SizedBox(width: 8),
+          _HomeRewardAdButton(onTap: onOpenReward),
+        ],
         const SizedBox(width: 6),
         _QuickIconButton(
           icon: Icons.storefront_rounded,
@@ -280,6 +279,51 @@ class HomeQuickActions extends StatelessWidget {
           accent: faloraAccent,
         ),
       ],
+    );
+  }
+}
+
+class _HomeRewardAdButton extends StatelessWidget {
+  const _HomeRewardAdButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTap(
+      onTap: onTap,
+      child: Tooltip(
+        message: 'İzle, +${formatTokenAmount(rewardAdTokenGrant)} jeton kazan',
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.fromLTRB(10, 0, 12, 0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(19),
+            color: faloraParchmentInset.withValues(alpha: 0.85),
+            border: Border.all(color: faloraGold.withValues(alpha: 0.55)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.ondemand_video_rounded,
+                color: faloraGold,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '+${formatTokenAmount(rewardAdTokenGrant)} jeton',
+                style: TextStyle(
+                  color: faloraInk,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -377,7 +421,7 @@ class PremiumCategoryCard extends StatelessWidget {
                     const SizedBox(height: 5),
                     Text(
                       category == FortuneCategory.ciftUyumu
-                          ? '${category.description} · $coupleTokenCost jeton'
+                          ? '${category.description} · ${formatTokenAmount(coupleTokenCost)} jeton'
                           : category.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -420,6 +464,8 @@ class GiftRewardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!showRewardedAdUi) return const SizedBox.shrink();
+
     return Container(
       padding: const EdgeInsets.all(20),
         decoration: faloraParchmentDecoration(
@@ -457,7 +503,7 @@ class GiftRewardCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Ücretsiz 50 Jeton Kazan',
+                      'Ücretsiz jeton kazan',
                       style: FaloraTypography.titleLarge.copyWith(
                         color: faloraInkHeading,
                       ),
@@ -475,7 +521,9 @@ class GiftRewardCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       hasReward
-                          ? 'Her reklam +$rewardAdTokenGrant jeton kazandırır.'
+                          ? 'Her reklam +${formatTokenAmount(rewardAdTokenGrant)} jeton '
+                              '(günde $maxRewardedAdsPerDay reklam = '
+                              '${formatTokenAmount(rewardAdTokenGrant * maxRewardedAdsPerDay)} jeton).'
                           : rewardAdLimitReachedMessage,
                       style: const TextStyle(
                         fontSize: 12,
@@ -506,7 +554,7 @@ class GiftRewardCard extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 hasReward
-                    ? 'Reklam İzle ve 50 Jeton Kazan'
+                    ? 'Reklam izle (+${formatTokenAmount(rewardAdTokenGrant)} jeton)'
                     : 'Bugünkü hak doldu',
                 style: TextStyle(
                   color: hasReward ? faloraParchmentRaised : faloraTextSecondary,
@@ -542,6 +590,8 @@ class GiftRewardModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!showRewardedAdUi) return const SizedBox.shrink();
+
     final cardWidth = MediaQuery.sizeOf(context).width * 0.85;
 
     return ConstrainedBox(
@@ -564,7 +614,7 @@ class GiftRewardModal extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
-              '🎁 Ücretsiz 50 Jeton Kazan',
+              '🎁 Ücretsiz jeton kazan',
               textAlign: TextAlign.center,
               style: FaloraTypography.titleLarge.copyWith(color: faloraInkHeading),
             ),
@@ -579,6 +629,20 @@ class GiftRewardModal extends StatelessWidget {
                 height: 1.35,
               ),
             ),
+            if (hasReward) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Her reklam +${formatTokenAmount(rewardAdTokenGrant)} jeton '
+                '(günde $maxRewardedAdsPerDay reklam = '
+                '${formatTokenAmount(rewardAdTokenGrant * maxRewardedAdsPerDay)} jeton).',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: faloraTextSecondary,
+                  height: 1.35,
+                ),
+              ),
+            ],
             if (!hasReward) ...[
               const SizedBox(height: 8),
               const Text(
@@ -609,7 +673,7 @@ class GiftRewardModal extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Text(
                   hasReward
-                      ? '📺 Reklam İzle ve 50 Jeton Kazan'
+                      ? '📺 Reklam izle (+${formatTokenAmount(rewardAdTokenGrant)} jeton)'
                       : 'Tamam',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -776,6 +840,7 @@ class ShopPackageCard extends StatelessWidget {
     required this.badge,
     required this.highlight,
     required this.price,
+    this.compareAtPrice,
     this.isPurchasing = false,
     required this.onBuy,
   });
@@ -785,6 +850,7 @@ class ShopPackageCard extends StatelessWidget {
   final String? badge;
   final bool highlight;
   final String price;
+  final String? compareAtPrice;
   final bool isPurchasing;
   final VoidCallback? onBuy;
 
@@ -845,7 +911,7 @@ class ShopPackageCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '$tokens',
+                            formatTokenAmount(tokens),
                             style: TextStyle(
                               fontSize: highlight ? 36 : 32,
                               fontWeight: FontWeight.w800,
@@ -882,7 +948,11 @@ class ShopPackageCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                FaloraGoldPrice(price: price, large: highlight),
+                FaloraGoldPrice(
+                  price: price,
+                  compareAtPrice: compareAtPrice,
+                  large: highlight,
+                ),
               ],
             ),
             const SizedBox(height: 18),

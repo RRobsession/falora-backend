@@ -6,9 +6,17 @@ const initialUserTokens = 50;
 const fortuneTokenCost = 50;
 const coupleTokenCost = 150;
 const rewardAdTokenGrant = 25;
-const maxRewardedAdsPerDay = 2;
+const maxRewardedAdsPerDay = 6;
 const rewardResetDuration = Duration(hours: 24);
 const rewardAdLimitReachedMessage =
     'Bugünkü reklam hakkınızı kullandınız. Yarın tekrar deneyin.';
+
+/// AdMob hesabı onaylanana kadar: reklam yüklenmese/açılmasa da
+/// günlük hak içinde butona basınca jeton verilir.
+/// Onay sonrası false yapın.
+const grantRewardWhenAdUnavailable = true;
+
+const rewardGrantedWithoutAdMessage =
+    'Reklam şu an gösterilemedi; günlük ödülünüz hesabınıza eklendi.';
 
 const shopPackageCatalog = tokenProductCatalog;

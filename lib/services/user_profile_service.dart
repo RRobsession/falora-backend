@@ -45,30 +45,24 @@ class UserProfileService {
       throw ArgumentError('İsim boş olamaz');
     }
     debugPrint('ONBOARDING_NAME_STEP_START');
-    await _userRef(uid).set(
-      {
-        'displayName': trimmed,
-        'name': trimmed,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _userRef(uid).update({
+      'displayName': trimmed,
+      'name': trimmed,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     debugPrint('ONBOARDING_NAME_SAVED');
   }
 
   Future<void> saveBirthDate(String uid, DateTime birthDate) async {
     debugPrint('ONBOARDING_BIRTHDATE_STEP_START');
     final age = calculateAgeFromBirthDate(birthDate);
-    await _userRef(uid).set(
-      {
-        'birthDate': Timestamp.fromDate(
-          DateTime(birthDate.year, birthDate.month, birthDate.day),
-        ),
-        'age': age,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _userRef(uid).update({
+      'birthDate': Timestamp.fromDate(
+        DateTime(birthDate.year, birthDate.month, birthDate.day),
+      ),
+      'age': age,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     debugPrint('ONBOARDING_BIRTHDATE_SAVED');
   }
 
@@ -78,13 +72,10 @@ class UserProfileService {
       throw ArgumentError('Burç seçilmelidir');
     }
     debugPrint('ONBOARDING_ZODIAC_STEP_START');
-    await _userRef(uid).set(
-      {
-        'zodiac': trimmed,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _userRef(uid).update({
+      'zodiac': trimmed,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     debugPrint('ONBOARDING_ZODIAC_SAVED');
   }
 
@@ -94,13 +85,10 @@ class UserProfileService {
         ? trimmed
         : normalizeStoredAvatarAsset(trimmed);
     debugPrint('ONBOARDING_AVATAR_STEP_START');
-    await _userRef(uid).set(
-      {
-        'avatarAsset': stored,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _userRef(uid).update({
+      'avatarAsset': stored,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     debugPrint('ONBOARDING_AVATAR_SELECTED asset=${stored.length > 80 ? '${stored.substring(0, 40)}…' : stored}');
   }
 
@@ -113,24 +101,18 @@ class UserProfileService {
   }
 
   Future<void> completeProfile(String uid) async {
-    await _userRef(uid).set(
-      {
-        'profileCompleted': true,
-        'profileCompletedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _userRef(uid).update({
+      'profileCompleted': true,
+      'profileCompletedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     debugPrint('ONBOARDING_COMPLETED');
   }
 
   Future<void> clearAvatarAsset(String uid) async {
-    await _userRef(uid).set(
-      {
-        'avatarAsset': FieldValue.delete(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await _userRef(uid).update({
+      'avatarAsset': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 }

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:falora/auth/email_verification_helper.dart' as email_verification;
 import 'package:falora/auth/auth_service.dart';
+import 'package:falora/auth/google_sign_in_config.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
@@ -10,6 +11,7 @@ import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/token_config.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseAuthService implements AuthService {
   FirebaseAuthService._();
@@ -18,6 +20,27 @@ class FirebaseAuthService implements AuthService {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  static Future<void>? _googleInitFuture;
+
+  /// google_sign_in 7.x — yalnızca bir kez çağrılmalı (main.dart).
+  static Future<void> initializeGoogleSignIn() {
+    _googleInitFuture ??= _configureGoogleSignIn();
+    return _googleInitFuture!;
+  }
+
+  static Future<void> _configureGoogleSignIn() async {
+    debugPrint('GOOGLE_SIGN_IN_INIT_START web=$kIsWeb');
+    await GoogleSignIn.instance.initialize(
+      clientId: kIsWeb ? googleSignInWebClientId : null,
+      serverClientId: kIsWeb ? null : googleSignInServerClientId,
+    );
+    debugPrint('GOOGLE_SIGN_IN_INIT_SUCCESS');
+  }
+
+  Future<void> _ensureGoogleSignInReady() async {
+    await initializeGoogleSignIn();
+  }
 
   String _normalizeEmail(String email) => email.trim().toLowerCase();
 
@@ -45,7 +68,11 @@ class FirebaseAuthService implements AuthService {
   }
 
   Future<void> _sendVerificationEmailToCurrentUser() async {
-    await email_verification.sendVerificationEmail();
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw AuthException('Oturum bulunamadı.');
+    }
+    await email_verification.sendAppEmailVerification(user);
   }
 
   Future<void> _deleteNewUserFirestoreDoc(String uid) async {
@@ -79,14 +106,19 @@ class FirebaseAuthService implements AuthService {
   }
 
   Future<void> _syncEmailVerifiedToFirestore(String uid) async {
+    final ref = _db.collection('users').doc(uid);
     try {
-      await _db.collection('users').doc(uid).set(
-        {
-          'emailVerified': true,
-          'emailVerifiedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      final snap = await ref.get();
+      if (!snap.exists) {
+        debugPrint(
+          'Firestore emailVerified sync skipped (user doc missing) uid=$uid',
+        );
+        return;
+      }
+      await ref.update({
+        'emailVerified': true,
+        'emailVerifiedAt': FieldValue.serverTimestamp(),
+      });
       debugPrint('Firestore emailVerified synced to true for $uid');
     } catch (e, stackTrace) {
       debugPrint('Firestore emailVerified update failed: $e');
@@ -110,12 +142,11 @@ class FirebaseAuthService implements AuthService {
     final emailVerified = _firebaseEmailVerified(fbUser);
     debugPrint('GET CURRENT USER emailVerified (Firebase Auth): $emailVerified');
 
-    if (emailVerified) {
-      await _syncEmailVerifiedToFirestore(fbUser.uid);
-    }
-
     try {
       final profile = await _loadUserProfile(fbUser);
+      if (emailVerified) {
+        await _syncEmailVerifiedToFirestore(fbUser.uid);
+      }
       return _appUserFromFirebaseAndFirestore(fbUser, profile);
     } catch (e, stackTrace) {
       debugPrint('Firestore user fetch failed: $e');
@@ -261,12 +292,11 @@ class FirebaseAuthService implements AuthService {
         'LOGIN SUCCESS uid: ${fbUser.uid} | emailVerified (Firebase Auth): ${fbUser.emailVerified}',
       );
 
-      if (fbUser.emailVerified) {
-        await _syncEmailVerifiedToFirestore(fbUser.uid);
-      }
-
       try {
         final profile = await _loadUserProfile(fbUser);
+        if (fbUser.emailVerified) {
+          await _syncEmailVerifiedToFirestore(fbUser.uid);
+        }
         return _appUserFromFirebaseAndFirestore(fbUser, profile);
       } catch (e, stackTrace) {
         debugPrint('Firestore user fetch failed on login: $e');
@@ -300,6 +330,164 @@ class FirebaseAuthService implements AuthService {
       debugPrint('Unknown login error: $e');
       debugPrint(stackTrace.toString());
       throw AuthException('Giriş hatası: $e');
+    }
+  }
+
+  @override
+  Future<AppUser> signInWithGoogle() async {
+    debugPrint('GOOGLE_SIGN_IN_START web=$kIsWeb');
+    try {
+      await _ensureGoogleSignInReady();
+
+      // Önceki oturumu temizle (Chrome’da admin oturumu kalmasın).
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (_) {}
+      await _auth.signOut();
+
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider();
+        provider.setCustomParameters({'prompt': 'select_account'});
+        final credential = await _auth.signInWithPopup(provider);
+        final fbUser = credential.user;
+        if (fbUser == null) {
+          throw AuthException('Google ile giriş tamamlanamadı.');
+        }
+        debugPrint(
+          'GOOGLE_SIGN_IN_ACCOUNT uid=${fbUser.uid} email=${fbUser.email}',
+        );
+        return _completeGoogleSignIn(fbUser);
+      }
+
+      if (!GoogleSignIn.instance.supportsAuthenticate()) {
+        throw AuthException(
+          'Bu cihazda Google ile giriş şu an desteklenmiyor.',
+        );
+      }
+
+      final googleUser = await GoogleSignIn.instance.authenticate(
+        scopeHint: const ['email', 'profile'],
+      );
+
+      final idToken = googleUser.authentication.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw AuthException(
+          'Google kimlik doğrulaması tamamlanamadı. Lütfen tekrar deneyin.',
+        );
+      }
+
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      await _auth.signInWithCredential(credential);
+
+      final fbUser = await _reloadCurrentUser(logPrefix: 'GOOGLE');
+      if (fbUser == null) {
+        throw AuthException('Google ile giriş tamamlanamadı.');
+      }
+      debugPrint(
+        'GOOGLE_SIGN_IN_ACCOUNT uid=${fbUser.uid} email=${fbUser.email}',
+      );
+      return _completeGoogleSignIn(fbUser);
+    } on AuthException {
+      rethrow;
+    } on GoogleSignInException catch (e) {
+      if (_isGoogleSignInCancellation(e)) {
+        debugPrint('GOOGLE_SIGN_IN_CANCELLED code=${e.code.name}');
+        throw AuthException('', userCancelled: true);
+      }
+      debugPrint(
+        'GOOGLE_SIGN_IN_ERROR code=${e.code.name} desc=${e.description}',
+      );
+      throw AuthException(mapGoogleSignInError(e));
+    } on FirebaseAuthException catch (e) {
+      if (_isFirebaseGoogleSignInCancellation(e)) {
+        debugPrint('GOOGLE_SIGN_IN_CANCELLED firebase code=${e.code}');
+        throw AuthException('', userCancelled: true);
+      }
+      debugPrint('GOOGLE_FIREBASE_AUTH_ERROR code=${e.code}');
+      throw AuthException(mapFirebaseAuthError(e, login: true));
+    } catch (e, stackTrace) {
+      debugPrint('GOOGLE_SIGN_IN_UNKNOWN_ERROR: $e');
+      debugPrint(stackTrace.toString());
+      throw AuthException('Google ile giriş yapılamadı. Lütfen tekrar deneyin.');
+    }
+  }
+
+  Future<AppUser> _completeGoogleSignIn(User fbUser) async {
+    debugPrint(
+      'GOOGLE_SIGN_IN_SUCCESS uid=${fbUser.uid} '
+      'emailVerified=${fbUser.emailVerified}',
+    );
+
+    final email = fbUser.email?.trim().toLowerCase() ?? '';
+    final displayName = fbUser.displayName?.trim() ?? '';
+    final photoUrl = fbUser.photoURL;
+
+    AppUser profile;
+    try {
+      profile = await TokenService.instance.syncGoogleUserDocument(
+        uid: fbUser.uid,
+        email: email,
+        displayName: displayName,
+        photoUrl: photoUrl,
+      );
+    } on FirebaseException catch (e, stackTrace) {
+      debugPrint('GOOGLE_USER_DOC_SYNC_FAILED code=${e.code}');
+      debugPrint(stackTrace.toString());
+      final message = e.code == 'permission-denied'
+          ? 'Profil kaydı tamamlanamadı (veritabanı izni).'
+          : 'Google profili kaydedilemedi. Lütfen tekrar deneyin.';
+      throw AuthException(message);
+    }
+
+    if (fbUser.emailVerified) {
+      await _syncEmailVerifiedToFirestore(fbUser.uid);
+    }
+
+    return _appUserFromFirebaseAndFirestore(
+      fbUser,
+      profile.copyWith(emailVerified: true),
+    );
+  }
+
+  static bool _isFirebaseGoogleSignInCancellation(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'popup-closed-by-user':
+      case 'cancelled-popup-request':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  static bool _isGoogleSignInCancellation(GoogleSignInException e) {
+    switch (e.code) {
+      case GoogleSignInExceptionCode.canceled:
+        return true;
+      case GoogleSignInExceptionCode.interrupted:
+      case GoogleSignInExceptionCode.uiUnavailable:
+      case GoogleSignInExceptionCode.unknownError:
+      case GoogleSignInExceptionCode.clientConfigurationError:
+      case GoogleSignInExceptionCode.providerConfigurationError:
+      case GoogleSignInExceptionCode.userMismatch:
+        return false;
+    }
+  }
+
+  static String mapGoogleSignInError(GoogleSignInException e) {
+    switch (e.code) {
+      case GoogleSignInExceptionCode.canceled:
+        return '';
+      case GoogleSignInExceptionCode.interrupted:
+        return 'Google girişi yarıda kesildi. Lütfen tekrar deneyin.';
+      case GoogleSignInExceptionCode.uiUnavailable:
+        return 'Google giriş ekranı açılamadı. Lütfen tekrar deneyin.';
+      case GoogleSignInExceptionCode.clientConfigurationError:
+      case GoogleSignInExceptionCode.providerConfigurationError:
+        return 'Google girişi yapılandırılmamış. Lütfen daha sonra tekrar deneyin.';
+      case GoogleSignInExceptionCode.userMismatch:
+        return 'Google hesabı oturumu karıştı. Lütfen tekrar deneyin.';
+      case GoogleSignInExceptionCode.unknownError:
+        return 'Google ile giriş yapılamadı. Lütfen tekrar deneyin.';
     }
   }
 
@@ -362,6 +550,11 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<void> logout() async {
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (e) {
+      debugPrint('GOOGLE_SIGN_OUT_ERROR: $e');
+    }
     await _auth.signOut();
     debugPrint('FIREBASE LOGOUT ok');
   }
@@ -475,6 +668,8 @@ class FirebaseAuthService implements AuthService {
         return 'Şifre hatalı.';
       case 'user-not-found':
         return 'Kullanıcı bulunamadı.';
+      case 'account-exists-with-different-credential':
+        return 'Bu e-posta farklı bir giriş yöntemiyle kayıtlı. E-posta/şifre ile deneyin.';
       default:
         return login ? 'Giriş hatası: ${e.code}' : 'Kayıt hatası: ${e.code}';
     }

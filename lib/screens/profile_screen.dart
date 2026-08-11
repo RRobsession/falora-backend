@@ -1,6 +1,7 @@
 import 'package:falora/auth/auth_service.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/screens/invite_friend_screen.dart';
+import 'package:falora/screens/report_problem_screen.dart';
 import 'package:falora/screens/shop_screen.dart';
 import 'package:falora/widgets/compact_birth_date_dialog.dart';
 import 'package:falora/widgets/preset_avatar_picker.dart';
@@ -12,6 +13,8 @@ import 'package:falora/services/terms_of_service_service.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/utils/format_tokens.dart';
+import 'package:falora/widgets/faq_dialog.dart';
 import 'package:falora/widgets/user_avatar_image.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
@@ -71,12 +74,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openReportProblem(BuildContext context) {
+    final user = TokenService.instance.liveUser.value ?? widget.user;
+    Navigator.of(context).push(
+      faloraPageRoute<void>(ReportProblemScreen(user: user)),
+    );
+  }
+
   Future<void> _openPrivacyPolicy() async {
     await PrivacyPolicyService.instance.openPrivacyPolicy(context);
   }
 
   Future<void> _openTermsOfService() async {
     await TermsOfServiceService.instance.openTermsOfService(context);
+  }
+
+  Future<void> _openFaq() async {
+    await showFaqDialog(context);
   }
 
   Future<void> _openNotificationSettings() async {
@@ -121,61 +135,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<String?> _askPasswordForReauth() async {
-    final controller = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    try {
-      return showDialog<String>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Kimlik Doğrulama'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Hesabını silmek için güvenlik nedeniyle şifreni tekrar girmelisin.',
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: controller,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Şifre'),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Şifre gerekli';
-                    return null;
-                  },
-                  onFieldSubmitted: (_) {
-                    if (formKey.currentState?.validate() ?? false) {
-                      Navigator.pop(ctx, controller.text);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('İptal'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.pop(ctx, controller.text);
-                }
-              },
-              child: const Text('Devam Et'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      controller.dispose();
-    }
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const _ReauthPasswordDialog(),
+    );
   }
 
   void _showError(String message) {
@@ -525,7 +489,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.person_add_alt_1_rounded,
                         iconColor: faloraBronze,
                         title: 'Arkadaşını Davet Et',
-                        subtitle: 'Davet kodunla jeton kazan',
+                        subtitle: 'Kod paylaş veya kod gir, jeton kazan',
                         onTap: () => _openInvite(context),
                       ),
                       _ProfileMenuTile(
@@ -534,6 +498,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'Bildirimler',
                         subtitle: 'Fal hazır bildirimleri',
                         onTap: _openNotificationSettings,
+                      ),
+                      _ProfileMenuTile(
+                        icon: Icons.help_outline_rounded,
+                        iconColor: faloraBronze,
+                        title: 'Sıkça Sorulan Sorular',
+                        subtitle: 'SSS ve yardım',
+                        onTap: _openFaq,
                       ),
                       _ProfileMenuTile(
                         icon: Icons.privacy_tip_outlined,
@@ -548,6 +519,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'Kullanıcı Sözleşmesi',
                         subtitle: 'Hizmet şartları ve feragatler',
                         onTap: _openTermsOfService,
+                      ),
+                      _ProfileMenuTile(
+                        icon: Icons.report_problem_outlined,
+                        iconColor: faloraGoldDark,
+                        title: 'Sorun Bildir',
+                        subtitle: 'Yaşadığın sorunu bize ilet',
+                        onTap: () => _openReportProblem(context),
                       ),
                       _ProfileLogoutTile(
                         onPressed: _deletingAccount ? null : _confirmLogout,
@@ -654,7 +632,7 @@ class _ProfileUserCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 3),
                         Text(
-                          '$tokens',
+                          formatTokenAmount(tokens),
                           style: const TextStyle(
                             color: faloraInk,
                             fontSize: 10,
@@ -779,6 +757,77 @@ class _ProfileUserCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Kimlik doğrulama dialogu — controller yaşam döngüsü bu State'e aittir.
+/// (Dışarıda oluşturup dialog bitmeden dispose etmek "used after disposed" üretir.)
+class _ReauthPasswordDialog extends StatefulWidget {
+  const _ReauthPasswordDialog();
+
+  @override
+  State<_ReauthPasswordDialog> createState() => _ReauthPasswordDialogState();
+}
+
+class _ReauthPasswordDialogState extends State<_ReauthPasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    Navigator.pop(context, _controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Kimlik Doğrulama'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Hesabını silmek için güvenlik nedeniyle şifreni tekrar girmelisin.',
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _controller,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Şifre'),
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Şifre gerekli';
+                return null;
+              },
+              onFieldSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('İptal'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: const Text('Devam Et'),
+        ),
+      ],
     );
   }
 }

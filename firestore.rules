@@ -38,6 +38,7 @@ service cloud.firestore {
           'l2vjDZXUbcOifjumq1q7HTubFxu2',
           'o0AyRibzJFfNb6BNYxUweM4RqAs2',
           'LmcMFwbp3eaLRrFRD2IURLW3reg1',
+          'PcyiSwnAIWhkwlpsJ88fHYMFGJW2',
         ];
 
     }
@@ -79,7 +80,7 @@ service cloud.firestore {
       let oldAds = resource.data.get('rewardedAdsToday', 0);
       let newAds = request.resource.data.get('rewardedAdsToday', 0);
       return newTokens == oldTokens + 25
-        && newAds <= 2
+        && newAds <= 6
         && (
           newAds == oldAds + 1
           || (rewardPeriodElapsed() && newAds == 1 && oldAds >= 1)
@@ -118,7 +119,7 @@ service cloud.firestore {
 
         && referredBy.size() > 0
 
-        && request.resource.data.get('tokens', 0) == resource.data.get('tokens', 0) + 100;
+        && request.resource.data.get('tokens', 0) == resource.data.get('tokens', 0) + 50;
 
     }
 
@@ -132,7 +133,7 @@ service cloud.firestore {
 
       let delta = newTokens - oldTokens;
 
-      return delta == 100;
+      return delta == 50;
 
     }
 
@@ -239,7 +240,7 @@ service cloud.firestore {
 
           && request.resource.data.fromUid == request.auth.uid
 
-          && request.resource.data.amount == 100
+          && request.resource.data.amount == 50
 
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.referredBy == userId;
 
@@ -367,7 +368,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if isAdmin()
         && request.resource.data.keys().hasOnly(
-          ['serdar', 'hatice', 'updatedAt', 'updatedBy']
+          [
+            'serdar', 'hatice',
+            'serdarVisible', 'haticeVisible',
+            'updatedAt', 'updatedBy'
+          ]
         )
         && (!('serdar' in request.resource.data)
           || request.resource.data.serdar in [
@@ -378,7 +383,11 @@ service cloud.firestore {
           || request.resource.data.hatice in [
             'auto', 'molada', 'fal_bakiyor',
             'mesai_saati_disinda', 'gunluk_fal_limiti_doldu'
-          ]);
+          ])
+        && (!('serdarVisible' in request.resource.data)
+          || request.resource.data.serdarVisible is bool)
+        && (!('haticeVisible' in request.resource.data)
+          || request.resource.data.haticeVisible is bool);
       allow delete: if isAdmin();
     }
 

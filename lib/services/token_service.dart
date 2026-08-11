@@ -189,7 +189,20 @@ class TokenService {
         normalizedEmail: normalizedEmail,
       );
       logRegisterUserDocCreatePayload(data);
-      await ref.set(data);
+      await _db.runTransaction((tx) async {
+        final existing = await tx.get(ref);
+        if (!existing.exists) {
+          tx.set(ref, data);
+        }
+      });
+      final created = await ref.get();
+      if (!created.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'aborted',
+          message: 'User document could not be created',
+        );
+      }
       debugPrint('NEW_USER_DOC_CREATED uid=$uid tokens=$initialUserTokens');
       debugPrint('ENSURE_USER_DOC_RECOVERY_SUCCESS uid=$uid');
       final user = AppUser(
@@ -220,6 +233,96 @@ class TokenService {
 
     final merged = {...data, ...updates};
     final user = AppUser.fromFirestore(uid, merged);
+    if (_boundUid == uid) {
+      liveUser.value = user;
+    }
+    return user;
+  }
+
+  /// Google girişi sonrası Firestore profil senkronizasyonu.
+  /// Yeni kullanıcıda belge oluşturur; mevcut kullanıcıda jeton/profil korunur.
+  Future<AppUser> syncGoogleUserDocument({
+    required String uid,
+    required String email,
+    required String displayName,
+    String? photoUrl,
+  }) async {
+    final ref = _userRef(uid);
+    final snap = await ref.get();
+    final normalizedEmail = email.trim().toLowerCase();
+    final trimmedName = displayName.trim();
+    final trimmedPhoto = photoUrl?.trim();
+
+    if (!snap.exists) {
+      final data = _newUserDocumentData(
+        uid: uid,
+        displayName: trimmedName,
+        normalizedEmail: normalizedEmail,
+      )
+        ..['emailVerified'] = true
+        ..['provider'] = 'google'
+        ..['lastLoginAt'] = FieldValue.serverTimestamp();
+      if (trimmedPhoto != null && trimmedPhoto.isNotEmpty) {
+        data['photoUrl'] = trimmedPhoto;
+      }
+      logRegisterUserDocCreatePayload(data);
+      await _db.runTransaction((tx) async {
+        final existing = await tx.get(ref);
+        if (!existing.exists) {
+          tx.set(ref, data);
+        }
+      });
+      final created = await ref.get();
+      if (!created.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'aborted',
+          message: 'Google user document could not be created',
+        );
+      }
+      debugPrint('GOOGLE_USER_DOC_CREATED uid=$uid');
+      final user = AppUser(
+        userId: uid,
+        name: trimmedName,
+        displayName: trimmedName,
+        email: normalizedEmail,
+        tokens: initialUserTokens,
+        emailVerified: true,
+      );
+      if (_boundUid == uid) {
+        liveUser.value = user;
+      }
+      return user;
+    }
+
+    final existing = snap.data() ?? {};
+    final updates = <String, dynamic>{
+      'provider': 'google',
+      'lastLoginAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'emailVerified': true,
+    };
+
+    final existingDisplay = (existing['displayName'] as String? ??
+            existing['name'] as String? ??
+            '')
+        .trim();
+    if (trimmedName.isNotEmpty &&
+        (existingDisplay.isEmpty || existingDisplay == trimmedName)) {
+      updates['displayName'] = trimmedName;
+      if ((existing['name'] as String? ?? '').trim().isEmpty) {
+        updates['name'] = trimmedName;
+      }
+    }
+
+    if (trimmedPhoto != null && trimmedPhoto.isNotEmpty) {
+      updates['photoUrl'] = trimmedPhoto;
+    }
+
+    await ref.update(updates);
+
+    final merged = {...existing, ...updates};
+    final user = AppUser.fromFirestore(uid, merged).copyWith(emailVerified: true);
     if (_boundUid == uid) {
       liveUser.value = user;
     }

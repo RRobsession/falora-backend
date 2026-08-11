@@ -1,9 +1,11 @@
 import 'package:falora/config/play_product_catalog.dart';
+import 'package:falora/models/shop_product_price.dart';
 import 'package:falora/services/billing_backend_service.dart';
 import 'package:falora/services/play_billing_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/token_config.dart';
+import 'package:falora/utils/format_tokens.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/foundation.dart';
@@ -22,7 +24,7 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
-  final Map<String, String> _priceByProductId = {};
+  final Map<String, ShopProductPrice> _priceByProductId = {};
   bool _loadingProducts = true;
   bool _productsReady = false;
   bool _restoring = false;
@@ -41,11 +43,14 @@ class _ShopScreenState extends State<ShopScreen> {
   /// Web'de Play Billing yok — mock fiyatları anında uygula (skeleton yok).
   void _loadWebMockPrices() {
     debugPrint('SHOP_LOAD_START (web mock)');
-    final prices = <String, String>{};
+    final prices = <String, ShopProductPrice>{};
     for (final id in tokenProductIds) {
       final mock = mockPriceForProductId(id);
       if (mock != null) {
-        prices[id] = mock;
+        prices[id] = ShopProductPrice(
+          price: mock,
+          compareAtPrice: compareAtPriceForProductId(id),
+        );
       }
     }
     _logProductResults(prices);
@@ -68,16 +73,19 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  void _logProductResults(Map<String, String> prices) {
+  void _logProductResults(Map<String, ShopProductPrice> prices) {
     final foundIds = prices.keys.toList()..sort();
     debugPrint('SHOP_PRODUCTS_FOUND: ${foundIds.join(', ')}');
     debugPrint('SHOP_PRODUCTS_COUNT: ${prices.length}');
     for (final id in tokenProductIds) {
-      final price = prices[id];
-      if (price == null || price.isEmpty) {
+      final info = prices[id];
+      if (info == null || info.price.isEmpty) {
         debugPrint('SHOP_PRODUCT: $id MISSING');
       } else {
-        debugPrint('SHOP_PRODUCT: $id FOUND price=$price');
+        debugPrint(
+          'SHOP_PRODUCT: $id FOUND price=${info.price} '
+          'compareAt=${info.compareAtPrice ?? '-'}',
+        );
       }
     }
   }
@@ -92,7 +100,7 @@ class _ShopScreenState extends State<ShopScreen> {
 
     try {
       final prices = await PlayBillingService.instance
-          .queryProductPrices(tokenProductIds);
+          .queryProductDisplayPrices(tokenProductIds);
       if (!mounted) return;
 
       _logProductResults(prices);
@@ -168,7 +176,7 @@ class _ShopScreenState extends State<ShopScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${product.tokens} jeton hesabına eklendi (önizleme).',
+                '${formatTokenAmount(product.tokens)} jeton hesabına eklendi (önizleme).',
               ),
             ),
           );
@@ -195,7 +203,7 @@ class _ShopScreenState extends State<ShopScreen> {
       if (!mounted) return;
       final message = result.alreadyProcessed
           ? 'Bu satın alma daha önce işlenmiş.'
-          : '${result.tokensGranted} jeton hesabına eklendi.';
+          : '${formatTokenAmount(result.tokensGranted)} jeton hesabına eklendi.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } on PlayBillingCancelledException {
       debugPrint('PURCHASE_CANCELLED productId=${product.productId}');
@@ -334,11 +342,11 @@ class _ShopScreenState extends State<ShopScreen> {
   List<Widget> _buildProductCards() {
     return shopPackageCatalog
         .where((pkg) {
-          final price = _priceByProductId[pkg.productId];
-          return price != null && price.isNotEmpty;
+          final info = _priceByProductId[pkg.productId];
+          return info != null && info.price.isNotEmpty;
         })
         .map((pkg) {
-          final price = _priceByProductId[pkg.productId]!;
+          final info = _priceByProductId[pkg.productId]!;
           final isPurchasing = _activeProductId == pkg.productId;
 
           return Padding(
@@ -348,7 +356,8 @@ class _ShopScreenState extends State<ShopScreen> {
               subtitle: pkg.subtitle,
               badge: pkg.badge,
               highlight: pkg.highlight,
-              price: price,
+              price: info.price,
+              compareAtPrice: info.compareAtPrice,
               isPurchasing: isPurchasing,
               onBuy: () => _buy(pkg),
             ),

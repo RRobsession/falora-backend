@@ -152,6 +152,7 @@ class FortuneStorageService {
     required String name,
     required int age,
     required String zodiac,
+    required String maritalStatus,
     required String intention,
     required int tokenCost,
     List<String> imageNames = const [],
@@ -172,6 +173,7 @@ class FortuneStorageService {
       'name': name,
       'age': age,
       'zodiac': zodiac,
+      'maritalStatus': maritalStatus,
       'intention': intention,
       if (imageNames.isNotEmpty) 'imageNames': imageNames,
       if (tellerId != null) 'tellerId': tellerId,
@@ -628,9 +630,12 @@ class FortuneStorageService {
     final name = d['name'] as String? ?? '';
     final age = (d['age'] as num?)?.toInt() ?? 0;
     final zodiac = d['zodiac'] as String? ?? '';
+    final maritalStatus = d['maritalStatus'] as String? ?? '';
     final intention = d['intention'] as String? ?? '';
+    final maritalPart =
+        maritalStatus.isNotEmpty ? ', $maritalStatus' : '';
     var summary =
-        '${category.label} — $name, $age, $zodiac\nNiyet: $intention';
+        '${category.label} — $name, $age, $zodiac$maritalPart\nNiyet: $intention';
     if (selectedTarotCards.isNotEmpty) {
       summary += '\n${selectedTarotCards.length} tarot kartı seçildi';
     }

@@ -4,6 +4,7 @@ import 'package:falora/services/privacy_policy_service.dart';
 import 'package:falora/services/terms_of_service_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/falora_logo_header.dart';
+import 'package:falora/widgets/google_sign_in_button.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 class RegisterScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmCtrl = TextEditingController();
   final _referralCtrl = TextEditingController();
   bool _loading = false;
+  bool _googleLoading = false;
   bool _obscure = true;
   bool _obscureConfirm = true;
   bool _acceptedTerms = false;
@@ -38,6 +40,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _referralCtrl.dispose();
     super.dispose();
   }
+
+  bool get _busy => _loading || _googleLoading;
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -83,6 +87,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Devam etmek için 18 yaş onayını ve sözleşmeleri kabul etmelisiniz.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _googleLoading = true);
+    try {
+      await widget.authService.signInWithGoogle();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onRegistered(verificationEmailSent: false);
+    } on AuthException catch (e) {
+      if (!mounted || e.userCancelled) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e, stackTrace) {
+      debugPrint('Unknown Google register error: $e');
+      debugPrint(stackTrace.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google ile kayıt hatası: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -114,7 +153,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           children: [
                             TextFormField(
                               controller: _emailCtrl,
-                              enabled: !_loading,
+                              enabled: !_busy,
                               keyboardType: TextInputType.emailAddress,
                               decoration: const InputDecoration(
                                 labelText: 'E-posta',
@@ -125,7 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             const SizedBox(height: 14),
                             TextFormField(
                               controller: _passwordCtrl,
-                              enabled: !_loading,
+                              enabled: !_busy,
                               obscureText: _obscure,
                               decoration: InputDecoration(
                                 labelText: 'Şifre',
@@ -136,7 +175,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         ? Icons.visibility_off_outlined
                                         : Icons.visibility_outlined,
                                   ),
-                                  onPressed: _loading
+                                  onPressed: _busy
                                       ? null
                                       : () =>
                                           setState(() => _obscure = !_obscure),
@@ -147,7 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             const SizedBox(height: 14),
                             TextFormField(
                               controller: _confirmCtrl,
-                              enabled: !_loading,
+                              enabled: !_busy,
                               obscureText: _obscureConfirm,
                               decoration: InputDecoration(
                                 labelText: 'Şifre Tekrar',
@@ -158,7 +197,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         ? Icons.visibility_off_outlined
                                         : Icons.visibility_outlined,
                                   ),
-                                  onPressed: _loading
+                                  onPressed: _busy
                                       ? null
                                       : () => setState(
                                             () => _obscureConfirm =
@@ -175,10 +214,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             const SizedBox(height: 14),
                             TextFormField(
                               controller: _referralCtrl,
-                              enabled: !_loading,
+                              enabled: !_busy,
                               textCapitalization: TextCapitalization.characters,
                               decoration: const InputDecoration(
-                                labelText: 'Referans kodu (isteğe bağlı)',
+                                labelText: 'Davet kodu (isteğe bağlı)',
+                                helperText:
+                                    'Şimdi veya sonra Profil → Arkadaşını Davet Et',
                                 prefixIcon: Icon(Icons.card_giftcard_outlined),
                               ),
                             ),
@@ -188,7 +229,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               children: [
                                 Checkbox(
                                   value: _acceptedTerms,
-                                  onChanged: _loading
+                                  onChanged: _busy
                                       ? null
                                       : (value) => setState(
                                             () => _acceptedTerms = value ?? false,
@@ -202,7 +243,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   child: Padding(
                                     padding: const EdgeInsets.only(top: 10),
                                     child: _TermsAcceptanceText(
-                                      enabled: !_loading,
+                                      enabled: !_busy,
                                       onOpenTerms: () => TermsOfServiceService
                                           .instance
                                           .openTermsOfService(context),
@@ -216,7 +257,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             const SizedBox(height: 24),
                             ElevatedButton(
-                              onPressed: _loading ? null : _submit,
+                              onPressed: _busy ? null : _submit,
                               child: _loading
                                   ? const SizedBox(
                                       height: 20,
@@ -227,6 +268,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       ),
                                     )
                                   : const Text('Hesap Oluştur'),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Divider(
+                                    color: faloraBronze.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    'veya',
+                                    style: TextStyle(
+                                      color: faloraInkSoft,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Divider(
+                                    color: faloraBronze.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            GoogleSignInButton(
+                              loading: _googleLoading,
+                              onPressed: _busy ? null : _signInWithGoogle,
                             ),
                           ],
                         ),

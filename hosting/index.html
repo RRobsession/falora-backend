@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tombik Teyze</title>
+  <script>
+    // Eski ActionCodeSettings continueUrl kök domaindi; doğrulama sonrası buraya düşülür.
+    // Query parametrelerini koruyarak sonuç sayfasına yönlendir.
+    (function () {
+      var target = '/email-verified.html' + window.location.search + window.location.hash;
+      window.location.replace(target);
+    })();
+  </script>
+  <meta http-equiv="refresh" content="0; url=/email-verified.html" />
+  <style>
+    body {
+      font-family: Georgia, serif;
+      background: #f7f0e4;
+      color: #2a2118;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    a { color: #8b4513; }
+  </style>
+</head>
+<body>
+  <p><a href="/email-verified.html">E-posta doğrulama sonucuna git</a></p>
+</body>
+</html>

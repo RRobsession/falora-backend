@@ -237,6 +237,7 @@ class MockAiService implements AiService {
     required String name,
     required int age,
     required String zodiac,
+    required String maritalStatus,
     required String intention,
     required String tellerId,
     String? requestId,
@@ -254,7 +255,8 @@ class MockAiService implements AiService {
           .join(', ');
       return 'Sevgili $name, 7\'li iskambil açılımında ($cards) niyetin '
           '"$intention" için masadaki kartlar net konuşuyor. '
-          'Kupa ve karo enerjileri yakın dönemde somut bir gelişmeye işaret ediyor.';
+          'Medeni durumun ($maritalStatus) bağlamında kupa ve karo enerjileri '
+          'yakın dönemde somut bir gelişmeye işaret ediyor.';
     }
     if (waterScatter != null && _categoryFromLabel(category) == FalCategory.su) {
       await Future<void>.delayed(const Duration(milliseconds: 900));

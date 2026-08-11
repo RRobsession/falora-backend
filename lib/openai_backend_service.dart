@@ -60,6 +60,8 @@ class OpenAiBackendService implements AiService {
 
     required String zodiac,
 
+    required String maritalStatus,
+
     required String intention,
 
     required String tellerId,
@@ -93,6 +95,8 @@ class OpenAiBackendService implements AiService {
         'age': age.toString(),
 
         'zodiac': zodiac,
+
+        'maritalStatus': maritalStatus,
 
         'intention': intention,
 

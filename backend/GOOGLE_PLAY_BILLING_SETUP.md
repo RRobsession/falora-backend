@@ -13,11 +13,11 @@ Başarılı çıktı: `OK: Play billing doğrulama erişimi hazır.`
 
 Google Play Android Developer API etkin olmalı:
 
-https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview?project=falora35
+https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview?project=tombikteyze
 
 ## 2. Service account
 
-Billing için ayrı service account kullanın (ör. `falora-play-billing@falora35.iam.gserviceaccount.com`).
+Billing için ayrı service account kullanın (ör. `play-billing@tombikteyze.iam.gserviceaccount.com`).
 
 JSON key dosyası: `backend/google-play-service-account.json` (git'e eklenmez).
 

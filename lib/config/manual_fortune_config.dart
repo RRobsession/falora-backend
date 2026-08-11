@@ -42,6 +42,9 @@ String manualReaderQuotaFullInfo(String readerName) =>
     '$readerName bugünkü fal kotasını doldurdu. '
     'Yarın 10:30\'da tekrar açılacak.';
 
+const manualFortuneImagesTooLargeMessage =
+    'Fotoğraflar çok büyük. Lütfen daha net veya daha küçük görseller seçip tekrar deneyin.';
+
 /// Fal türüne göre manuel yorum teklifi.
 class ManualFortuneOffer {
   const ManualFortuneOffer({

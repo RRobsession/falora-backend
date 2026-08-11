@@ -118,7 +118,7 @@ async function discoverDeveloperId(auth) {
 
   const candidates = new Set([
     process.env.PLAY_DEVELOPER_ID,
-    '688744850733',
+    '36770284037',
   ].filter(Boolean));
 
   for (const developerId of candidates) {

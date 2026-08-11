@@ -47,29 +47,28 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCoEZyfII5OgKEWbx5zMNhOJso-z7uQMNk',
-    appId: '1:688744850733:web:c78e84eef0b6f50f665fa4',
-    messagingSenderId: '688744850733',
-    projectId: 'falora35',
-    authDomain: 'falora35.firebaseapp.com',
-    storageBucket: 'falora35.firebasestorage.app',
-    measurementId: 'G-PYF37K87QX',
+    apiKey: 'AIzaSyCqVS_DSnsv9V8Rm9NpJLmVTn45Hde7PXs',
+    appId: '1:36770284037:web:3928a19e47f183c79ad26c',
+    messagingSenderId: '36770284037',
+    projectId: 'tombikteyze',
+    authDomain: 'tombikteyze.firebaseapp.com',
+    storageBucket: 'tombikteyze.firebasestorage.app',
+    measurementId: 'G-09K6JZJ6Q1',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyB0kR44bmHL5AAPP6y0DWaK31HJVOdHsvQ',
-    appId: '1:688744850733:android:a5dc972019d50950665fa4',
-    messagingSenderId: '688744850733',
-    projectId: 'falora35',
-    storageBucket: 'falora35.firebasestorage.app',
+    apiKey: 'AIzaSyAhK-xqBUCFsT6KrTDAEs9tDq3jOmQ7l1U',
+    appId: '1:36770284037:android:a79e40dd2db2a84a9ad26c',
+    messagingSenderId: '36770284037',
+    projectId: 'tombikteyze',
+    storageBucket: 'tombikteyze.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBSTIsY9a9pa2ykRKKZNkAPBGpvPRABt5M',
-    appId: '1:688744850733:ios:3c966b25f7db3391665fa4',
-    messagingSenderId: '688744850733',
-    projectId: 'falora35',
-    storageBucket: 'falora35.firebasestorage.app',
+    apiKey: 'AIzaSyC5zGpKEMYF7pHJe-UiiRrOkO3lf_6Jnv8',
+    appId: '1:36770284037:ios:5be2b1b86be377da9ad26c',
+    messagingSenderId: '36770284037',
+    projectId: 'tombikteyze',
+    storageBucket: 'tombikteyze.firebasestorage.app',
     iosBundleId: 'com.example.falora',
   );
 }

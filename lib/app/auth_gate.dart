@@ -5,7 +5,7 @@ import 'package:falora/auth/auth_service.dart';
 import 'package:falora/config/admin_config.dart';
 import 'package:falora/main.dart';
 import 'package:falora/models/app_user.dart';
-import 'package:falora/screens/admin_manual_fortune_screen.dart';
+import 'package:falora/screens/admin_home_screen.dart';
 import 'package:falora/screens/login_screen.dart';
 import 'package:falora/screens/onboarding/profile_onboarding_screen.dart';
 import 'package:falora/screens/verification_screen.dart';
@@ -74,6 +74,11 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
     if (fbUser != null) {
       debugPrint('ADMIN UID: ${fbUser.uid}');
+      debugPrint(
+        'ADMIN CHECK: uidMatch=${adminUids.contains(fbUser.uid)} '
+        'email=${fbUser.email} '
+        'isAdmin=${isAdminUser(fbUser.uid, email: fbUser.email)}',
+      );
     }
 
     if (!mounted || generation != _sessionGeneration) return;
@@ -85,7 +90,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     });
 
     if (user != null && emailVerified) {
-      if (isAdminUser(user.userId)) {
+      if (isCurrentFirebaseUserAdmin()) {
         unawaited(_runAdminPostAuthSetup(user.userId));
       } else {
         unawaited(_runPostAuthSetup(user.userId));
@@ -180,8 +185,8 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       );
     }
 
-    if (isAdminUser(_user!.userId)) {
-      return AdminManualRequestsScreen(onLogout: _onLogout);
+    if (isCurrentFirebaseUserAdmin()) {
+      return AdminHomeScreen(onLogout: _onLogout);
     }
 
     if (UserProfileService.needsProfileCompletion(_user!)) {

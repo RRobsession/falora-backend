@@ -1,26 +1,51 @@
 {
   "project_info": {
-    "project_number": "688744850733",
-    "project_id": "falora35",
-    "storage_bucket": "falora35.firebasestorage.app"
+    "project_number": "36770284037",
+    "project_id": "tombikteyze",
+    "storage_bucket": "tombikteyze.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:688744850733:android:a5dc972019d50950665fa4",
+        "mobilesdk_app_id": "1:36770284037:android:a79e40dd2db2a84a9ad26c",
         "android_client_info": {
           "package_name": "com.rrlime.falora"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "36770284037-56sbkkc8h1j4kfghjntlfj6dkhjibtek.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rrlime.falora",
+            "certificate_hash": "ff7b5ea178141cebca92a6e2a87fcc1f4ec46bd5"
+          }
+        },
+        {
+          "client_id": "36770284037-6o273rttknjmtshrbatjcbgffl0dcqbm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyB0kR44bmHL5AAPP6y0DWaK31HJVOdHsvQ"
+          "current_key": "AIzaSyAhK-xqBUCFsT6KrTDAEs9tDq3jOmQ7l1U"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "36770284037-6o273rttknjmtshrbatjcbgffl0dcqbm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "36770284037-ir9d0r5bujabfmnq1mm6lkdk2belk87m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.falora"
+              }
+            }
+          ]
         }
       }
     }

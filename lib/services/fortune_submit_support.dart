@@ -3,6 +3,7 @@ import 'package:falora/services/backend_auth_client.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:falora/services/fortune_submit_messages.dart';
 import 'package:falora/services/fortune_storage_service.dart';
+import 'package:falora/services/manual_fortune_storage_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -124,6 +125,10 @@ String mapFortuneSubmitError(
   if (error is TokenSpendException) {
     debugPrint('FORTUNE_SUBMIT_FAILED_REASON ${error.code}');
     return error.userMessage;
+  }
+  if (error is ManualFortuneException) {
+    debugPrint('FORTUNE_SUBMIT_FAILED_REASON ${error.message}');
+    return error.message;
   }
   if (error is BackendAuthException) {
     debugPrint('AUTH_VERIFY_FAILED');

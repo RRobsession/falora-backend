@@ -73,6 +73,30 @@ class UnavailableRewardedAdService implements RewardedAdService {
     AdMobLogger.log('REWARD SERVICE TYPE: $serviceTypeName');
     AdMobLogger.log('MOCK REWARD USED: no');
     AdMobLogger.log('ADMOB REWARD USED: no');
+
+    if (remainingDailyAds(user) <= 0) {
+      _lastErrorMessage = rewardAdLimitReachedMessage;
+      return RewardedAdResult.limitReached;
+    }
+
+    if (grantRewardWhenAdUnavailable) {
+      try {
+        await TokenService.instance.claimRewardedAd(userId);
+        _lastErrorMessage = rewardGrantedWithoutAdMessage;
+        AdMobLogger.log(
+          'REWARDED_CLAIM_SUCCESS_WITHOUT_AD reason=platform_unavailable',
+        );
+        return RewardedAdResult.rewarded;
+      } on TokenException catch (e) {
+        _lastErrorMessage = e.message;
+        return RewardedAdResult.limitReached;
+      } catch (e, stackTrace) {
+        AdMobLogger.claimError(e, stackTrace);
+        _lastErrorMessage = rewardedAdLoadFailedMessage;
+        return RewardedAdResult.failed;
+      }
+    }
+
     _lastErrorMessage = rewardedAdLoadFailedMessage;
     AdMobLogger.log('REWARDED LOAD FAILED: ads unavailable on this platform');
     return RewardedAdResult.failed;
@@ -81,8 +105,10 @@ class UnavailableRewardedAdService implements RewardedAdService {
 
 /// Yalnızca Web (Chrome) geliştirme/test için sahte ödüllü reklam.
 class MockRewardedAdService implements RewardedAdService {
+  String? _lastErrorMessage;
+
   @override
-  String? get lastErrorMessage => null;
+  String? get lastErrorMessage => _lastErrorMessage;
 
   @override
   String get serviceTypeName => 'MockRewardedAdService';
@@ -139,6 +165,21 @@ class MockRewardedAdService implements RewardedAdService {
 
     if (!completed) {
       AdMobLogger.log('REWARDED LOAD FAILED: mock ad cancelled');
+      if (grantRewardWhenAdUnavailable) {
+        try {
+          await TokenService.instance.claimRewardedAd(userId);
+          _lastErrorMessage = rewardGrantedWithoutAdMessage;
+          AdMobLogger.log('REWARDED_CLAIM_SUCCESS_WITHOUT_AD reason=mock_cancel');
+          return RewardedAdResult.rewarded;
+        } on TokenException catch (e) {
+          _lastErrorMessage = e.message;
+          AdMobLogger.claimError(e.message);
+          return RewardedAdResult.limitReached;
+        } catch (e, stackTrace) {
+          AdMobLogger.claimError(e, stackTrace);
+          return RewardedAdResult.failed;
+        }
+      }
       return RewardedAdResult.cancelled;
     }
 
@@ -146,6 +187,7 @@ class MockRewardedAdService implements RewardedAdService {
 
     try {
       await TokenService.instance.claimRewardedAd(userId);
+      _lastErrorMessage = null;
       AdMobLogger.log('REWARDED_CLAIM_SUCCESS');
       return RewardedAdResult.rewarded;
     } on TokenException catch (e) {

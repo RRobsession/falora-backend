@@ -57,15 +57,26 @@ const allBillingProductIds = tokenProductIds;
 
 /// Web / geliştirme önizlemesi için sabit fiyatlar (Play Billing yok).
 const tokenProductMockPrices = <String, String>{
-  'tokens_50': '₺49,99',
-  'tokens_100': '₺95,99',
-  'tokens_150': '₺119,99',
-  'tokens_200': '₺159,99',
-  'tokens_1500': '₺499,99',
+  'tokens_50': '₺9,94',
+  'tokens_100': '₺19,90',
+  'tokens_150': '₺29,75',
+  'tokens_200': '₺49,93',
+  'tokens_1500': '₺349,99',
+};
+
+/// İndirim öncesi gösterilecek üstü çizili fiyatlar (yalnızca UI).
+const tokenProductCompareAtPrices = <String, String>{
+  'tokens_50': '₺23,99',
+  'tokens_100': '₺35,99',
+  'tokens_150': '₺47,99',
+  'tokens_200': '₺189,99',
 };
 
 String? mockPriceForProductId(String productId) =>
     tokenProductMockPrices[productId];
+
+String? compareAtPriceForProductId(String productId) =>
+    tokenProductCompareAtPrices[productId];
 
 TokenProductDefinition? tokenProductById(String productId) {
   for (final item in tokenProductCatalog) {

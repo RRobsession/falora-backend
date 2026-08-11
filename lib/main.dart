@@ -42,7 +42,10 @@ import 'package:falora/openai_backend_service.dart';
 import 'package:falora/picked_image.dart';
 import 'package:falora/screens/profile_screen.dart';
 import 'package:falora/services/ads/ad_service_bootstrap.dart';
+import 'package:falora/services/analytics_service.dart';
+import 'package:falora/services/daily_horoscope_service.dart';
 import 'package:falora/services/fortune_submit_support.dart';
+import 'package:falora/widgets/daily_horoscope_card.dart';
 import 'package:falora/services/fortune_backend_service.dart';
 import 'package:falora/services/fortune_form_prefill.dart';
 import 'package:falora/services/marital_status_preference.dart';
@@ -93,6 +96,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await AnalyticsService.init();
   await FirebaseAuthService.initializeGoogleSignIn();
   if (!kIsWeb) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -165,6 +169,7 @@ class _FaloraAppState extends State<FaloraApp> with WidgetsBindingObserver {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      navigatorObservers: [AnalyticsService.observer],
       home: Stack(
         fit: StackFit.expand,
         children: [
@@ -372,6 +377,11 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       setState(() => _tabIndex = tab);
     }
 
+    if (request.type == 'daily_horoscope') {
+      await _openDailyHoroscopeFromNotification(request);
+      return;
+    }
+
     final readingId = request.readingId;
     if (readingId == null || readingId.isEmpty) return;
 
@@ -385,6 +395,41 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       () => ValueNotifier(reading),
     );
     _openSonuc(reading);
+  }
+
+  Future<void> _openDailyHoroscopeFromNotification(
+    NotificationOpenRequest request,
+  ) async {
+    final zodiac = (request.zodiac?.trim().isNotEmpty == true)
+        ? request.zodiac!.trim()
+        : (TokenService.instance.liveUser.value?.zodiac ??
+                widget.user.zodiac)
+            ?.trim();
+    if (zodiac == null || zodiac.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Burç bilgin bulunamadı')),
+      );
+      return;
+    }
+    final dateKey = request.date ?? DailyHoroscopeService.istanbulDateKey();
+    final text = await DailyHoroscopeService.instance.textForZodiac(
+      zodiac: zodiac,
+      dateKey: dateKey,
+    );
+    if (!mounted) return;
+    if (text == null || text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bugünkü burç yorumu henüz yok')),
+      );
+      return;
+    }
+    await showDailyHoroscopeDialog(
+      context,
+      zodiac: zodiac,
+      text: text,
+      dateKey: dateKey,
+    );
   }
 
   Future<FortuneReading?> _resolveReadingForNotification({
@@ -2302,6 +2347,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
           _AnaSayfa(
             userName: widget.user.name,
             tokens: user.tokens,
+            zodiac: user.zodiac,
             onCategoryTap: _openCategory,
             onOpenShop: _openShop,
             onOpenReward: _openRewardAd,
@@ -2344,6 +2390,7 @@ class _AnaSayfa extends StatelessWidget {
   const _AnaSayfa({
     required this.userName,
     required this.tokens,
+    this.zodiac,
     required this.onCategoryTap,
     required this.onOpenShop,
     required this.onOpenReward,
@@ -2351,12 +2398,14 @@ class _AnaSayfa extends StatelessWidget {
 
   final String userName;
   final int tokens;
+  final String? zodiac;
   final void Function(FortuneCategory) onCategoryTap;
   final VoidCallback onOpenShop;
   final VoidCallback onOpenReward;
 
   @override
   Widget build(BuildContext context) {
+    final zodiacLabel = zodiac?.trim();
     return FaloraBackground(
       child: SafeArea(
         bottom: false,
@@ -2367,6 +2416,10 @@ class _AnaSayfa extends StatelessWidget {
                 SliverToBoxAdapter(
                   child: PremiumWelcomeHeader(userName: userName),
                 ),
+                if (zodiacLabel != null && zodiacLabel.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: DailyHoroscopeCard(zodiac: zodiacLabel),
+                  ),
                 for (final section in homeCategorySections) ...[
                   SliverToBoxAdapter(
                     child: Padding(

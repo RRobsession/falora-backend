@@ -12,6 +12,8 @@ import 'package:falora/widgets/premium_ui.dart';
 import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
 import 'package:falora/services/manual_reader_quota_service.dart';
+import 'package:falora/services/manual_reader_status_service.dart';
+import 'package:falora/models/manual_reader_status.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -40,7 +42,9 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
   ManualFortuneOffer? _manualOffer;
   Timer? _manualReaderHoursTimer;
   StreamSubscription<ManualReaderDailyQuota>? _quotaSub;
+  StreamSubscription<ManualReaderStatusSnapshot>? _statusSub;
   ManualReaderDailyQuota _quota = ManualReaderDailyQuota.empty;
+  ManualReaderStatusSnapshot _statuses = ManualReaderStatusSnapshot.empty;
   String? _quotaDayKey;
 
   void _bindQuotaStream() {
@@ -62,6 +66,11 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
       _manualOffer = manualOfferFor(widget.category);
       logManualReaderConfig(widget.category);
       _bindQuotaStream();
+      _statusSub = ManualReaderStatusService.instance.watch().listen(
+        (statuses) {
+          if (mounted) setState(() => _statuses = statuses);
+        },
+      );
       _manualReaderHoursTimer = Timer.periodic(
         const Duration(minutes: 1),
         (_) {
@@ -76,6 +85,7 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
   @override
   void dispose() {
     _quotaSub?.cancel();
+    _statusSub?.cancel();
     _manualReaderHoursTimer?.cancel();
     super.dispose();
   }
@@ -121,10 +131,22 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                         const SizedBox(height: 8),
                         Text(
                           _manualOffer != null
-                              ? 'Yorumcular jeton ile kişisel yorum hazırlar. '
-                                  'Serdar ve Hatice birebir özel yorum sunar; '
-                                  '${_manualOffer!.questionLimit} soru '
-                                  '${formatTokenAmount(_manualOffer!.tokenCost)} jeton.'
+                              ? () {
+                                  final visibleNames = manualFortuneReaders
+                                      .where((r) => _statuses.isVisible(r.id))
+                                      .map((r) => r.name)
+                                      .toList();
+                                  if (visibleNames.isEmpty) {
+                                    return 'Yorumcular jeton ile kişisel yorum hazırlar.';
+                                  }
+                                  final names = visibleNames.length == 1
+                                      ? visibleNames.first
+                                      : '${visibleNames.first} ve ${visibleNames.last}';
+                                  return 'Yorumcular jeton ile kişisel yorum hazırlar. '
+                                      '$names birebir özel yorum sunar; '
+                                      '${_manualOffer!.questionLimit} soru '
+                                      '${formatTokenAmount(_manualOffer!.tokenCost)} jeton.';
+                                }()
                               : 'Yorumcular jeton ile kişisel yorum hazırlar.',
                           style: FaloraTypography.bodyMedium,
                         ),
@@ -155,50 +177,103 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                   ),
                 ),
                 if (_manualOffer != null) ...[
-                  const SizedBox(height: 8),
-                  const FaloraSectionHeading('Özel Yorumcular'),
-                  const SizedBox(height: 12),
-                  _ManualReaderHoursInfoBanner(
-                    isActive: isManualReaderActiveNow,
-                  ),
-                  const SizedBox(height: 12),
-                  ...manualFortuneReaders.map(
-                    (reader) {
-                      final dailyCount = _quota.countFor(reader.id);
-                      final hoursActive = isManualReaderActiveNow;
-                      final quotaAvailable =
-                          isManualReaderQuotaAvailable(dailyCount);
-                      final readerActive = hoursActive && quotaAvailable;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: _ManualFortuneReaderCard(
-                          reader: reader,
-                          category: category,
-                          offer: _manualOffer!,
-                          dailyCount: dailyCount,
-                          isActive: readerActive,
-                          onTap: () {
-                            if (!hoursActive) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(manualReaderInactiveInfo),
+                  Builder(
+                    builder: (context) {
+                      final visibleReaders = manualFortuneReaders
+                          .where((r) => _statuses.isVisible(r.id))
+                          .toList();
+                      if (visibleReaders.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 8),
+                          const FaloraSectionHeading('Özel Yorumcular'),
+                          const SizedBox(height: 12),
+                          _ManualReaderHoursInfoBanner(
+                            isActive: isManualReaderActiveNow,
+                          ),
+                          const SizedBox(height: 12),
+                          ...visibleReaders.map(
+                            (reader) {
+                              final dailyCount = _quota.countFor(reader.id);
+                              final manualStatus =
+                                  _statuses.forReader(reader.id);
+                              final hoursActive = isManualReaderActiveNow;
+                              final quotaAvailable =
+                                  isManualReaderQuotaAvailable(dailyCount);
+                              final statusBlocks =
+                                  !manualStatus.acceptsNewRequests;
+                              final readerActive = !statusBlocks &&
+                                  hoursActive &&
+                                  quotaAvailable;
+                              final statusLabel = statusBlocks
+                                  ? manualStatus.label
+                                  : (readerActive
+                                      ? 'Şu an aktif'
+                                      : (dailyCount >=
+                                              manualReaderDailyQuotaCloseAt
+                                          ? 'Kota doldu'
+                                          : 'Şu an kapalı'));
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: _ManualFortuneReaderCard(
+                                  reader: reader,
+                                  category: category,
+                                  offer: _manualOffer!,
+                                  dailyCount: dailyCount,
+                                  isActive: readerActive,
+                                  statusLabel: statusLabel,
+                                  onTap: () {
+                                    if (!_statuses.isVisible(reader.id)) {
+                                      return;
+                                    }
+                                    if (statusBlocks) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            manualStatus
+                                                .blockedMessage(reader.name),
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    if (!hoursActive) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content:
+                                              Text(manualReaderInactiveInfo),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    if (!quotaAvailable) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            manualReaderQuotaFullInfo(
+                                              reader.name,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    widget.onManualReaderChosen(
+                                      context,
+                                      reader,
+                                    );
+                                  },
                                 ),
                               );
-                              return;
-                            }
-                            if (!quotaAvailable) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    manualReaderQuotaFullInfo(reader.name),
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-                            widget.onManualReaderChosen(context, reader);
-                          },
-                        ),
+                            },
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -219,6 +294,7 @@ class _ManualFortuneReaderCard extends StatelessWidget {
     required this.offer,
     required this.dailyCount,
     required this.isActive,
+    required this.statusLabel,
     required this.onTap,
   });
 
@@ -227,6 +303,7 @@ class _ManualFortuneReaderCard extends StatelessWidget {
   final ManualFortuneOffer offer;
   final int dailyCount;
   final bool isActive;
+  final String statusLabel;
   final VoidCallback onTap;
 
   static const _avatarSize = 64.0;
@@ -323,11 +400,7 @@ class _ManualFortuneReaderCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: _InfoChip(
-                    label: isActive
-                        ? 'Şu an aktif'
-                        : (dailyCount >= manualReaderDailyQuotaCloseAt
-                            ? 'Kota doldu'
-                            : 'Şu an kapalı'),
+                    label: statusLabel,
                     color: isActive
                         ? const Color(0xFF2E7D32)
                         : faloraBronze,
@@ -359,7 +432,7 @@ class _ManualFortuneReaderCard extends StatelessWidget {
                   ? 'Günlük kota doldu'
                   : isActive
                       ? 'Devam Et · ${offer.priceLabel}'
-                      : 'Şu an aktif değil',
+                      : statusLabel,
               onPressed: onTap,
             ),
           ],

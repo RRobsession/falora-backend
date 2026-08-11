@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:falora/theme/falora_design_tokens.dart';
+import 'package:falora/utils/format_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -384,7 +385,7 @@ class FaloraTokenBadge extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            '$amount jeton',
+            '${formatTokenAmount(amount)} jeton',
             style: FaloraTypography.labelLarge.copyWith(
               color: faloraInk,
               fontSize: compact ? 12 : 13,
@@ -611,7 +612,7 @@ class FaloraTokenMedallion extends StatelessWidget {
           ),
           SizedBox(width: compact ? 6 : 8),
           Text(
-            '$tokens',
+            formatTokenAmount(tokens),
             style: TextStyle(
               fontFamily: FaloraTypography.displayFamily,
               fontSize: fontSize,
@@ -779,7 +780,9 @@ class FaloraAncientPriceBadge extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            suffix != null ? '$amount $suffix' : '$amount',
+            suffix != null
+                ? '${formatTokenAmount(amount)} $suffix'
+                : formatTokenAmount(amount),
             style: FaloraTypography.labelLarge.copyWith(
               color: faloraInk,
               fontSize: 13,
@@ -1192,24 +1195,48 @@ class FaloraGoldPrice extends StatelessWidget {
   const FaloraGoldPrice({
     super.key,
     required this.price,
+    this.compareAtPrice,
     this.large = false,
   });
 
   final String price;
+  final String? compareAtPrice;
   final bool large;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      price,
-      style: TextStyle(
-        fontFamily: FaloraTypography.displayFamily,
-        fontSize: large ? 28 : 24,
-        fontWeight: FontWeight.w800,
-        color: faloraGoldDark,
-        height: 1.1,
-        letterSpacing: -0.3,
-      ),
+    final currentStyle = TextStyle(
+      fontFamily: FaloraTypography.displayFamily,
+      fontSize: large ? 28 : 24,
+      fontWeight: FontWeight.w800,
+      color: faloraGoldDark,
+      height: 1.1,
+      letterSpacing: -0.3,
+    );
+
+    final compareAt = compareAtPrice?.trim();
+    if (compareAt == null || compareAt.isEmpty) {
+      return Text(price, style: currentStyle);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          compareAt,
+          style: TextStyle(
+            fontSize: large ? 14 : 13,
+            fontWeight: FontWeight.w600,
+            color: faloraTextSecondary.withValues(alpha: 0.9),
+            decoration: TextDecoration.lineThrough,
+            decorationColor: faloraTextSecondary.withValues(alpha: 0.75),
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(price, style: currentStyle),
+      ],
     );
   }
 }

@@ -26,6 +26,9 @@ abstract class AuthService {
     required String password,
   });
 
+  /// Google hesabı ile giriş. Kullanıcı iptal ederse [AuthException.userCancelled].
+  Future<AppUser> signInWithGoogle();
+
   Future<void> sendPasswordResetEmail({required String email});
 
   Future<void> logout();
@@ -46,10 +49,15 @@ abstract class AuthService {
 AuthService createAuthService() => FirebaseAuthService.instance;
 
 class AuthException implements Exception {
-  AuthException(this.message, {this.requiresReauth = false});
+  AuthException(
+    this.message, {
+    this.requiresReauth = false,
+    this.userCancelled = false,
+  });
 
   final String message;
   final bool requiresReauth;
+  final bool userCancelled;
 
   @override
   String toString() => message;

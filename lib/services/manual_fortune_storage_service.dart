@@ -12,6 +12,9 @@ import 'package:falora/models/fortune_models.dart';
 import 'package:falora/models/manual_fortune_request.dart';
 
 import 'package:falora/services/manual_reader_quota_service.dart';
+import 'package:falora/services/manual_reader_status_service.dart';
+import 'package:falora/models/manual_reader_status.dart';
+import 'package:falora/utils/upload_image_prepare.dart';
 
 import 'package:falora/picked_image.dart';
 
@@ -223,7 +226,14 @@ class ManualFortuneStorageService {
 
     debugPrint('MANUAL QUESTION_LIMIT: ${offer.questionLimit}');
 
-    final imageInfo = encodeImagesForPayload(images);
+    List<PickedImage>? preparedImages;
+    if (images != null && images.isNotEmpty) {
+      preparedImages = await prepareManualFortuneImagesForUpload(images);
+      if (!manualFortuneImagesFitFirestore(preparedImages)) {
+        throw ManualFortuneException(manualFortuneImagesTooLargeMessage);
+      }
+    }
+    final imageInfo = encodeImagesForPayload(preparedImages);
 
     final created = DateTime.now();
     final ready = computeManualReadyAt(created);
@@ -232,6 +242,32 @@ class ManualFortuneStorageService {
     try {
 
       await _db.runTransaction((tx) async {
+        final statusSnap = await tx.get(
+          _db.collection('manual_reader_status').doc('current'),
+        );
+        final statusData = statusSnap.data();
+        final visibleField =
+            readerId == 'hatice' ? 'haticeVisible' : 'serdarVisible';
+        final visibleRaw = statusData?[visibleField];
+        final isVisible = visibleRaw is bool
+            ? visibleRaw
+            : (visibleRaw == null
+                ? true
+                : visibleRaw.toString().trim().toLowerCase() != 'false');
+        if (!isVisible) {
+          throw ManualFortuneException(
+            ManualReaderStatusService.hiddenMessage(readerName),
+          );
+        }
+        final manualStatus = ManualReaderStatusX.fromCode(
+          statusData?[readerId]?.toString(),
+        );
+        if (!manualStatus.acceptsNewRequests) {
+          throw ManualFortuneException(
+            manualStatus.blockedMessage(readerName),
+          );
+        }
+
         final reserved = await ManualReaderQuotaService.instance
             .tryIncrementInTransaction(
           tx: tx,

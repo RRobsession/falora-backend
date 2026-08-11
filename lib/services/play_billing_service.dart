@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:falora/config/play_product_catalog.dart';
+import 'package:falora/models/shop_product_price.dart';
 import 'package:falora/services/fortune_submit_logger.dart';
+import 'package:falora/services/play_offer_price_channel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
 enum PurchaseSource { purchased, restored }
 
@@ -52,6 +55,7 @@ class PlayBillingService {
   StreamSubscription<List<PurchaseDetails>>? _purchaseSub;
   final Map<String, Completer<PlayPurchaseResult>> _purchaseCompleters = {};
   final List<PlayPurchaseResult> _restoredPurchases = [];
+  final Map<String, String> _offerTokenByProductId = {};
   Completer<List<PlayPurchaseResult>>? _restoreCompleter;
   bool _initialized = false;
 
@@ -115,27 +119,80 @@ class PlayBillingService {
   }
 
   Future<Map<String, String>> queryProductPrices(Set<String> productIds) async {
+    final displayPrices = await queryProductDisplayPrices(productIds);
+    return displayPrices.map((id, info) => MapEntry(id, info.price));
+  }
+
+  Future<Map<String, ShopProductPrice>> queryProductDisplayPrices(
+    Set<String> productIds,
+  ) async {
     if (kIsWeb) {
       debugPrint('PLAY BILLING: web — returning mock shop prices');
-      final prices = <String, String>{};
+      final prices = <String, ShopProductPrice>{};
       for (final id in productIds) {
         final mock = mockPriceForProductId(id);
         if (mock != null) {
-          prices[id] = mock;
+          prices[id] = ShopProductPrice(
+            price: mock,
+            compareAtPrice: compareAtPriceForProductId(id),
+          );
           debugPrint('PLAY BILLING mock: $id price=$mock');
         }
       }
       return prices;
     }
 
-    final products = await queryProducts(productIds);
-    final prices = <String, String>{};
-    for (final product in products) {
-      if (product.price.isNotEmpty) {
-        prices[product.id] = product.price;
+    _offerTokenByProductId.clear();
+    final offerPrices = await PlayOfferPriceChannel.queryOfferPrices(productIds);
+    for (final entry in offerPrices.entries) {
+      final token = entry.value.offerToken;
+      if (token != null && token.isNotEmpty) {
+        _offerTokenByProductId[entry.key] = token;
       }
     }
+
+    if (offerPrices.isNotEmpty) {
+      debugPrint('PLAY OFFERS loaded ${offerPrices.length} product(s)');
+      for (final entry in offerPrices.entries) {
+        final info = entry.value;
+        debugPrint(
+          'PLAY OFFERS ${entry.key}: price=${info.price} '
+          'compareAt=${info.compareAtPrice ?? '-'} '
+          'offerToken=${info.offerToken != null}',
+        );
+      }
+      return _mergeDisplayPrices(productIds, offerPrices);
+    }
+
+    final products = await queryProducts(productIds);
+    final prices = <String, ShopProductPrice>{};
+    for (final product in products) {
+      if (product.price.isEmpty) continue;
+      prices[product.id] = ShopProductPrice(
+        price: product.price,
+        compareAtPrice: compareAtPriceForProductId(product.id),
+      );
+    }
     return prices;
+  }
+
+  Map<String, ShopProductPrice> _mergeDisplayPrices(
+    Set<String> productIds,
+    Map<String, ShopProductPrice> offerPrices,
+  ) {
+    final merged = <String, ShopProductPrice>{};
+    for (final id in productIds) {
+      final offer = offerPrices[id];
+      if (offer == null) continue;
+
+      final catalogCompareAt = compareAtPriceForProductId(id);
+      merged[id] = ShopProductPrice(
+        price: offer.price,
+        compareAtPrice: offer.compareAtPrice ?? catalogCompareAt,
+        offerToken: offer.offerToken,
+      );
+    }
+    return merged;
   }
 
   bool get isWebMockShop => kIsWeb;
@@ -148,6 +205,13 @@ class PlayBillingService {
     }
 
     await init();
+    final refreshedOffers =
+        await PlayOfferPriceChannel.queryOfferPrices({productId});
+    final refreshed = refreshedOffers[productId];
+    if (refreshed?.offerToken != null && refreshed!.offerToken!.isNotEmpty) {
+      _offerTokenByProductId[productId] = refreshed.offerToken!;
+    }
+
     final products = await queryProducts({productId});
     if (products.isEmpty) {
       debugPrint(
@@ -162,11 +226,17 @@ class PlayBillingService {
 
     final completer = Completer<PlayPurchaseResult>();
     _purchaseCompleters[productId] = completer;
-    debugPrint('PURCHASE_STARTED productId=$productId');
+    final offerToken = _offerTokenByProductId[productId];
+    debugPrint(
+      'PURCHASE_STARTED productId=$productId offerToken=${offerToken != null}',
+    );
 
     try {
       final started = await _iap.buyConsumable(
-        purchaseParam: PurchaseParam(productDetails: products.first),
+        purchaseParam: GooglePlayPurchaseParam(
+          productDetails: products.first,
+          offerToken: offerToken,
+        ),
       );
 
       if (!started) {

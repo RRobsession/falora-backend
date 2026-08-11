@@ -45,8 +45,15 @@ class AdServiceBootstrap {
     );
     AdMobLogger.log('BUILD MODE: ${kDebugMode ? 'debug' : 'release'}');
     AdMobLogger.log('USE_PRODUCTION_ADS: $useProductionAds');
+    AdMobLogger.log('FORCE_TEST_ADS: $forceTestAds');
+    AdMobLogger.log(
+      'REWARD_TEST_FALLBACK: $rewardTestFallbackOnAccountPending',
+    );
 
     await AdConsentService.requestConsentIfNeeded();
+
+    final canRequest = AdConsentService.lastCanRequestAds;
+    AdMobLogger.log('AD CONSENT canRequestAds=$canRequest');
 
     final rewarded = AdMobRewardedAdService();
     RewardedAdService.instance = rewarded;
@@ -67,6 +74,14 @@ class AdServiceBootstrap {
 
       final interstitial = AdMobInterstitialAdService();
       InterstitialAdService.instance = interstitial;
+
+      if (canRequest == false) {
+        AdMobLogger.log(
+          'REWARDED PRELOAD SKIPPED: canRequestAds=false '
+          '(UMP consent required or denied)',
+        );
+        return;
+      }
 
       rewarded.preload();
       interstitial.preload();

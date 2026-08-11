@@ -41,6 +41,17 @@ function trimToMaxWords(text, maxWords) {
   return slice.trim();
 }
 
+function getPromptWordRange(teller) {
+  return {
+    min: teller.promptMinWords ?? teller.minWords,
+    max: teller.promptMaxWords ?? teller.maxWords,
+  };
+}
+
+function hasProductionWordTarget(teller) {
+  return teller.promptMinWords != null || teller.promptMaxWords != null;
+}
+
 function expansionTokenBudget(teller, needed) {
   const estimate = Math.ceil(needed * 2.8);
   return Math.min(Math.max(estimate, 120), 360, teller.maxCompletionTokens);
@@ -62,14 +73,19 @@ function isInWordRange(words, teller) {
 }
 
 function targetWordCount(teller) {
-  return Math.round((teller.minWords + teller.maxWords) / 2);
+  const prompt = getPromptWordRange(teller);
+  return Math.round((prompt.min + prompt.max) / 2);
 }
 
 function firstPassCompletionTokens(teller) {
+  if (hasProductionWordTarget(teller)) {
+    return teller.maxCompletionTokens;
+  }
+  const prompt = getPromptWordRange(teller);
   const target = targetWordCount(teller);
-  const estimate = Math.ceil(target * 1.5);
-  const floor = Math.ceil(teller.minWords * 1.4);
-  const ceiling = Math.ceil(teller.maxWords * 1.45);
+  const estimate = Math.ceil(target * 1.52);
+  const floor = Math.ceil(teller.minWords * 1.45);
+  const ceiling = Math.ceil(prompt.max * 1.42);
   return Math.min(
     Math.max(estimate, floor),
     ceiling,
@@ -77,8 +93,44 @@ function firstPassCompletionTokens(teller) {
   );
 }
 
+function firstPassMinCompletionTokens(teller) {
+  return null;
+}
+
+function buildGizemFirstPassLead(teller) {
+  if (teller.id !== 'gizem_ana') return null;
+  const prompt = getPromptWordRange(teller);
+  return `ÖNCELİK: Yanıtın EN AZ ${teller.minWords} kelime olacak; hedef ${prompt.min}-${prompt.max} kelime. ${teller.minWords} kelimenin altı kabul edilmez.`;
+}
+
+function buildFirstPassRetryPrompt(baseUserPrompt, teller, words, pass = 2) {
+  const prompt = getPromptWordRange(teller);
+  const floor =
+    hasProductionWordTarget(teller) && pass >= 3
+      ? prompt.min
+      : teller.minWords;
+  const targetHint = hasProductionWordTarget(teller)
+    ? `; hedef ${prompt.min}-${prompt.max} kelime`
+    : '';
+  return `${baseUserPrompt}
+
+KABUL EDİLMEZ (${pass}. deneme): Yanıtın yalnızca ${words} kelimeydi.
+Bu sefer EN AZ ${floor} kelime yaz${targetHint}. Daha kısa yanıt sistem tarafından reddedilir. Metni baştan yaz.`;
+}
+
 function buildFirstPassLengthBlock(teller) {
+  const prompt = getPromptWordRange(teller);
   const target = targetWordCount(teller);
+
+  if (hasProductionWordTarget(teller)) {
+    return `KELİME ARALIĞI — İLK YANITTA ZORUNLU:
+- ASLA ${teller.minWords} kelimenin altına inme; daha kısa yanıt red edilir.
+- Üretim hedefi: ${prompt.min}-${prompt.max} kelime; ilk yanıtta buna otur.
+- Kabul edilen aralık: ${teller.minWords}-${teller.maxWords} kelime.
+- ${teller.minWords} kelimenin altındaki cevap kabul edilemez.
+- ${teller.maxWords} kelimenin üstüne çıkma.`;
+  }
+
   return `KELİME ARALIĞI — İLK YANITTA ZORUNLU:
 - ${teller.minWords}-${teller.maxWords} kelime; hedef ~${target}.
 - İlk metninde aralığa otur; eksik veya fazla yazma.
@@ -86,18 +138,29 @@ function buildFirstPassLengthBlock(teller) {
 }
 
 function buildFinalLengthInstruction(teller) {
+  const prompt = getPromptWordRange(teller);
   const target = targetWordCount(teller);
+
+  if (hasProductionWordTarget(teller)) {
+    return `SON TALİMAT — ZORUNLU: En az ${teller.minWords} kelime yaz; hedef ${prompt.min}-${prompt.max} kelime (kabul aralığı ${teller.minWords}-${teller.maxWords}). ${teller.minWords} kelimenin altındaki cevap kabul edilemez. ${teller.maxWords} kelimeden fazla yazma.`;
+  }
+
   return `SON TALİMAT: Yanıtın tam ${teller.minWords}-${teller.maxWords} kelime olsun (hedef ~${target}). ${teller.minWords} kelimeden az, ${teller.maxWords} kelimeden fazla yazma.`;
 }
 
 module.exports = {
   countWords,
   trimToMaxWords,
+  getPromptWordRange,
   expansionTokenBudget,
   buildExpandPrompt,
   isInWordRange,
   targetWordCount,
   firstPassCompletionTokens,
+  firstPassMinCompletionTokens,
+  hasProductionWordTarget,
+  buildGizemFirstPassLead,
+  buildFirstPassRetryPrompt,
   buildFirstPassLengthBlock,
   buildFinalLengthInstruction,
 };

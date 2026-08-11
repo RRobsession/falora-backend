@@ -71,19 +71,12 @@ class ReferralService {
       );
 
       takePendingReferralCode(uid);
-
-      if (result.code == ReferralClaimCode.success && result.rewardTokens > 0) {
-        final current = TokenService.instance.liveUser.value;
-        if (current != null && current.userId == uid) {
-          TokenService.instance.liveUser.value = current.copyWith(
-            tokens: current.tokens + result.rewardTokens,
-          );
-        }
-      }
+      _applyInviteeRewardLocally(uid, result);
 
       return switch (result.code) {
         ReferralClaimCode.success => referralSuccessInviteeMessage,
-        ReferralClaimCode.notFound => referralCodeNotFoundMessage,
+        ReferralClaimCode.notFound =>
+          'Referans kodu bulunamadı, kayıt normal devam etti.',
         ReferralClaimCode.selfReferral => null,
         ReferralClaimCode.alreadyClaimed => null,
         ReferralClaimCode.serverError => null,
@@ -98,6 +91,54 @@ class ReferralService {
       debugPrint('REFERRAL_IGNORED_REGISTRATION_CONTINUES');
       return null;
     }
+  }
+
+  /// Profil / davet ekranından kod girişi (ömür boyu 1 hak).
+  Future<String> claimEnteredReferralCode({
+    required String uid,
+    required String referralCode,
+  }) async {
+    final code = referralCode.trim().toUpperCase();
+    if (code.isEmpty) {
+      throw ReferralException('Lütfen bir davet kodu girin.');
+    }
+
+    final current = TokenService.instance.liveUser.value;
+    if (current != null &&
+        current.userId == uid &&
+        !current.canEnterReferralCode) {
+      throw ReferralException(referralAlreadyClaimedMessage);
+    }
+
+    try {
+      final result = await ReferralBackendService.instance.claimReferral(
+        referralCode: code,
+      );
+      _applyInviteeRewardLocally(uid, result);
+
+      return switch (result.code) {
+        ReferralClaimCode.success => referralSuccessInviteeMessage,
+        ReferralClaimCode.notFound => referralCodeNotFoundMessage,
+        ReferralClaimCode.selfReferral => referralSelfReferralMessage,
+        ReferralClaimCode.alreadyClaimed => referralAlreadyClaimedMessage,
+        ReferralClaimCode.serverError => referralClaimFailedMessage,
+      };
+    } on ReferralBackendException catch (e) {
+      debugPrint('REFERRAL_PROFILE_CLAIM_FAILED: ${e.message}');
+      throw ReferralException(referralClaimFailedMessage);
+    }
+  }
+
+  void _applyInviteeRewardLocally(String uid, ReferralClaimResult result) {
+    if (result.code != ReferralClaimCode.success || result.rewardTokens <= 0) {
+      return;
+    }
+    final current = TokenService.instance.liveUser.value;
+    if (current == null || current.userId != uid) return;
+    TokenService.instance.liveUser.value = current.copyWith(
+      tokens: current.tokens + result.rewardTokens,
+      referralRewardClaimed: true,
+    );
   }
 
   Future<String> ensureReferralCode(String userId) async {
@@ -143,7 +184,8 @@ class ReferralService {
     final buffer = StringBuffer(
       "$appDisplayName'ye katıl!\n"
       'Davet kodum: $code\n\n'
-      'Kayıt olurken kodu gir; ikiniz de $referralInviterRewardTokens jeton kazanın.',
+      'Kayıt olurken veya Profil → Arkadaşını Davet Et ekranından kodu gir; '
+      'sen +$referralInviteeRewardTokens, ben +$referralInviterRewardTokens jeton kazanayım.',
     );
     if (playStoreUrl.trim().isNotEmpty) {
       buffer.write('\n\n$playStoreUrl');

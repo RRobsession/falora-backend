@@ -3,6 +3,7 @@ import 'package:falora/auth/auth_validators.dart';
 import 'package:falora/screens/register_screen.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/falora_logo_header.dart';
+import 'package:falora/widgets/google_sign_in_button.dart';
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
+  bool _googleLoading = false;
   bool _obscure = true;
   bool _showForgotPassword = false;
 
@@ -33,6 +35,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordCtrl.dispose();
     super.dispose();
   }
+
+  bool get _busy => _loading || _googleLoading;
 
   Future<void> _submit() async {
     debugPrint('LOGIN BUTTON CLICKED');
@@ -69,6 +73,30 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    debugPrint('GOOGLE SIGN IN BUTTON CLICKED');
+    setState(() => _googleLoading = true);
+    try {
+      await widget.authService.signInWithGoogle();
+      if (!mounted) return;
+      widget.onLoggedIn();
+    } on AuthException catch (e) {
+      if (!mounted || e.userCancelled) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e, stackTrace) {
+      debugPrint('Unknown Google login error: $e');
+      debugPrint(stackTrace.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google ile giriş hatası: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
     }
   }
 
@@ -191,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Align(
                                 alignment: Alignment.centerLeft,
                                 child: TextButton(
-                                  onPressed: _loading ? null : _sendPasswordReset,
+                                  onPressed: _busy ? null : _sendPasswordReset,
                                   style: TextButton.styleFrom(
                                     foregroundColor: faloraBronzeDark,
                                     padding: EdgeInsets.zero,
@@ -205,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                             const SizedBox(height: 28),
                             ElevatedButton(
-                              onPressed: _loading ? null : _submit,
+                              onPressed: _busy ? null : _submit,
                               child: _loading
                                   ? const SizedBox(
                                       height: 20,
@@ -218,8 +246,42 @@ class _LoginScreenState extends State<LoginScreen> {
                                   : const Text('Giriş Yap'),
                             ),
                             const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Divider(
+                                    color: faloraBronze.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    'veya',
+                                    style: TextStyle(
+                                      color: faloraTextSecondary.withValues(
+                                        alpha: 0.85,
+                                      ),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Divider(
+                                    color: faloraBronze.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            GoogleSignInButton(
+                              loading: _googleLoading,
+                              onPressed: _busy ? null : _signInWithGoogle,
+                            ),
+                            const SizedBox(height: 16),
                             OutlinedButton(
-                              onPressed: _loading ? null : _openRegister,
+                              onPressed: _busy ? null : _openRegister,
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: faloraBronzeDark,
                                 side: BorderSide(

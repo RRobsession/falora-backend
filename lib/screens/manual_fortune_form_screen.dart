@@ -16,6 +16,8 @@ import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/live_token_builder.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
 import 'package:falora/services/manual_reader_quota_service.dart';
+import 'package:falora/models/manual_reader_status.dart';
+import 'package:falora/services/manual_reader_status_service.dart';
 
 import 'package:falora/widgets/premium_ui.dart';
 
@@ -179,6 +181,28 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
     if (!isManualReaderActiveNow) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(manualReaderInactiveInfo)),
+      );
+      return;
+    }
+
+    final statuses = await ManualReaderStatusService.instance.fetch();
+    if (!mounted) return;
+    if (!statuses.isVisible(widget.reader.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ManualReaderStatusService.hiddenMessage(widget.reader.name),
+          ),
+        ),
+      );
+      return;
+    }
+    final manualStatus = statuses.forReader(widget.reader.id);
+    if (!manualStatus.acceptsNewRequests) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(manualStatus.blockedMessage(widget.reader.name)),
+        ),
       );
       return;
     }

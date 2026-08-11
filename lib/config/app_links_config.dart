@@ -1,7 +1,14 @@
 /// Boş bırakılırsa gizlilik politikası uygulama içinde gösterilir.
-const privacyPolicyUrl = 'https://falora35.web.app/privacy.html';
+const privacyPolicyUrl = 'https://tombikteyze.web.app/privacy.html';
 
-const termsOfServiceUrl = 'https://falora35.web.app/terms.html';
+const termsOfServiceUrl = 'https://tombikteyze.web.app/terms.html';
+
+/// Firebase Auth e-posta doğrulama continueUrl (Hosting sonuç sayfası).
+const emailVerificationContinueUrl =
+    'https://tombikteyze.web.app/email-verified.html';
+
+/// google-services.json / build.gradle.kts ile aynı.
+const androidPackageName = 'com.rrlime.falora';
 
 /// Google Play Veri Güvenliği formu — hesap silme web bağlantısı.
 const deleteAccountUrl =

@@ -10,8 +10,6 @@ import 'package:falora/picked_image.dart';
 
 import 'package:falora/services/manual_fortune_storage_service.dart';
 
-import 'package:falora/services/notification_service.dart';
-
 import 'package:falora/theme/falora_theme.dart';
 
 import 'package:falora/widgets/premium_ui.dart';
@@ -29,23 +27,11 @@ String _formatAdminDate(DateTime dt) {
   return '$day.$month.${d.year} $hour:$minute';
 }
 
-/// Admin girişinde manuel fal talepleri yönetilir.
+/// Admin: manuel fal talepleri (kategori ekranından açılır).
 
 class AdminManualRequestsScreen extends StatefulWidget {
 
-  const AdminManualRequestsScreen({
-
-    super.key,
-
-    required this.onLogout,
-
-  });
-
-
-
-  final VoidCallback onLogout;
-
-
+  const AdminManualRequestsScreen({super.key});
 
   @override
 
@@ -63,10 +49,6 @@ class _AdminManualRequestsScreenState extends State<AdminManualRequestsScreen>
 
   late final TabController _tabController;
 
-  VoidCallback? _notificationListener;
-
-
-
   @override
 
   void initState() {
@@ -74,18 +56,6 @@ class _AdminManualRequestsScreenState extends State<AdminManualRequestsScreen>
     super.initState();
 
     _tabController = TabController(length: 2, vsync: this);
-
-    _notificationListener = _onPendingAdminNotification;
-
-    NotificationService.instance.pendingOpenRequest
-
-        .addListener(_notificationListener!);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-
-      _onPendingAdminNotification();
-
-    });
 
   }
 
@@ -95,47 +65,9 @@ class _AdminManualRequestsScreenState extends State<AdminManualRequestsScreen>
 
   void dispose() {
 
-    if (_notificationListener != null) {
-
-      NotificationService.instance.pendingOpenRequest
-
-          .removeListener(_notificationListener!);
-
-    }
-
     _tabController.dispose();
 
     super.dispose();
-
-  }
-
-
-
-  void _onPendingAdminNotification() {
-
-    final pending = NotificationService.instance.pendingOpenRequest.value;
-
-    if (pending?.type != 'admin_manual_request' || pending?.isValid != true) {
-
-      return;
-
-    }
-
-    NotificationService.instance.consumePendingOpenRequest();
-
-    if (!mounted) return;
-
-    if (_tabController.index != 0) {
-
-      _tabController.animateTo(0);
-
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-
-      const SnackBar(content: Text('Yeni özel fal talebi geldi')),
-
-    );
 
   }
 
@@ -164,20 +96,6 @@ class _AdminManualRequestsScreenState extends State<AdminManualRequestsScreen>
           ],
 
         ),
-
-        actions: [
-
-          IconButton(
-
-            onPressed: widget.onLogout,
-
-            icon: const Icon(Icons.logout),
-
-            tooltip: 'Çıkış',
-
-          ),
-
-        ],
 
       ),
 
