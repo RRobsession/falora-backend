@@ -1,7 +1,10 @@
 const admin = require('firebase-admin');
 const { getFirestore, initFirebaseAdmin } = require('./fcm');
 
-const REFERRAL_REWARD_TOKENS = 100;
+const REFERRAL_INVITEE_REWARD_TOKENS = 50;
+const REFERRAL_INVITER_REWARD_TOKENS = 50;
+/** Geriye uyumluluk / log */
+const REFERRAL_REWARD_TOKENS = REFERRAL_INVITEE_REWARD_TOKENS;
 
 function getFirestoreOrThrow() {
   if (!initFirebaseAdmin()) {
@@ -94,27 +97,31 @@ async function claimReferral({ uid, referralCode }) {
       const inviterData = inviterSnap.data() ?? {};
       const newUserTokens =
         (typeof newUserData.tokens === 'number' ? newUserData.tokens : 0) +
-        REFERRAL_REWARD_TOKENS;
+        REFERRAL_INVITEE_REWARD_TOKENS;
       const inviterTokens =
         (typeof inviterData.tokens === 'number' ? inviterData.tokens : 0) +
-        REFERRAL_REWARD_TOKENS;
+        REFERRAL_INVITER_REWARD_TOKENS;
       const inviteCount =
         (typeof inviterData.referralInviteCount === 'number'
           ? inviterData.referralInviteCount
           : 0) + 1;
 
-      console.log('REFERRAL_NEW_USER_REWARD_START uid=%s amount=%s', uid, REFERRAL_REWARD_TOKENS);
+      console.log(
+        'REFERRAL_NEW_USER_REWARD_START uid=%s amount=%s',
+        uid,
+        REFERRAL_INVITEE_REWARD_TOKENS,
+      );
       console.log(
         'REFERRAL_INVITER_REWARD_START inviter=%s amount=%s',
         inviterUid,
-        REFERRAL_REWARD_TOKENS,
+        REFERRAL_INVITER_REWARD_TOKENS,
       );
 
       tx.update(newUserRef, {
         tokens: newUserTokens,
         referredBy: inviterUid,
         referralRewardClaimed: true,
-        referralRewardAmount: REFERRAL_REWARD_TOKENS,
+        referralRewardAmount: REFERRAL_INVITEE_REWARD_TOKENS,
         referralRewardedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -125,7 +132,7 @@ async function claimReferral({ uid, referralCode }) {
 
       tx.set(creditRef, {
         fromUid: uid,
-        amount: REFERRAL_REWARD_TOKENS,
+        amount: REFERRAL_INVITER_REWARD_TOKENS,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         code,
       });
@@ -133,7 +140,8 @@ async function claimReferral({ uid, referralCode }) {
       return {
         ok: true,
         code: 'success',
-        rewardTokens: REFERRAL_REWARD_TOKENS,
+        rewardTokens: REFERRAL_INVITEE_REWARD_TOKENS,
+        inviterRewardTokens: REFERRAL_INVITER_REWARD_TOKENS,
         inviterUid,
       };
     });
@@ -153,5 +161,7 @@ async function claimReferral({ uid, referralCode }) {
 
 module.exports = {
   REFERRAL_REWARD_TOKENS,
+  REFERRAL_INVITEE_REWARD_TOKENS,
+  REFERRAL_INVITER_REWARD_TOKENS,
   claimReferral,
 };
