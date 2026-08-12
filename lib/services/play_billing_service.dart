@@ -132,10 +132,7 @@ class PlayBillingService {
       for (final id in productIds) {
         final mock = mockPriceForProductId(id);
         if (mock != null) {
-          prices[id] = ShopProductPrice(
-            price: mock,
-            compareAtPrice: compareAtPriceForProductId(id),
-          );
+          prices[id] = ShopProductPrice(price: mock);
           debugPrint('PLAY BILLING mock: $id price=$mock');
         }
       }
@@ -157,7 +154,6 @@ class PlayBillingService {
         final info = entry.value;
         debugPrint(
           'PLAY OFFERS ${entry.key}: price=${info.price} '
-          'compareAt=${info.compareAtPrice ?? '-'} '
           'offerToken=${info.offerToken != null}',
         );
       }
@@ -168,10 +164,7 @@ class PlayBillingService {
     final prices = <String, ShopProductPrice>{};
     for (final product in products) {
       if (product.price.isEmpty) continue;
-      prices[product.id] = ShopProductPrice(
-        price: product.price,
-        compareAtPrice: compareAtPriceForProductId(product.id),
-      );
+      prices[product.id] = ShopProductPrice(price: product.price);
     }
     return prices;
   }
@@ -185,10 +178,8 @@ class PlayBillingService {
       final offer = offerPrices[id];
       if (offer == null) continue;
 
-      final catalogCompareAt = compareAtPriceForProductId(id);
       merged[id] = ShopProductPrice(
         price: offer.price,
-        compareAtPrice: offer.compareAtPrice ?? catalogCompareAt,
         offerToken: offer.offerToken,
       );
     }

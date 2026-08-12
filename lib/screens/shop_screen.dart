@@ -47,10 +47,7 @@ class _ShopScreenState extends State<ShopScreen> {
     for (final id in tokenProductIds) {
       final mock = mockPriceForProductId(id);
       if (mock != null) {
-        prices[id] = ShopProductPrice(
-          price: mock,
-          compareAtPrice: compareAtPriceForProductId(id),
-        );
+        prices[id] = ShopProductPrice(price: mock);
       }
     }
     _logProductResults(prices);
@@ -83,8 +80,7 @@ class _ShopScreenState extends State<ShopScreen> {
         debugPrint('SHOP_PRODUCT: $id MISSING');
       } else {
         debugPrint(
-          'SHOP_PRODUCT: $id FOUND price=${info.price} '
-          'compareAt=${info.compareAtPrice ?? '-'}',
+          'SHOP_PRODUCT: $id FOUND price=${info.price}',
         );
       }
     }
@@ -357,7 +353,6 @@ class _ShopScreenState extends State<ShopScreen> {
               badge: pkg.badge,
               highlight: pkg.highlight,
               price: info.price,
-              compareAtPrice: info.compareAtPrice,
               isPurchasing: isPurchasing,
               onBuy: () => _buy(pkg),
             ),
