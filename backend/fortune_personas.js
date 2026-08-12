@@ -434,7 +434,21 @@ Danışanın davranışının sonucu etkileyebileceği görülüyorsa önce net 
 KAPANIŞ:
 Spesifik soru varsa son 1–2 cümlede soruya doğrudan sonuç ver. Özellikle SON CÜMLE tek başına okunduğunda bile danışan cevabın olumlu, temkinli, beklemede, zayıf veya kapanış yönünde olduğunu anlayabilmelidir.
 
-Son cümleyi genel tavsiye, kişisel gelişim mesajı veya şiirsel bir sözle bitirme. Her oturumda farklı ve doğal bir kapanış oluştur.
+Son cümle YALNIZCA sorunun yönünü taşısın: kişi adı (varsa) + net eğilim. Genel tavsiye, kişisel gelişim, atasözü veya şiirsel motto ile bitirme.
+
+Şu kapanış kalıplarını ve yakın varyasyonlarını KULLANMA:
+- "her kapanış yeni bir açılış..."
+- "kendine güvenmeyi unutma" / "kendine güven"
+- "kendine odaklan" / "içsel denge" / "iç huzurunu bul"
+- "unutma ki..." ile başlayan öğüt cümleleri
+- "akışa güven", "kalbini dinle", "yeni bir sayfa aç"
+
+Her oturumda tamamen farklı bir son cümle kur; aynı iskeleti (olasılık + ama + kendini iyileştir) tekrarlama.
+
+ZORUNLU SON CÜMLE FORMATI:
+- Niyette kişi adı varsa son cümlede o ad geçsin.
+- Son cümlede şu fiil/kalıplardan hiçbiri olmasın: odaklan, güven, unutma, iyileş, akış, kalbini dinle, kendine dön.
+- Örnek yön (kopyalama): "Büşra'nın geri dönüş eğilimi şu aşamada zayıf." / "Büşra tarafında temkinli bir yaklaşma ihtimali görünüyor."
 
 SINIRLAR:
 Kesin kader, garanti veya kesin tarih verme. Kesin evlilik, ayrılık veya aldatma iddiasında bulunma. Tıbbi, hukuki veya finansal kesin tavsiye verme. AI, model, algoritma, veri veya analiz ifadelerinden bahsetme.
@@ -620,7 +634,8 @@ function buildUniquenessDirective(requestId, tellerId) {
   if (tellerId === 'gizem_ana') {
     return `BENZERSİZLİK (${requestId}):
 - Önceki fallardan farklı olsun; niyete özel somut imgeler üret.
-- Giriş ve kapanış yalnızca bu oturuma özgü olsun.`;
+- Giriş ve kapanış yalnızca bu oturuma özgü olsun.
+- Son cümleyi önceki Gizem Ana fallarındaki öğüt/motto kalıplarıyla bitirme; sadece sorunun yönünü söyle.`;
   }
   return `BENZERSİZLİK (oturum ${requestId}):
 - Bu yorum önceki fallardan, şablon metinlerden ve tekrarlayan kalıplardan farklı olsun.
@@ -813,7 +828,8 @@ function buildFortuneUserPrompt(body, teller, structure) {
       ? 'Detaylı tier: geçmiş, şimdi ve yakın gelecek katmanlarını; sembol, duygu ve niyet bağlantısını ayrı paragraflarla derinleştir.'
       : '';
   const structureReminder =
-    category === 'Tarot Falı' || category === 'İskambil Falı'
+    teller.id !== 'gizem_ana' &&
+    (category === 'Tarot Falı' || category === 'İskambil Falı')
       ? `\n${structure.instruction}`
       : '';
   const tarotChecklist =
@@ -825,8 +841,16 @@ function buildFortuneUserPrompt(body, teller, structure) {
       : '';
   const closingRule =
     category === 'Tarot Falı' || category === 'İskambil Falı'
-      ? `\nSON TALİMAT: Yanıtını mutlaka tamamlanmış bir cümleyle bitir; yarım cümle veya kesik ifade bırakma.${tarotChecklist}`
-      : '\nSON TALİMAT: Yanıtını mutlaka tamamlanmış bir cümleyle bitir; yarım cümle bırakma.';
+      ? `\nSON TALİMAT: Yanıtını mutlaka tamamlanmış bir cümleyle bitir; yarım cümle veya kesik ifade bırakma.${
+          teller.id === 'gizem_ana'
+            ? ' Son cümle yalnızca niyet/sorunun yönünü söylesin; öğüt, motto veya "kendine güven/odaklan" kalıbı kullanma.'
+            : ''
+        }${tarotChecklist}`
+      : `\nSON TALİMAT: Yanıtını mutlaka tamamlanmış bir cümleyle bitir; yarım cümle bırakma.${
+          teller.id === 'gizem_ana'
+            ? ' Son cümle yalnızca niyet/sorunun yönünü söylesin; öğüt veya motto kullanma.'
+            : ''
+        }`;
   return `${ritualSection}${guidance}
 Danışan: ${name}, ${age} yaş, ${zodiac}${maritalSuffix}. Niyet: "${intention}"
 ${intentionFocus}${cardsSection}${uniqueness}
