@@ -385,7 +385,7 @@ function resolveFortuneCompletionTokens(teller, body) {
 }
 
 async function generateFortuneForTeller(openai, teller, structure, body) {
-  const systemPrompt = buildFortuneSystemPrompt(teller, structure);
+  const systemPrompt = buildFortuneSystemPrompt(teller, structure, body);
   const userPrompt = buildFortuneUserPrompt(body, teller, structure);
   const maxTokens = resolveFortuneCompletionTokens(teller, body);
 
