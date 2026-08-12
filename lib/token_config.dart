@@ -7,9 +7,9 @@ const fortuneTokenCost = 50;
 const coupleTokenCost = 150;
 const rewardAdTokenGrant = 25;
 const maxRewardedAdsPerDay = 6;
-const rewardResetDuration = Duration(hours: 24);
+/// Reklam hakkı Türkiye saatiyle her gün 00:00'da sıfırlanır (yuvarlanan 24 saat değil).
 const rewardAdLimitReachedMessage =
-    'Bugünkü reklam hakkınızı kullandınız. Yarın tekrar deneyin.';
+    'Bugünkü reklam hakkınızı kullandınız. Yarın 00:00\'dan sonra tekrar deneyin.';
 
 /// AdMob hesabı onaylanana kadar: reklam yüklenmese/açılmasa da
 /// günlük hak içinde butona basınca jeton verilir.

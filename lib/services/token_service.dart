@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:falora/models/app_user.dart';
+import 'package:falora/services/daily_horoscope_service.dart';
 import 'package:falora/services/fortune_submit_messages.dart';
 import 'package:falora/token_config.dart';
 import 'package:flutter/foundation.dart';
@@ -427,9 +428,12 @@ class TokenService {
         .clamp(0, maxRewardedAdsPerDay);
   }
 
+  /// Türkiye (UTC+3) takvim günü değiştiyse reklam hakkı sıfırlanır.
   static bool isRewardPeriodElapsed(DateTime? lastRewardAt) {
     if (lastRewardAt == null) return false;
-    return DateTime.now().difference(lastRewardAt) >= rewardResetDuration;
+    final lastKey = DailyHoroscopeService.istanbulDateKey(lastRewardAt.toUtc());
+    final todayKey = DailyHoroscopeService.istanbulDateKey();
+    return lastKey != todayKey;
   }
 
   int _effectiveRewardCount(AppUser user) {
@@ -439,12 +443,23 @@ class TokenService {
     return count;
   }
 
+  /// Sonraki Türkiye 00:00'a kalan süre (hak bitince).
   Duration? timeUntilRewardReset(AppUser user) {
     if (remainingRewardAds(user) > 0) return null;
-    if (user.lastRewardAt == null) return rewardResetDuration;
-    final elapsed = DateTime.now().difference(user.lastRewardAt!);
-    if (elapsed >= rewardResetDuration) return null;
-    return rewardResetDuration - elapsed;
+    if (isRewardPeriodElapsed(user.lastRewardAt)) return null;
+
+    final nowUtc = DateTime.now().toUtc();
+    final istanbulNow = nowUtc.add(const Duration(hours: 3));
+    final nextMidnightIstanbul = DateTime(
+      istanbulNow.year,
+      istanbulNow.month,
+      istanbulNow.day + 1,
+    );
+    final nextMidnightUtc =
+        nextMidnightIstanbul.subtract(const Duration(hours: 3));
+    final remaining = nextMidnightUtc.difference(nowUtc);
+    if (remaining <= Duration.zero) return null;
+    return remaining;
   }
 
   String rewardAdWaitMessage(AppUser user) => rewardAdLimitReachedMessage;

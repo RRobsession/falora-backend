@@ -68,10 +68,15 @@ service cloud.firestore {
 
 
 
+    function istanbulDayIndex(ts) {
+      // Türkiye sabit UTC+3 — takvim günü indeksi
+      return int((ts.toMillis() + 10800000) / 86400000);
+    }
+
     function rewardPeriodElapsed() {
       let last = resource.data.get('lastRewardAt', null);
       return last == null
-        || request.time > last + duration.value(24, 'h');
+        || istanbulDayIndex(request.time) != istanbulDayIndex(last);
     }
 
     function validRewardedAdGrant() {
