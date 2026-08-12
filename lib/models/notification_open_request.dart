@@ -5,12 +5,16 @@ class NotificationOpenRequest {
     this.readingId,
     this.date,
     this.zodiac,
+    this.title,
+    this.body,
   });
 
   final String type;
   final String? readingId;
   final String? date;
   final String? zodiac;
+  final String? title;
+  final String? body;
 
   /// Ana shell sekmesi: 1 = Fallarım, 3 = Çift Uyumu.
   int? get targetTabIndex {
@@ -33,6 +37,8 @@ class NotificationOpenRequest {
     final requestId = data['requestId']?.toString().trim();
     final date = data['date']?.toString().trim();
     final zodiac = data['zodiac']?.toString().trim();
+    final title = data['title']?.toString().trim();
+    final body = data['body']?.toString().trim();
     final id = (readingId != null && readingId.isNotEmpty)
         ? readingId
         : ((requestId != null && requestId.isNotEmpty) ? requestId : null);
@@ -41,6 +47,8 @@ class NotificationOpenRequest {
       readingId: id,
       date: (date != null && date.isNotEmpty) ? date : null,
       zodiac: (zodiac != null && zodiac.isNotEmpty) ? zodiac : null,
+      title: (title != null && title.isNotEmpty) ? title : null,
+      body: (body != null && body.isNotEmpty) ? body : null,
     );
   }
 

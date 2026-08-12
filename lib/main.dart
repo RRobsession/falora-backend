@@ -382,6 +382,11 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       return;
     }
 
+    if (request.type == 'angel_card' || request.type == 'admin_broadcast') {
+      await _openSimpleNotificationMessage(request);
+      return;
+    }
+
     final readingId = request.readingId;
     if (readingId == null || readingId.isEmpty) return;
 
@@ -429,6 +434,47 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       zodiac: zodiac,
       text: text,
       dateKey: dateKey,
+    );
+  }
+
+  Future<void> _openSimpleNotificationMessage(
+    NotificationOpenRequest request,
+  ) async {
+    final title = (request.title?.trim().isNotEmpty == true)
+        ? request.title!.trim()
+        : (request.type == 'angel_card' ? 'Melek Kartı' : 'Bildirim');
+    final body = request.body?.trim() ?? '';
+    if (!mounted) return;
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bildirim metni bulunamadı')),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: faloraParchmentCard,
+          title: Text(title),
+          content: SingleChildScrollView(
+            child: Text(
+              body,
+              style: const TextStyle(
+                color: faloraTextPrimary,
+                height: 1.45,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Tamam'),
+            ),
+          ],
+        );
+      },
     );
   }
 
