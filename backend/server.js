@@ -335,6 +335,84 @@ function parseChatImages(body) {
     .filter(Boolean);
 }
 
+function parseFortuneImages(body) {
+  const raw = body?.fortuneImages;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 2)
+    .map((item, index) => {
+      const parsed = parseImageField(item?.base64, item?.mime);
+      if (!parsed) return null;
+      parsed.label = item?.name || (index === 0 ? 'sağ el' : 'sol el');
+      return parsed;
+    })
+    .filter(Boolean);
+}
+
+function buildPalmImageContent(userPrompt, images) {
+  const content = [{ type: 'text', text: userPrompt }];
+  const handLabels = ['Sağ el', 'Sol el'];
+  images.forEach((image, index) => {
+    content.push({
+      type: 'text',
+      text: `${handLabels[index]} fotoğrafı (${image.label}):`,
+    });
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${image.mime};base64,${image.base64}`,
+        detail: 'high',
+      },
+    });
+  });
+  return content;
+}
+
+const IMAGE_VALIDATION_RULES = {
+  palm: `İki slot zorunlu: right_hand ve left_hand. Her görselde tek, açık ve avuç içi kameraya dönük bir insan eli bulunmalı. Avuç ve ana çizgiler yorumlanabilecek kadar net, aydınlık ve kadraj içinde olmalı. El dışı görseli, el sırtını, kapalı yumruğu, çizimi, ekran görüntüsünü ve aşırı bulanık/karanlık görseli reddet. İki görsel aynı veya yakın kopya olmamalı. Kamera aynalaması nedeniyle yalnızca sağ/sol yönü belirsiz diye reddetme.`,
+  coffee: `Üç slot zorunlu: cup_1, cup_2 ve saucer. cup_1 ile cup_2 görsellerinde kahve fincanının iç yüzeyi ve telve izleri net görünmeli. saucer görselinde kahve tabağı ve telve/akıntı izleri görünmeli. Boş fincanı, yalnızca fincan dışını, alakasız nesneyi, çizimi ve okunamayacak kadar bulanık/karanlık görseli reddet. Görseller aynı veya yakın kopya olmamalı.`,
+  couple: `İki slot zorunlu: woman ve man. Her görselde tam olarak bir yetişkin insanın yüzü yeterince büyük, önden veya hafif açıyla ve net görünmeli. Grup fotoğrafını, yüzü kapalı/kesilmiş görseli, insan içermeyen görseli, çizimi ve aşırı bulanık/karanlık görseli reddet. Slot etiketindeki cinsiyeti görüntüden doğrulamaya çalışma. İki dosya aynı veya yakın kopya olmamalı.`,
+  relationship_chat: `Her görsel gerçek bir mesajlaşma veya sohbet ekran görüntüsü olmalı ve en az birkaç okunabilir mesaj balonu ya da konuşma satırı içermeli. Selfie, manzara, boş ekran, sosyal medya profil sayfası, yalnızca klavye veya okunamayacak kadar bulanık görüntüyü reddet. Birden fazla görsel varsa aynı veya yakın kopya olmamalı.`,
+};
+
+function buildValidationImageContent(kind, images) {
+  const content = [
+    {
+      type: 'text',
+      text: `Doğrulama türü: ${kind}\nKurallar: ${IMAGE_VALIDATION_RULES[kind]}`,
+    },
+  ];
+  images.forEach((image) => {
+    content.push({ type: 'text', text: `Slot: ${image.slot}` });
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${image.mime};base64,${image.base64}`,
+        detail: 'high',
+      },
+    });
+  });
+  return content;
+}
+
+function parseValidationImages(body) {
+  const raw = body?.images;
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 3).map((item, index) => {
+    const parsed = parseImageField(item?.base64, item?.mime);
+    if (!parsed) return null;
+    parsed.slot = String(item?.slot || `image_${index + 1}`);
+    return parsed;
+  }).filter(Boolean);
+}
+
+function expectedValidationCount(kind, count) {
+  if (kind === 'palm' || kind === 'couple') return count === 2;
+  if (kind === 'coffee') return count === 3;
+  if (kind === 'relationship_chat') return count >= 1 && count <= 3;
+  return false;
+}
+
 function buildRelationshipChatImageContent(userPrompt, images) {
   const content = [{ type: 'text', text: userPrompt }];
 
@@ -389,13 +467,36 @@ async function generateFortuneForTeller(openai, teller, structure, body) {
   const userPrompt = buildFortuneUserPrompt(body, teller, structure);
   const maxTokens = resolveFortuneCompletionTokens(teller, body);
 
-  const result = await generate(
-    openai,
-    'fortune',
-    systemPrompt,
-    userPrompt,
-    maxTokens,
-  );
+  let result;
+  if (body?.category === 'El Falı') {
+    const images = parseFortuneImages(body);
+    if (images.length !== 2) {
+      throw new Error('El falı için sağ ve sol el fotoğrafları gerekli');
+    }
+    const completion = await openai.chat.completions.create({
+      model: VISION_MODEL,
+      temperature: TEMPERATURE,
+      max_completion_tokens: maxTokens,
+      frequency_penalty: FREQUENCY_PENALTY,
+      presence_penalty: PRESENCE_PENALTY,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: buildPalmImageContent(userPrompt, images) },
+      ],
+    });
+    logTokenUsage('palm_fortune', completion.usage);
+    result = completion.choices?.[0]?.message?.content?.trim();
+    if (!result) throw new Error('Boş AI cevabı');
+    result = sanitizeAiResult(result);
+  } else {
+    result = await generate(
+      openai,
+      'fortune',
+      systemPrompt,
+      userPrompt,
+      maxTokens,
+    );
+  }
 
   const words = countWords(result);
   const endsComplete = /[.!?…]["')\]]*\s*$/.test(result.trim());
@@ -649,6 +750,70 @@ app.get('/health', (_req, res) => {
     firebaseClientEmail: readFirebaseServiceAccountClientEmail(),
   });
 });
+
+app.post(
+  '/validate-fortune-images',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+    const kind = String(req.body?.kind || '').trim();
+    if (!Object.prototype.hasOwnProperty.call(IMAGE_VALIDATION_RULES, kind)) {
+      return res.status(400).json({ error: 'Geçersiz fotoğraf doğrulama türü.' });
+    }
+    const images = parseValidationImages(req.body);
+    if (!expectedValidationCount(kind, images.length)) {
+      return res.status(400).json({ error: 'Gerekli fotoğrafların tamamını ekleyin.' });
+    }
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: VISION_MODEL,
+        temperature: 0.1,
+        max_completion_tokens: 500,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: `Sen yalnızca yüklenen fal fotoğraflarının teknik ve kategori uygunluğunu denetleyen bir görsel kalite kontrol sistemisin.
+Görsellerden kimlik, etnik köken, sağlık durumu veya kişilik çıkarımı yapma. Fal yorumu üretme.
+Kuralları katı ama adil uygula. Emin değilsen valid=false döndür.
+Yalnızca şu JSON yapısını döndür:
+{"valid":true|false,"message":"Kullanıcıya Türkçe kısa açıklama","issues":[{"slot":"slot adı","code":"kısa_kod","message":"Türkçe sorun"}],"confidence":0.0}`,
+          },
+          {
+            role: 'user',
+            content: buildValidationImageContent(kind, images),
+          },
+        ],
+      });
+      logTokenUsage('fortune_image_validation', completion.usage);
+      const raw = completion.choices?.[0]?.message?.content?.trim();
+      if (!raw) throw new Error('Boş doğrulama cevabı');
+      const result = JSON.parse(raw);
+      const confidence = Math.max(0, Math.min(1, Number(result?.confidence) || 0));
+      const valid = result?.valid === true && confidence >= 0.75;
+      const message = String(
+        confidence < 0.75
+          ? 'Fotoğraflar yeterince net doğrulanamadı. Lütfen daha aydınlık ve net fotoğraflar yükleyin.'
+          : result?.message ||
+              (valid
+                ? 'Fotoğraflar uygun.'
+                : 'Fotoğraflar bu fal türüne uygun görünmüyor.'),
+      ).slice(0, 300);
+      return res.json({
+        valid,
+        message,
+        issues: Array.isArray(result?.issues) ? result.issues.slice(0, 3) : [],
+        confidence,
+      });
+    } catch (error) {
+      console.error('FORTUNE IMAGE VALIDATION ERROR:', error.message);
+      return res.status(503).json({
+        error: 'Fotoğraf kontrolü şu anda tamamlanamadı. Lütfen tekrar deneyin.',
+      });
+    }
+  },
+);
 
 app.post('/send-notification', requireAuth, async (req, res) => {
   const { token, title, body } = req.body ?? {};
@@ -996,6 +1161,90 @@ app.post(
 );
 
 app.post(
+  '/generate-yes-no',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+    const question = String(req.body?.question || '').trim();
+    const cards = Array.isArray(req.body?.cards) ? req.body.cards : [];
+    const paymentMethod = req.body?.paymentMethod;
+    if (question.length < 5 || question.length > 500) {
+      return res.status(400).json({ error: 'Soru 5-500 karakter olmalı' });
+    }
+    if (cards.length !== 3 || !cards.every((card) =>
+      card && typeof card.id === 'string' && card.id.trim().length > 0
+    )) {
+      return res.status(400).json({ error: 'Tam olarak 3 tarot kartı gerekli' });
+    }
+    if (paymentMethod !== 'token' && paymentMethod !== 'ad') {
+      return res.status(400).json({ error: 'Geçersiz ödeme yöntemi' });
+    }
+
+    let chargedToken = false;
+    let chargedUserRef = null;
+    try {
+      if (paymentMethod === 'token') {
+        const db = getFirestore();
+        if (!db) {
+          return res.status(503).json({ error: 'Jeton servisi kullanılamıyor' });
+        }
+        chargedUserRef = db.collection('users').doc(req.auth.uid);
+        await db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(chargedUserRef);
+          if (!snapshot.exists) {
+            const error = new Error('Kullanıcı kaydı bulunamadı');
+            error.statusCode = 404;
+            throw error;
+          }
+          const balance = Number(snapshot.data()?.tokens || 0);
+          if (!Number.isFinite(balance) || balance < 20) {
+            const error = new Error('Bu fal için 20 jeton gerekiyor');
+            error.statusCode = 402;
+            throw error;
+          }
+          transaction.update(chargedUserRef, {
+            tokens: Math.floor(balance) - 20,
+          });
+        });
+        chargedToken = true;
+      }
+
+      const cardLines = cards.map((card, index) =>
+        `${index + 1}. ${String(card.id).trim()} (${card.isReversed ? 'ters' : 'düz'})`
+      ).join('\n');
+      const result = await generate(
+        openai,
+        'yes_no',
+        'Kullanıcının sorusuna verilen 3 tarot kartını birlikte değerlendirerek son derece kısa ve net yanıt ver. Yanıt tam olarak tek satır olmalı ve yalnızca "EVET — kısa cümle" veya "HAYIR — kısa cümle" biçiminde yazılmalı. BELİRSİZ deme; mutlaka EVET ya da HAYIR seç. Açıklama en fazla 18 kelime olsun. Kart isimlerini tek tek yorumlama; başlık, madde, paragraf, "Genel yorum" veya ek açıklama kullanma. Kesin gelecek garantisi verme.',
+        `Soru: ${question}\nKartlar:\n${cardLines}`,
+        80,
+      );
+
+      return res.json({ result });
+    } catch (err) {
+      console.error('generate-yes-no error:', err.message);
+      if (chargedToken && chargedUserRef) {
+        try {
+          await getFirestore().runTransaction(async (transaction) => {
+            const snapshot = await transaction.get(chargedUserRef);
+            if (!snapshot.exists) return;
+            const balance = Number(snapshot.data()?.tokens || 0);
+            transaction.update(chargedUserRef, {
+              tokens: Math.floor(balance) + 20,
+            });
+          });
+        } catch (refundError) {
+          console.error('generate-yes-no refund error:', refundError.message);
+        }
+      }
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.statusCode ? err.message : 'Fal yorumlanamadı' });
+    }
+  },
+);
+
+app.post(
   '/generate-fortune',
   requireAuth,
   requireVerifiedEmail,
@@ -1056,7 +1305,9 @@ app.post(
   }
 
   try {
-    const teller = getFortuneTeller(tellerId || 'gizem_ana');
+    const teller = getFortuneTeller(
+      category === 'El Falı' ? 'pinar_baci' : tellerId || 'gizem_ana',
+    );
     const structure = pickFortuneStructureForTeller(teller.id);
     logFortuneRequest(teller.id, structure.id, `max=${teller.maxWords}`);
 
