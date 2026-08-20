@@ -369,7 +369,7 @@ function buildPalmImageContent(userPrompt, images) {
 }
 
 const IMAGE_VALIDATION_RULES = {
-  palm: `İki slot zorunlu: right_hand ve left_hand. Her görselde tek, açık ve avuç içi kameraya dönük bir insan eli bulunmalı. Avuç ve ana çizgiler yorumlanabilecek kadar net, aydınlık ve kadraj içinde olmalı. El dışı görseli, el sırtını, kapalı yumruğu, çizimi, ekran görüntüsünü ve aşırı bulanık/karanlık görseli reddet. İki görsel aynı veya yakın kopya olmamalı. Kamera aynalaması nedeniyle yalnızca sağ/sol yönü belirsiz diye reddetme.`,
+  palm: `İki slot zorunlu: right_hand ve left_hand. Tek kontrol şudur: Her iki fotoğrafta da fal yorumunda kullanılabilecek, avuç içi kameraya dönük açık bir insan eli var mı? Varsa valid=true döndür. Işık, açı, kadraj veya çizgilerin keskinliği kusursuz olmak zorunda değildir; avuç içi seçilebildiği sürece reddetme. Yalnızca fotoğrafta avuç içi yoksa (alakasız nesne, yalnızca el sırtı veya kapalı yumruk) reddet. Sağ/sol yönünü görüntüden doğrulamaya çalışma.`,
   coffee: `Üç slot zorunlu: cup_1, cup_2 ve saucer. cup_1 ile cup_2 görsellerinde kahve fincanının iç yüzeyi ve telve izleri net görünmeli. saucer görselinde kahve tabağı ve telve/akıntı izleri görünmeli. Boş fincanı, yalnızca fincan dışını, alakasız nesneyi, çizimi ve okunamayacak kadar bulanık/karanlık görseli reddet. Görseller aynı veya yakın kopya olmamalı.`,
   couple: `İki slot zorunlu: woman ve man. Her görselde tam olarak bir yetişkin insanın yüzü yeterince büyük, önden veya hafif açıyla ve net görünmeli. Grup fotoğrafını, yüzü kapalı/kesilmiş görseli, insan içermeyen görseli, çizimi ve aşırı bulanık/karanlık görseli reddet. Slot etiketindeki cinsiyeti görüntüden doğrulamaya çalışma. İki dosya aynı veya yakın kopya olmamalı.`,
   relationship_chat: `Her görsel gerçek bir mesajlaşma veya sohbet ekran görüntüsü olmalı ve en az birkaç okunabilir mesaj balonu ya da konuşma satırı içermeli. Selfie, manzara, boş ekran, sosyal medya profil sayfası, yalnızca klavye veya okunamayacak kadar bulanık görüntüyü reddet. Birden fazla görsel varsa aynı veya yakın kopya olmamalı.`,
@@ -388,7 +388,7 @@ function buildValidationImageContent(kind, images) {
       type: 'image_url',
       image_url: {
         url: `data:${image.mime};base64,${image.base64}`,
-        detail: 'high',
+        detail: kind === 'palm' ? 'low' : 'high',
       },
     });
   });
@@ -766,17 +766,20 @@ app.post(
     }
 
     try {
+      const isPalmValidation = kind === 'palm';
       const completion = await openai.chat.completions.create({
         model: VISION_MODEL,
-        temperature: 0.1,
-        max_completion_tokens: 500,
+        temperature: 0,
+        max_completion_tokens: isPalmValidation ? 160 : 500,
         response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
             content: `Sen yalnızca yüklenen fal fotoğraflarının teknik ve kategori uygunluğunu denetleyen bir görsel kalite kontrol sistemisin.
 Görsellerden kimlik, etnik köken, sağlık durumu veya kişilik çıkarımı yapma. Fal yorumu üretme.
-Kuralları katı ama adil uygula. Emin değilsen valid=false döndür.
+${isPalmValidation
+  ? 'El falında yalnızca açık bir insan avuç içinin bulunup bulunmadığını denetle. Avuç içi seçilebiliyorsa küçük kalite kusurlarında valid=true döndür.'
+  : 'Kuralları katı ama adil uygula. Emin değilsen valid=false döndür.'}
 Yalnızca şu JSON yapısını döndür:
 {"valid":true|false,"message":"Kullanıcıya Türkçe kısa açıklama","issues":[{"slot":"slot adı","code":"kısa_kod","message":"Türkçe sorun"}],"confidence":0.0}`,
           },
@@ -791,10 +794,13 @@ Yalnızca şu JSON yapısını döndür:
       if (!raw) throw new Error('Boş doğrulama cevabı');
       const result = JSON.parse(raw);
       const confidence = Math.max(0, Math.min(1, Number(result?.confidence) || 0));
-      const valid = result?.valid === true && confidence >= 0.75;
+      const minimumConfidence = isPalmValidation ? 0.35 : 0.75;
+      const valid = result?.valid === true && confidence >= minimumConfidence;
       const message = String(
-        confidence < 0.75
-          ? 'Fotoğraflar yeterince net doğrulanamadı. Lütfen daha aydınlık ve net fotoğraflar yükleyin.'
+        confidence < minimumConfidence
+          ? isPalmValidation
+            ? 'Fotoğraflarda açık bir avuç içi algılanamadı. Lütfen avuç içiniz kameraya dönük olacak şekilde tekrar çekin.'
+            : 'Fotoğraflar yeterince net doğrulanamadı. Lütfen daha aydınlık ve net fotoğraflar yükleyin.'
           : result?.message ||
               (valid
                 ? 'Fotoğraflar uygun.'
