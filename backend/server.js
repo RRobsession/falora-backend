@@ -685,6 +685,36 @@ async function saveGeneratedResult(req, result, collection) {
   }
 }
 
+async function failGeneratedRequest(req, collection = FORTUNE_COLLECTION) {
+  const requestId = req.body?.requestId;
+  if (!requestId || !req.auth?.uid) return;
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const ref = db.collection(collection).doc(String(requestId).trim());
+    const snap = await ref.get();
+    if (!snap.exists || snap.data()?.userId !== req.auth.uid) return;
+    const result = String(snap.data()?.result || '').trim();
+    if (result) return;
+    await ref.update({ status: 'error' });
+    const refund = await refundFortuneRequest({
+      uid: req.auth.uid,
+      requestId,
+      collection,
+    });
+    console.error(
+      'FORTUNE FAILED AND REFUNDED | id=',
+      requestId,
+      '| reason=',
+      refund.reason,
+      '| amount=',
+      refund.amount,
+    );
+  } catch (persistError) {
+    console.error('FORTUNE FAILURE PERSIST ERROR:', persistError.message);
+  }
+}
+
 const app = express();
 
 const corsOptions = {
@@ -1260,6 +1290,7 @@ app.post(
     return res.json({ result });
   } catch (err) {
     console.error('generate-fortune error:', err.message);
+    await failGeneratedRequest(req);
     return res.status(500).json({ error: 'AI yanıtı üretilemedi' });
   }
 },
