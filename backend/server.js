@@ -368,32 +368,12 @@ function buildPalmImageContent(userPrompt, images) {
   return content;
 }
 
-const IMAGE_VALIDATION_RULES = {
-  palm: `İki slot zorunlu: right_hand ve left_hand. Tek kontrol şudur: Her iki fotoğrafta da fal yorumunda kullanılabilecek, avuç içi kameraya dönük açık bir insan eli var mı? Varsa valid=true döndür. Işık, açı, kadraj veya çizgilerin keskinliği kusursuz olmak zorunda değildir; avuç içi seçilebildiği sürece reddetme. Yalnızca fotoğrafta avuç içi yoksa (alakasız nesne, yalnızca el sırtı veya kapalı yumruk) reddet. Sağ/sol yönünü görüntüden doğrulamaya çalışma.`,
-  coffee: `Üç slot zorunlu: cup_1, cup_2 ve saucer. cup_1 ile cup_2 görsellerinde kahve fincanının iç yüzeyi ve telve izleri net görünmeli. saucer görselinde kahve tabağı ve telve/akıntı izleri görünmeli. Boş fincanı, yalnızca fincan dışını, alakasız nesneyi, çizimi ve okunamayacak kadar bulanık/karanlık görseli reddet. Görseller aynı veya yakın kopya olmamalı.`,
-  couple: `İki slot zorunlu: woman ve man. Her görselde tam olarak bir yetişkin insanın yüzü yeterince büyük, önden veya hafif açıyla ve net görünmeli. Grup fotoğrafını, yüzü kapalı/kesilmiş görseli, insan içermeyen görseli, çizimi ve aşırı bulanık/karanlık görseli reddet. Slot etiketindeki cinsiyeti görüntüden doğrulamaya çalışma. İki dosya aynı veya yakın kopya olmamalı.`,
-  relationship_chat: `Her görsel gerçek bir mesajlaşma veya sohbet ekran görüntüsü olmalı ve en az birkaç okunabilir mesaj balonu ya da konuşma satırı içermeli. Selfie, manzara, boş ekran, sosyal medya profil sayfası, yalnızca klavye veya okunamayacak kadar bulanık görüntüyü reddet. Birden fazla görsel varsa aynı veya yakın kopya olmamalı.`,
-};
-
-function buildValidationImageContent(kind, images) {
-  const content = [
-    {
-      type: 'text',
-      text: `Doğrulama türü: ${kind}\nKurallar: ${IMAGE_VALIDATION_RULES[kind]}`,
-    },
-  ];
-  images.forEach((image) => {
-    content.push({ type: 'text', text: `Slot: ${image.slot}` });
-    content.push({
-      type: 'image_url',
-      image_url: {
-        url: `data:${image.mime};base64,${image.base64}`,
-        detail: kind === 'palm' ? 'low' : 'high',
-      },
-    });
-  });
-  return content;
-}
+const PHOTO_UPLOAD_KINDS = new Set([
+  'palm',
+  'coffee',
+  'couple',
+  'relationship_chat',
+]);
 
 function parseValidationImages(body) {
   const raw = body?.images;
@@ -757,7 +737,7 @@ app.post(
   requireVerifiedEmail,
   async (req, res) => {
     const kind = String(req.body?.kind || '').trim();
-    if (!Object.prototype.hasOwnProperty.call(IMAGE_VALIDATION_RULES, kind)) {
+    if (!PHOTO_UPLOAD_KINDS.has(kind)) {
       return res.status(400).json({ error: 'Geçersiz fotoğraf doğrulama türü.' });
     }
     const images = parseValidationImages(req.body);
@@ -765,59 +745,12 @@ app.post(
       return res.status(400).json({ error: 'Gerekli fotoğrafların tamamını ekleyin.' });
     }
 
-    try {
-      const isPalmValidation = kind === 'palm';
-      const completion = await openai.chat.completions.create({
-        model: VISION_MODEL,
-        temperature: 0,
-        max_completion_tokens: isPalmValidation ? 160 : 500,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: `Sen yalnızca yüklenen fal fotoğraflarının teknik ve kategori uygunluğunu denetleyen bir görsel kalite kontrol sistemisin.
-Görsellerden kimlik, etnik köken, sağlık durumu veya kişilik çıkarımı yapma. Fal yorumu üretme.
-${isPalmValidation
-  ? 'El falında yalnızca açık bir insan avuç içinin bulunup bulunmadığını denetle. Avuç içi seçilebiliyorsa küçük kalite kusurlarında valid=true döndür.'
-  : 'Kuralları katı ama adil uygula. Emin değilsen valid=false döndür.'}
-Yalnızca şu JSON yapısını döndür:
-{"valid":true|false,"message":"Kullanıcıya Türkçe kısa açıklama","issues":[{"slot":"slot adı","code":"kısa_kod","message":"Türkçe sorun"}],"confidence":0.0}`,
-          },
-          {
-            role: 'user',
-            content: buildValidationImageContent(kind, images),
-          },
-        ],
-      });
-      logTokenUsage('fortune_image_validation', completion.usage);
-      const raw = completion.choices?.[0]?.message?.content?.trim();
-      if (!raw) throw new Error('Boş doğrulama cevabı');
-      const result = JSON.parse(raw);
-      const confidence = Math.max(0, Math.min(1, Number(result?.confidence) || 0));
-      const minimumConfidence = isPalmValidation ? 0.35 : 0.75;
-      const valid = result?.valid === true && confidence >= minimumConfidence;
-      const message = String(
-        confidence < minimumConfidence
-          ? isPalmValidation
-            ? 'Fotoğraflarda açık bir avuç içi algılanamadı. Lütfen avuç içiniz kameraya dönük olacak şekilde tekrar çekin.'
-            : 'Fotoğraflar yeterince net doğrulanamadı. Lütfen daha aydınlık ve net fotoğraflar yükleyin.'
-          : result?.message ||
-              (valid
-                ? 'Fotoğraflar uygun.'
-                : 'Fotoğraflar bu fal türüne uygun görünmüyor.'),
-      ).slice(0, 300);
-      return res.json({
-        valid,
-        message,
-        issues: Array.isArray(result?.issues) ? result.issues.slice(0, 3) : [],
-        confidence,
-      });
-    } catch (error) {
-      console.error('FORTUNE IMAGE VALIDATION ERROR:', error.message);
-      return res.status(503).json({
-        error: 'Fotoğraf kontrolü şu anda tamamlanamadı. Lütfen tekrar deneyin.',
-      });
-    }
+    return res.json({
+      valid: true,
+      message: 'Fotoğraflar alındı.',
+      issues: [],
+      confidence: 1,
+    });
   },
 );
 
