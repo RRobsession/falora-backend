@@ -14,13 +14,14 @@ const { safeLog } = require('./safe_log');
 const { adminUids } = require('./admin_config');
 const FCM_ANDROID_CHANNEL_ID =
   process.env.FCM_ANDROID_CHANNEL_ID || 'falora_ready';
-const MAX_TIMEOUT_MS = 2147483647;
 const NOTIFICATION_SCHEDULES = 'notification_schedules';
+const NOTIFICATION_WORKER_INTERVAL_MS = 20 * 1000;
 
 let messaging = null;
 let firestore = null;
 let initAttempted = false;
-const scheduledJobs = new Map();
+let notificationWorkerTimer = null;
+let notificationWorkerInFlight = false;
 
 const READY_MESSAGES = {
   fortune: {
@@ -87,6 +88,7 @@ function initFirebaseAdmin() {
       'Firebase Admin SDK hazır | projectId=',
       serviceAccount.project_id,
     );
+    startNotificationScheduleWorker();
     void restorePendingNotificationSchedules().catch((err) => {
       console.error('FCM SCHEDULE RESTORE ERROR:', err.message);
     });
@@ -309,41 +311,6 @@ async function notifyAdminsNewManualRequest({
   };
 }
 
-function scheduleInMemoryTimer(scheduleId, userId, type, notifyAtMs) {
-  const delayMs = Math.max(0, notifyAtMs - Date.now());
-  const existing = scheduledJobs.get(scheduleId);
-  if (existing) {
-    clearTimeout(existing);
-  }
-
-  console.log(
-    'FCM SCHEDULE TIMER | scheduleId=',
-    scheduleId,
-    '| userId=',
-    userId,
-    '| type=',
-    type,
-    '| delayMs=',
-    delayMs,
-  );
-
-  const cappedDelay = Math.min(delayMs, MAX_TIMEOUT_MS);
-  const timer = setTimeout(() => {
-    scheduledJobs.delete(scheduleId);
-    void fireScheduledNotification(scheduleId, userId, type).catch((err) => {
-      console.error(
-        'FCM SCHEDULE FIRE ERROR | scheduleId=',
-        scheduleId,
-        '|',
-        err.message,
-      );
-    });
-  }, cappedDelay);
-
-  scheduledJobs.set(scheduleId, timer);
-  return delayMs;
-}
-
 async function isReadingReadyForNotification(type, readingId, notifyAtMs) {
   if (Date.now() < notifyAtMs) return false;
 
@@ -406,7 +373,6 @@ async function fireScheduledNotification(scheduleId, userId, type) {
       return { success: false, reason: 'result_timeout' };
     }
 
-    scheduleInMemoryTimer(scheduleId, userId, type, Date.now() + 20_000);
     return { success: false, reason: 'waiting_for_result' };
   }
 
@@ -443,33 +409,54 @@ async function fireScheduledNotification(scheduleId, userId, type) {
 
 async function restorePendingNotificationSchedules() {
   if (!isFcmReady()) return;
+  if (notificationWorkerInFlight) return;
 
-  const snap = await firestore
-    .collection(NOTIFICATION_SCHEDULES)
-    .where('sent', '==', false)
-    .get();
+  notificationWorkerInFlight = true;
 
-  if (snap.empty) {
-    console.log('FCM SCHEDULE RESTORE | pending=0');
-    return;
-  }
+  try {
+    const snap = await firestore
+      .collection(NOTIFICATION_SCHEDULES)
+      .where('sent', '==', false)
+      .get();
 
-  console.log('FCM SCHEDULE RESTORE | pending=', snap.size);
-  const now = Date.now();
+    if (snap.empty) return;
 
-  for (const doc of snap.docs) {
-    const data = doc.data() || {};
-    const userId = data.userId;
-    const type = data.type;
-    const notifyAt = data.notifyAt?.toDate?.();
-    if (!userId || !type || !notifyAt) continue;
+    const now = Date.now();
+    let due = 0;
 
-    if (notifyAt.getTime() <= now) {
+    for (const doc of snap.docs) {
+      const data = doc.data() || {};
+      const userId = data.userId;
+      const type = data.type;
+      const notifyAt = data.notifyAt?.toDate?.();
+      if (!userId || !type || !notifyAt || notifyAt.getTime() > now) continue;
+
+      due += 1;
       await fireScheduledNotification(doc.id, userId, type);
-    } else {
-      scheduleInMemoryTimer(doc.id, userId, type, notifyAt.getTime());
     }
+
+    if (due > 0) {
+      console.log('FCM SCHEDULE WORKER | pending=', snap.size, '| due=', due);
+    }
+  } finally {
+    notificationWorkerInFlight = false;
   }
+}
+
+function startNotificationScheduleWorker() {
+  if (notificationWorkerTimer) return notificationWorkerTimer;
+
+  notificationWorkerTimer = setInterval(() => {
+    void restorePendingNotificationSchedules().catch((err) => {
+      console.error('FCM SCHEDULE WORKER ERROR:', err.message);
+    });
+  }, NOTIFICATION_WORKER_INTERVAL_MS);
+
+  if (typeof notificationWorkerTimer.unref === 'function') {
+    notificationWorkerTimer.unref();
+  }
+
+  return notificationWorkerTimer;
 }
 
 async function scheduleFortuneNotify(userId, type, notifyAtIso, readingId) {
@@ -509,11 +496,9 @@ async function scheduleFortuneNotify(userId, type, notifyAtIso, readingId) {
     { merge: true },
   );
 
-  const delayMs = scheduleInMemoryTimer(scheduleId, userId, type, notifyAt);
-
   return {
     success: true,
-    scheduledInMs: delayMs,
+    scheduledInMs: Math.max(0, notifyAt - Date.now()),
     readingId: readingId || null,
     scheduleId,
   };
