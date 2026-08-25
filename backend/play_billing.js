@@ -33,23 +33,10 @@ function isNonEmptyString(value) {
 function resolveGooglePlayServiceAccount() {
   if (resolvedPlayBillingAccount) return resolvedPlayBillingAccount;
 
-  const playLoaded = loadServiceAccount({
-    label: 'Google Play',
-    jsonEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
-    pathEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_PATH',
-    defaultPath: path.join(__dirname, 'google-play-service-account.json'),
-  });
-  if (playLoaded) {
-    resolvedPlayBillingAccount = {
-      credentials: playLoaded.credentials,
-      source: playLoaded.source,
-      clientEmail: playLoaded.credentials.client_email,
-    };
-    return resolvedPlayBillingAccount;
-  }
-
+  // Prefer the Firebase account verified to have Android Publisher access.
+  // The legacy dedicated account currently returns permissionDenied.
   const firebaseLoaded = loadServiceAccount({
-    label: 'Google Play (Firebase fallback)',
+    label: 'Google Play (Firebase)',
     jsonEnv: 'FIREBASE_SERVICE_ACCOUNT_JSON',
     pathEnv: 'FIREBASE_SERVICE_ACCOUNT_PATH',
     defaultPath: path.join(__dirname, 'firebase-service-account.json'),
@@ -59,6 +46,21 @@ function resolveGooglePlayServiceAccount() {
       credentials: firebaseLoaded.credentials,
       source: firebaseLoaded.source,
       clientEmail: firebaseLoaded.credentials.client_email,
+    };
+    return resolvedPlayBillingAccount;
+  }
+
+  const playLoaded = loadServiceAccount({
+    label: 'Google Play fallback',
+    jsonEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
+    pathEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_PATH',
+    defaultPath: path.join(__dirname, 'google-play-service-account.json'),
+  });
+  if (playLoaded) {
+    resolvedPlayBillingAccount = {
+      credentials: playLoaded.credentials,
+      source: playLoaded.source,
+      clientEmail: playLoaded.credentials.client_email,
     };
     return resolvedPlayBillingAccount;
   }
