@@ -335,6 +335,64 @@ function parseChatImages(body) {
     .filter(Boolean);
 }
 
+function parseFortuneImages(body) {
+  const raw = body?.fortuneImages;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 2)
+    .map((item, index) => {
+      const parsed = parseImageField(item?.base64, item?.mime);
+      if (!parsed) return null;
+      parsed.label = item?.name || (index === 0 ? 'sağ el' : 'sol el');
+      return parsed;
+    })
+    .filter(Boolean);
+}
+
+function buildPalmImageContent(userPrompt, images) {
+  const content = [{ type: 'text', text: userPrompt }];
+  const handLabels = ['Sağ el', 'Sol el'];
+  images.forEach((image, index) => {
+    content.push({
+      type: 'text',
+      text: `${handLabels[index]} fotoğrafı (${image.label}):`,
+    });
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${image.mime};base64,${image.base64}`,
+        detail: 'high',
+      },
+    });
+  });
+  return content;
+}
+
+const PHOTO_UPLOAD_KINDS = new Set([
+  'palm',
+  'coffee',
+  'couple',
+  'relationship_chat',
+]);
+
+function parseValidationImages(body) {
+  const raw = body?.images;
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 3).map((item, index) => {
+    const parsed = parseImageField(item?.base64, item?.mime);
+    if (!parsed) return null;
+    parsed.slot = String(item?.slot || `image_${index + 1}`);
+    return parsed;
+  }).filter(Boolean);
+}
+
+function expectedValidationCount(kind, count) {
+  if (kind === 'palm' || kind === 'couple') return count === 2;
+  if (kind === 'coffee') return count === 3;
+  if (kind === 'relationship_chat') return count >= 1 && count <= 3;
+  return false;
+}
+
 function buildRelationshipChatImageContent(userPrompt, images) {
   const content = [{ type: 'text', text: userPrompt }];
 
@@ -389,13 +447,36 @@ async function generateFortuneForTeller(openai, teller, structure, body) {
   const userPrompt = buildFortuneUserPrompt(body, teller, structure);
   const maxTokens = resolveFortuneCompletionTokens(teller, body);
 
-  const result = await generate(
-    openai,
-    'fortune',
-    systemPrompt,
-    userPrompt,
-    maxTokens,
-  );
+  let result;
+  if (body?.category === 'El Falı') {
+    const images = parseFortuneImages(body);
+    if (images.length !== 2) {
+      throw new Error('El falı için sağ ve sol el fotoğrafları gerekli');
+    }
+    const completion = await openai.chat.completions.create({
+      model: VISION_MODEL,
+      temperature: TEMPERATURE,
+      max_completion_tokens: maxTokens,
+      frequency_penalty: FREQUENCY_PENALTY,
+      presence_penalty: PRESENCE_PENALTY,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: buildPalmImageContent(userPrompt, images) },
+      ],
+    });
+    logTokenUsage('palm_fortune', completion.usage);
+    result = completion.choices?.[0]?.message?.content?.trim();
+    if (!result) throw new Error('Boş AI cevabı');
+    result = sanitizeAiResult(result);
+  } else {
+    result = await generate(
+      openai,
+      'fortune',
+      systemPrompt,
+      userPrompt,
+      maxTokens,
+    );
+  }
 
   const words = countWords(result);
   const endsComplete = /[.!?…]["')\]]*\s*$/.test(result.trim());
@@ -604,6 +685,36 @@ async function saveGeneratedResult(req, result, collection) {
   }
 }
 
+async function failGeneratedRequest(req, collection = FORTUNE_COLLECTION) {
+  const requestId = req.body?.requestId;
+  if (!requestId || !req.auth?.uid) return;
+  try {
+    const db = getFirestore();
+    if (!db) return;
+    const ref = db.collection(collection).doc(String(requestId).trim());
+    const snap = await ref.get();
+    if (!snap.exists || snap.data()?.userId !== req.auth.uid) return;
+    const result = String(snap.data()?.result || '').trim();
+    if (result) return;
+    await ref.update({ status: 'error' });
+    const refund = await refundFortuneRequest({
+      uid: req.auth.uid,
+      requestId,
+      collection,
+    });
+    console.error(
+      'FORTUNE FAILED AND REFUNDED | id=',
+      requestId,
+      '| reason=',
+      refund.reason,
+      '| amount=',
+      refund.amount,
+    );
+  } catch (persistError) {
+    console.error('FORTUNE FAILURE PERSIST ERROR:', persistError.message);
+  }
+}
+
 const app = express();
 
 const corsOptions = {
@@ -649,6 +760,29 @@ app.get('/health', (_req, res) => {
     firebaseClientEmail: readFirebaseServiceAccountClientEmail(),
   });
 });
+
+app.post(
+  '/validate-fortune-images',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+    const kind = String(req.body?.kind || '').trim();
+    if (!PHOTO_UPLOAD_KINDS.has(kind)) {
+      return res.status(400).json({ error: 'Geçersiz fotoğraf doğrulama türü.' });
+    }
+    const images = parseValidationImages(req.body);
+    if (!expectedValidationCount(kind, images.length)) {
+      return res.status(400).json({ error: 'Gerekli fotoğrafların tamamını ekleyin.' });
+    }
+
+    return res.json({
+      valid: true,
+      message: 'Fotoğraflar alındı.',
+      issues: [],
+      confidence: 1,
+    });
+  },
+);
 
 app.post('/send-notification', requireAuth, async (req, res) => {
   const { token, title, body } = req.body ?? {};
@@ -996,6 +1130,90 @@ app.post(
 );
 
 app.post(
+  '/generate-yes-no',
+  requireAuth,
+  requireVerifiedEmail,
+  async (req, res) => {
+    const question = String(req.body?.question || '').trim();
+    const cards = Array.isArray(req.body?.cards) ? req.body.cards : [];
+    const paymentMethod = req.body?.paymentMethod;
+    if (question.length < 5 || question.length > 500) {
+      return res.status(400).json({ error: 'Soru 5-500 karakter olmalı' });
+    }
+    if (cards.length !== 3 || !cards.every((card) =>
+      card && typeof card.id === 'string' && card.id.trim().length > 0
+    )) {
+      return res.status(400).json({ error: 'Tam olarak 3 tarot kartı gerekli' });
+    }
+    if (paymentMethod !== 'token' && paymentMethod !== 'ad') {
+      return res.status(400).json({ error: 'Geçersiz ödeme yöntemi' });
+    }
+
+    let chargedToken = false;
+    let chargedUserRef = null;
+    try {
+      if (paymentMethod === 'token') {
+        const db = getFirestore();
+        if (!db) {
+          return res.status(503).json({ error: 'Jeton servisi kullanılamıyor' });
+        }
+        chargedUserRef = db.collection('users').doc(req.auth.uid);
+        await db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(chargedUserRef);
+          if (!snapshot.exists) {
+            const error = new Error('Kullanıcı kaydı bulunamadı');
+            error.statusCode = 404;
+            throw error;
+          }
+          const balance = Number(snapshot.data()?.tokens || 0);
+          if (!Number.isFinite(balance) || balance < 20) {
+            const error = new Error('Bu fal için 20 jeton gerekiyor');
+            error.statusCode = 402;
+            throw error;
+          }
+          transaction.update(chargedUserRef, {
+            tokens: Math.floor(balance) - 20,
+          });
+        });
+        chargedToken = true;
+      }
+
+      const cardLines = cards.map((card, index) =>
+        `${index + 1}. ${String(card.id).trim()} (${card.isReversed ? 'ters' : 'düz'})`
+      ).join('\n');
+      const result = await generate(
+        openai,
+        'yes_no',
+        'Kullanıcının sorusuna verilen 3 tarot kartını birlikte değerlendirerek son derece kısa ve net yanıt ver. Yanıt tam olarak tek satır olmalı ve yalnızca "EVET — kısa cümle" veya "HAYIR — kısa cümle" biçiminde yazılmalı. BELİRSİZ deme; mutlaka EVET ya da HAYIR seç. Açıklama en fazla 18 kelime olsun. Kart isimlerini tek tek yorumlama; başlık, madde, paragraf, "Genel yorum" veya ek açıklama kullanma. Kesin gelecek garantisi verme.',
+        `Soru: ${question}\nKartlar:\n${cardLines}`,
+        80,
+      );
+
+      return res.json({ result });
+    } catch (err) {
+      console.error('generate-yes-no error:', err.message);
+      if (chargedToken && chargedUserRef) {
+        try {
+          await getFirestore().runTransaction(async (transaction) => {
+            const snapshot = await transaction.get(chargedUserRef);
+            if (!snapshot.exists) return;
+            const balance = Number(snapshot.data()?.tokens || 0);
+            transaction.update(chargedUserRef, {
+              tokens: Math.floor(balance) + 20,
+            });
+          });
+        } catch (refundError) {
+          console.error('generate-yes-no refund error:', refundError.message);
+        }
+      }
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.statusCode ? err.message : 'Fal yorumlanamadı' });
+    }
+  },
+);
+
+app.post(
   '/generate-fortune',
   requireAuth,
   requireVerifiedEmail,
@@ -1056,7 +1274,9 @@ app.post(
   }
 
   try {
-    const teller = getFortuneTeller(tellerId || 'gizem_ana');
+    const teller = getFortuneTeller(
+      category === 'El Falı' ? 'pinar_baci' : tellerId || 'gizem_ana',
+    );
     const structure = pickFortuneStructureForTeller(teller.id);
     logFortuneRequest(teller.id, structure.id, `max=${teller.maxWords}`);
 
@@ -1070,6 +1290,7 @@ app.post(
     return res.json({ result });
   } catch (err) {
     console.error('generate-fortune error:', err.message);
+    await failGeneratedRequest(req);
     return res.status(500).json({ error: 'AI yanıtı üretilemedi' });
   }
 },

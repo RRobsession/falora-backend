@@ -1,6 +1,7 @@
 import 'package:falora/models/app_user.dart';
 import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/token_service.dart';
+import 'package:falora/services/statistics_service.dart';
 import 'package:falora/token_config.dart';
 import 'package:falora/widgets/mock_ad_overlay.dart';
 import 'package:flutter/foundation.dart';
@@ -37,6 +38,12 @@ abstract class RewardedAdService {
     required BuildContext context,
     required String userId,
     required AppUser user,
+  });
+
+  /// Reklamı tamamlatır ancak kullanıcıya jeton yazmaz.
+  Future<RewardedAdResult> watchForUnlock({
+    required BuildContext context,
+    required String userId,
   });
 }
 
@@ -81,7 +88,11 @@ class UnavailableRewardedAdService implements RewardedAdService {
 
     if (grantRewardWhenAdUnavailable) {
       try {
-        await TokenService.instance.claimRewardedAd(userId);
+        await TokenService.instance.claimRewardedAd(
+          userId,
+          isCompensation: true,
+          compensationReason: 'platform_unavailable',
+        );
         _lastErrorMessage = rewardGrantedWithoutAdMessage;
         AdMobLogger.log(
           'REWARDED_CLAIM_SUCCESS_WITHOUT_AD reason=platform_unavailable',
@@ -99,6 +110,27 @@ class UnavailableRewardedAdService implements RewardedAdService {
 
     _lastErrorMessage = rewardedAdLoadFailedMessage;
     AdMobLogger.log('REWARDED LOAD FAILED: ads unavailable on this platform');
+    await StatisticsService.instance.logAdOutcome(
+      userId,
+      outcome: 'failed',
+      placement: 'reward_tokens',
+      reason: 'platform_unavailable',
+    );
+    return RewardedAdResult.failed;
+  }
+
+  @override
+  Future<RewardedAdResult> watchForUnlock({
+    required BuildContext context,
+    required String userId,
+  }) async {
+    _lastErrorMessage = rewardedAdLoadFailedMessage;
+    await StatisticsService.instance.logAdOutcome(
+      userId,
+      outcome: 'failed',
+      placement: 'yes_no_unlock',
+      reason: 'platform_unavailable',
+    );
     return RewardedAdResult.failed;
   }
 }
@@ -141,6 +173,12 @@ class MockRewardedAdService implements RewardedAdService {
       AdMobLogger.log(
         'REWARDED LOAD FAILED: mock blocked — native requires AdMob',
       );
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'reward_tokens',
+        reason: 'mock_blocked_on_native',
+      );
       return RewardedAdResult.failed;
     }
 
@@ -167,7 +205,11 @@ class MockRewardedAdService implements RewardedAdService {
       AdMobLogger.log('REWARDED LOAD FAILED: mock ad cancelled');
       if (grantRewardWhenAdUnavailable) {
         try {
-          await TokenService.instance.claimRewardedAd(userId);
+          await TokenService.instance.claimRewardedAd(
+            userId,
+            isCompensation: true,
+            compensationReason: 'mock_cancel',
+          );
           _lastErrorMessage = rewardGrantedWithoutAdMessage;
           AdMobLogger.log('REWARDED_CLAIM_SUCCESS_WITHOUT_AD reason=mock_cancel');
           return RewardedAdResult.rewarded;
@@ -197,5 +239,30 @@ class MockRewardedAdService implements RewardedAdService {
       AdMobLogger.claimError(e, stackTrace);
       return RewardedAdResult.failed;
     }
+  }
+
+  @override
+  Future<RewardedAdResult> watchForUnlock({
+    required BuildContext context,
+    required String userId,
+  }) async {
+    if (!kIsWeb) {
+      _lastErrorMessage = rewardedAdLoadFailedMessage;
+      return RewardedAdResult.failed;
+    }
+    final completed = await MockAdOverlay.show(
+      context,
+      title: 'Ücretsiz Evet / Hayır Falı',
+      message: 'Reklamı tamamladığınızda falınız yorumlanacak.',
+      closableAfterComplete: false,
+    );
+    await StatisticsService.instance.logAdOutcome(
+      userId,
+      outcome: completed ? 'completed' : 'cancelled',
+      placement: 'yes_no_unlock',
+      reason: completed ? null : 'mock_cancel',
+    );
+    _lastErrorMessage = completed ? null : 'Reklam tamamlanmadı.';
+    return completed ? RewardedAdResult.rewarded : RewardedAdResult.cancelled;
   }
 }

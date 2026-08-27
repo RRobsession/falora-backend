@@ -11,7 +11,7 @@ Future<BaklaScatterReading?> showBaklaFortuneSimulation(BuildContext context) {
     PageRouteBuilder<BaklaScatterReading?>(
       opaque: true,
       barrierDismissible: false,
-      transitionDuration: const Duration(milliseconds: 400),
+      transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (_, _, _) => const BaklaFortuneSimulationPage(),
       transitionsBuilder: (_, animation, _, child) {
         return FadeTransition(opacity: animation, child: child);
@@ -29,7 +29,8 @@ abstract final class _T {
   static const settleEnd = 4500;
   static const symbolsEnd = 5000;
   static const total = 6200;
-  static const holdAfter = 1100;
+  // Son kareyi kısa süre görünür tut; gönderim akışını gereksiz yere bekletme.
+  static const holdAfter = 300;
 }
 
 enum _MysticSymbol {

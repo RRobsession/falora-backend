@@ -24,7 +24,10 @@ class FortuneSubmitLogger {
     String? endpoint,
     Map<String, dynamic>? requestBody,
   }) async {
-    final hasToken = await authTokenExists();
+    // Bu metot yalnızca tanılama içindir. Burada getIdToken(true) çağırmak,
+    // gerçek gönderim doğrulamasından hemen önce gereksiz bir ağ turu ekliyordu.
+    // Tokenın geçerliliği prepareFortuneSubmit içinde tek kez doğrulanır.
+    final hasToken = FirebaseAuth.instance.currentUser != null;
     debugPrint('FORTUNE SUBMIT START');
     debugPrint('FORTUNE TYPE: $fortuneType');
     debugPrint('SELECTED READER: $selectedReader');

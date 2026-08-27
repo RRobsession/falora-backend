@@ -7,6 +7,7 @@ import 'package:falora/screens/admin_grant_tokens_screen.dart';
 import 'package:falora/screens/admin_manual_fortune_screen.dart';
 import 'package:falora/screens/admin_manual_reader_status_screen.dart';
 import 'package:falora/screens/admin_problem_reports_screen.dart';
+import 'package:falora/screens/admin_statistics_screen.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/problem_report_service.dart';
@@ -56,8 +57,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     )..forward();
 
     _notificationListener = _onPendingAdminNotification;
-    NotificationService.instance.pendingOpenRequest
-        .addListener(_notificationListener!);
+    NotificationService.instance.pendingOpenRequest.addListener(
+      _notificationListener!,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onPendingAdminNotification();
     });
@@ -68,8 +70,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   @override
   void dispose() {
     if (_notificationListener != null) {
-      NotificationService.instance.pendingOpenRequest
-          .removeListener(_notificationListener!);
+      NotificationService.instance.pendingOpenRequest.removeListener(
+        _notificationListener!,
+      );
     }
     _enterCtrl.dispose();
     super.dispose();
@@ -83,15 +86,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     NotificationService.instance.consumePendingOpenRequest();
     if (!mounted) return;
     _openManualFortunes();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Yeni özel fal talebi geldi')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Yeni özel fal talebi geldi')));
   }
 
   void _push(Widget page) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => page),
-    );
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
   void _openManualFortunes() {
@@ -101,6 +102,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   @override
   Widget build(BuildContext context) {
     final cats = <_AdminCategory>[
+      _AdminCategory(
+        title: 'İstatistik',
+        subtitle: 'Fal, reklam ve canlı kullanım',
+        icon: Icons.query_stats_rounded,
+        accent: const Color(0xFF356B55),
+        onOpen: () => _push(const AdminStatisticsScreen()),
+      ),
       _AdminCategory(
         title: 'Manuel Fal',
         subtitle: 'Bekleyen ve cevaplanan talepler',
@@ -117,9 +125,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         icon: Icons.report_problem_outlined,
         accent: const Color(0xFF8B3A3A),
         onOpen: () => _push(const AdminProblemReportsScreen()),
-        badgeStream: ProblemReportService.instance
-            .watchOpenForAdmin()
-            .map((list) => list.length),
+        badgeStream: ProblemReportService.instance.watchOpenForAdmin().map(
+          (list) => list.length,
+        ),
       ),
       _AdminCategory(
         title: 'Günlük Burç',
@@ -295,11 +303,22 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                               const SizedBox(height: gap),
                               Expanded(
                                 flex: 7,
-                                child: _BentoCard(
-                                  category: cats[6],
-                                  animation: _enterCtrl,
-                                  index: 6,
-                                  horizontal: true,
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (var i = 6; i < cats.length; i++) ...[
+                                      if (i > 6) const SizedBox(width: gap),
+                                      Expanded(
+                                        child: _BentoCard(
+                                          category: cats[i],
+                                          animation: _enterCtrl,
+                                          index: i,
+                                          horizontal: cats.length == 7,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ],
@@ -375,9 +394,7 @@ class _BentoCard extends StatelessWidget {
                   Color.lerp(faloraParchmentCard, category.accent, 0.08)!,
                 ],
               ),
-              border: Border.all(
-                color: faloraBronze.withValues(alpha: 0.16),
-              ),
+              border: Border.all(color: faloraBronze.withValues(alpha: 0.16)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.06),
@@ -389,14 +406,8 @@ class _BentoCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
               child: horizontal
-                  ? _HorizontalCardBody(
-                      category: category,
-                      badge: badge,
-                    )
-                  : _VerticalCardBody(
-                      category: category,
-                      badge: badge,
-                    ),
+                  ? _HorizontalCardBody(category: category, badge: badge)
+                  : _VerticalCardBody(category: category, badge: badge),
             ),
           ),
         ),
@@ -406,10 +417,7 @@ class _BentoCard extends StatelessWidget {
 }
 
 class _VerticalCardBody extends StatelessWidget {
-  const _VerticalCardBody({
-    required this.category,
-    required this.badge,
-  });
+  const _VerticalCardBody({required this.category, required this.badge});
 
   final _AdminCategory category;
   final Widget badge;
@@ -433,10 +441,7 @@ class _VerticalCardBody extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: _VisualStage(
-            icon: category.icon,
-            accent: category.accent,
-          ),
+          child: _VisualStage(icon: category.icon, accent: category.accent),
         ),
       ],
     );
@@ -444,10 +449,7 @@ class _VerticalCardBody extends StatelessWidget {
 }
 
 class _HorizontalCardBody extends StatelessWidget {
-  const _HorizontalCardBody({
-    required this.category,
-    required this.badge,
-  });
+  const _HorizontalCardBody({required this.category, required this.badge});
 
   final _AdminCategory category;
   final Widget badge;
@@ -485,10 +487,7 @@ class _HorizontalCardBody extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           flex: 4,
-          child: _VisualStage(
-            icon: category.icon,
-            accent: category.accent,
-          ),
+          child: _VisualStage(icon: category.icon, accent: category.accent),
         ),
       ],
     );
@@ -534,10 +533,7 @@ class _CardHeader extends StatelessWidget {
 
 /// Kartın kalan alanını dolduran dengeli görsel sahne.
 class _VisualStage extends StatelessWidget {
-  const _VisualStage({
-    required this.icon,
-    required this.accent,
-  });
+  const _VisualStage({required this.icon, required this.accent});
 
   final IconData icon;
   final Color accent;
@@ -605,11 +601,7 @@ class _VisualStage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Icon(
-                    icon,
-                    size: iconSize * 0.72,
-                    color: accent,
-                  ),
+                  child: Icon(icon, size: iconSize * 0.72, color: accent),
                 ),
                 // Küçük denge noktaları
                 Positioned(

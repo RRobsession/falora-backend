@@ -47,6 +47,13 @@ enum FortuneCategory {
     FontAwesomeIcons.gem,
     Color(0xFF7A4A52),
   ),
+  elFali(
+    'El Falı',
+    'Avuç içindeki çizgilerin taşıdığı mesajları keşfet',
+    'assets/icons/el_fali.svg',
+    FontAwesomeIcons.hand,
+    Color(0xFF9A6B62),
+  ),
   ciftUyumu(
     'Çift Uyumu',
     'İlişkinizin uyumunu derinlemesine keşfet',
@@ -111,6 +118,8 @@ enum FortuneCategory {
         return 'Suyun yansıttığı işaretler değerlendiriliyor...';
       case FortuneCategory.iskambil:
         return 'Kartların anlattıkları yorumlanıyor...';
+      case FortuneCategory.elFali:
+        return 'Avuç çizgilerin Pınar Bacı tarafından yorumlanıyor...';
       case FortuneCategory.ciftUyumu:
         return 'Uyum raporunuz hazırlanıyor...';
       case FortuneCategory.ruyaTabiri:
@@ -212,13 +221,7 @@ class FortuneReading {
   String get statusBadgeLabel {
     if (isReadyDisplay) return 'Hazır';
     if (isFailedDisplay) return 'Oluşturulamadı';
-    if (isManualPremium && !isReadyAtElapsed && readyAt != null) {
-      return 'Beklemede · ${formatReadingCountdown(remainingUntilReady)}';
-    }
     if (isManualPremium) return 'Beklemede';
-    if (showsCountdown) {
-      return 'Hazırlanıyor · ${formatReadingCountdown(remainingUntilReady)}';
-    }
     return 'Hazırlanıyor';
   }
 

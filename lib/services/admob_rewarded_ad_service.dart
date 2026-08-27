@@ -7,6 +7,7 @@ import 'package:falora/services/ads/ad_service_bootstrap.dart';
 import 'package:falora/services/ads/admob_config.dart';
 import 'package:falora/services/ads/admob_logger.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
+import 'package:falora/services/statistics_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/token_config.dart';
 import 'package:flutter/foundation.dart';
@@ -224,7 +225,11 @@ class AdMobRewardedAdService implements RewardedAdService {
     String? reason,
   }) async {
     try {
-      await TokenService.instance.claimRewardedAd(userId);
+      await TokenService.instance.claimRewardedAd(
+        userId,
+        isCompensation: withoutAd,
+        compensationReason: withoutAd ? reason : null,
+      );
       if (withoutAd) {
         _lastErrorMessage = rewardGrantedWithoutAdMessage;
         AdMobLogger.log(
@@ -236,14 +241,38 @@ class AdMobRewardedAdService implements RewardedAdService {
       }
       return RewardedAdResult.rewarded;
     } on TokenException catch (e) {
+      if (!withoutAd) {
+        await StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'completed',
+          placement: 'reward_tokens',
+          reason: 'reward_write_rejected',
+        );
+      }
       _lastErrorMessage = e.message;
       AdMobLogger.claimError(e.message);
       return RewardedAdResult.limitReached;
     } on FirebaseException catch (e) {
+      if (!withoutAd) {
+        await StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'completed',
+          placement: 'reward_tokens',
+          reason: 'reward_write_failed',
+        );
+      }
       _lastErrorMessage = 'Jeton yazılamadı (${e.code}): ${e.message}';
       AdMobLogger.claimError('Firebase ${e.code}: ${e.message}');
       return RewardedAdResult.failed;
     } catch (e, stackTrace) {
+      if (!withoutAd) {
+        await StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'completed',
+          placement: 'reward_tokens',
+          reason: 'reward_write_exception',
+        );
+      }
       _lastErrorMessage = 'Jeton eklenemedi: $e';
       AdMobLogger.claimError(e, stackTrace);
       return RewardedAdResult.failed;
@@ -287,6 +316,12 @@ class AdMobRewardedAdService implements RewardedAdService {
       AdMobLogger.log('REWARDED LOAD FAILED: AdMob init not successful');
       final grace = await _grantDespiteAdFailure(userId, 'admob_init_failed');
       if (grace == RewardedAdResult.rewarded) return grace;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'reward_tokens',
+        reason: 'admob_init_failed',
+      );
       _lastErrorMessage = rewardedAdLoadFailedMessage;
       return RewardedAdResult.failed;
     }
@@ -295,6 +330,12 @@ class AdMobRewardedAdService implements RewardedAdService {
       AdMobLogger.log('REWARDED LOAD FAILED: canRequestAds=false');
       final grace = await _grantDespiteAdFailure(userId, 'consent_denied');
       if (grace == RewardedAdResult.rewarded) return grace;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'reward_tokens',
+        reason: 'consent_denied',
+      );
       _lastErrorMessage =
           'Reklam izni verilmedi. Ayarlardan reklam rızasını güncelleyip tekrar deneyin.';
       return RewardedAdResult.failed;
@@ -322,6 +363,12 @@ class AdMobRewardedAdService implements RewardedAdService {
       );
       final grace = await _grantDespiteAdFailure(userId, 'no_fill');
       if (grace == RewardedAdResult.rewarded) return grace;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'reward_tokens',
+        reason: 'no_fill',
+      );
       _lastErrorMessage ??=
           '$rewardedAdLoadFailedMessage (hazır reklam yok / no-fill)';
       return RewardedAdResult.failed;
@@ -332,6 +379,27 @@ class AdMobRewardedAdService implements RewardedAdService {
     final dismissed = Completer<void>();
 
     ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdShowedFullScreenContent: (_) => unawaited(
+        StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'shown',
+          placement: 'reward_tokens',
+        ),
+      ),
+      onAdImpression: (_) => unawaited(
+        StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'impression',
+          placement: 'reward_tokens',
+        ),
+      ),
+      onAdClicked: (_) => unawaited(
+        StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'clicked',
+          placement: 'reward_tokens',
+        ),
+      ),
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _rewardedAd = null;
@@ -376,6 +444,12 @@ class AdMobRewardedAdService implements RewardedAdService {
       AdMobLogger.log(stackTrace.toString());
       final grace = await _grantDespiteAdFailure(userId, 'show_exception');
       if (grace == RewardedAdResult.rewarded) return grace;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'reward_tokens',
+        reason: 'show_exception',
+      );
       _lastErrorMessage = rewardedAdLoadFailedMessage;
       return RewardedAdResult.failed;
     }
@@ -383,6 +457,12 @@ class AdMobRewardedAdService implements RewardedAdService {
     if (showFailed) {
       final grace = await _grantDespiteAdFailure(userId, 'show_failed');
       if (grace == RewardedAdResult.rewarded) return grace;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'reward_tokens',
+        reason: 'show_failed',
+      );
       return RewardedAdResult.failed;
     }
 
@@ -391,11 +471,154 @@ class AdMobRewardedAdService implements RewardedAdService {
       onTimeout: () => false,
     );
     if (!earned) {
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'cancelled',
+        placement: 'reward_tokens',
+        reason: 'reward_not_earned',
+      );
       _lastErrorMessage = 'Reklam tam izlenmedi, jeton verilmedi.';
       AdMobLogger.log('REWARDED CLAIM ERROR: reward callback not received');
       return RewardedAdResult.cancelled;
     }
 
     return _claimTokens(userId, withoutAd: false);
+  }
+
+  @override
+  Future<RewardedAdResult> watchForUnlock({
+    required BuildContext context,
+    required String userId,
+  }) async {
+    await AdServiceBootstrap.ensureInitialized();
+    if (!AdServiceBootstrap.initSucceeded ||
+        AdConsentService.lastCanRequestAds == false) {
+      _lastErrorMessage = rewardedAdLoadFailedMessage;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'yes_no_unlock',
+        reason: !AdServiceBootstrap.initSucceeded
+            ? 'admob_init_failed'
+            : 'consent_denied',
+      );
+      return RewardedAdResult.failed;
+    }
+
+    final ad = _rewardedAd ??
+        await _awaitReady(timeout: const Duration(seconds: 12));
+    if (ad == null) {
+      _lastErrorMessage ??= rewardedAdLoadFailedMessage;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'yes_no_unlock',
+        reason: 'no_fill',
+      );
+      return RewardedAdResult.failed;
+    }
+
+    final rewardEarned = Completer<bool>();
+    final dismissed = Completer<void>();
+    var showFailed = false;
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdShowedFullScreenContent: (_) => unawaited(
+        StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'shown',
+          placement: 'yes_no_unlock',
+        ),
+      ),
+      onAdImpression: (_) => unawaited(
+        StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'impression',
+          placement: 'yes_no_unlock',
+        ),
+      ),
+      onAdClicked: (_) => unawaited(
+        StatisticsService.instance.logAdOutcome(
+          userId,
+          outcome: 'clicked',
+          placement: 'yes_no_unlock',
+        ),
+      ),
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _rewardedAd = null;
+        _loadedUnitId = null;
+        _retryIndex = 0;
+        preload();
+        if (!dismissed.isCompleted) dismissed.complete();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _rewardedAd = null;
+        _loadedUnitId = null;
+        _retryIndex = 0;
+        preload();
+        showFailed = true;
+        _lastErrorMessage = adMobUserFacingLoadError(
+          code: error.code,
+          message: error.message,
+        );
+        if (!rewardEarned.isCompleted) rewardEarned.complete(false);
+        if (!dismissed.isCompleted) dismissed.complete();
+      },
+    );
+
+    try {
+      await ad.show(
+        onUserEarnedReward: (_, reward) {
+          AdMobLogger.log(
+            'REWARDED UNLOCK EARNED amount=${reward.amount} type=${reward.type}',
+          );
+          if (!rewardEarned.isCompleted) rewardEarned.complete(true);
+        },
+      );
+      await dismissed.future;
+    } catch (e, stackTrace) {
+      AdMobLogger.log('REWARDED UNLOCK SHOW FAILED: $e');
+      AdMobLogger.log(stackTrace.toString());
+      _lastErrorMessage = rewardedAdLoadFailedMessage;
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'yes_no_unlock',
+        reason: 'show_exception',
+      );
+      return RewardedAdResult.failed;
+    }
+
+    if (showFailed) {
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'failed',
+        placement: 'yes_no_unlock',
+        reason: 'show_failed',
+      );
+      return RewardedAdResult.failed;
+    }
+    final earned = await rewardEarned.future.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => false,
+    );
+    if (!earned) {
+      await StatisticsService.instance.logAdOutcome(
+        userId,
+        outcome: 'cancelled',
+        placement: 'yes_no_unlock',
+        reason: 'reward_not_earned',
+      );
+      _lastErrorMessage = 'Reklam tamamlanmadı.';
+      return RewardedAdResult.cancelled;
+    }
+    _lastErrorMessage = null;
+    await StatisticsService.instance.logAdOutcome(
+      userId,
+      outcome: 'completed',
+      placement: 'yes_no_unlock',
+    );
+    return RewardedAdResult.rewarded;
   }
 }

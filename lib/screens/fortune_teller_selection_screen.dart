@@ -13,6 +13,7 @@ import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
 import 'package:falora/services/manual_reader_quota_service.dart';
 import 'package:falora/services/manual_reader_status_service.dart';
+import 'package:falora/services/token_service.dart';
 import 'package:falora/models/manual_reader_status.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -28,9 +29,10 @@ class FortuneTellerSelectionPage extends StatefulWidget {
   });
 
   final FortuneCategory category;
-  final void Function(BuildContext context, FortuneTeller teller) onTellerChosen;
+  final void Function(BuildContext context, FortuneTeller teller)
+  onTellerChosen;
   final void Function(BuildContext context, ManualFortuneReader reader)
-      onManualReaderChosen;
+  onManualReaderChosen;
   final VoidCallback onOpenShop;
 
   @override
@@ -38,7 +40,8 @@ class FortuneTellerSelectionPage extends StatefulWidget {
       _FortuneTellerSelectionPageState();
 }
 
-class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage> {
+class _FortuneTellerSelectionPageState
+    extends State<FortuneTellerSelectionPage> {
   ManualFortuneOffer? _manualOffer;
   Timer? _manualReaderHoursTimer;
   StreamSubscription<ManualReaderDailyQuota>? _quotaSub;
@@ -52,11 +55,11 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
     if (_quotaDayKey == dayKey && _quotaSub != null) return;
     _quotaDayKey = dayKey;
     _quotaSub?.cancel();
-    _quotaSub = ManualReaderQuotaService.instance.watchDay(dayKey).listen(
-      (quota) {
-        if (mounted) setState(() => _quota = quota);
-      },
-    );
+    _quotaSub = ManualReaderQuotaService.instance.watchDay(dayKey).listen((
+      quota,
+    ) {
+      if (mounted) setState(() => _quota = quota);
+    });
   }
 
   @override
@@ -66,19 +69,16 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
       _manualOffer = manualOfferFor(widget.category);
       logManualReaderConfig(widget.category);
       _bindQuotaStream();
-      _statusSub = ManualReaderStatusService.instance.watch().listen(
-        (statuses) {
-          if (mounted) setState(() => _statuses = statuses);
-        },
-      );
-      _manualReaderHoursTimer = Timer.periodic(
-        const Duration(minutes: 1),
-        (_) {
-          if (!mounted) return;
-          _bindQuotaStream();
-          setState(() {});
-        },
-      );
+      _statusSub = ManualReaderStatusService.instance.watch().listen((
+        statuses,
+      ) {
+        if (mounted) setState(() => _statuses = statuses);
+      });
+      _manualReaderHoursTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (!mounted) return;
+        _bindQuotaStream();
+        setState(() {});
+      });
     }
   }
 
@@ -94,12 +94,12 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
   Widget build(BuildContext context) {
     final category = widget.category;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(category.label),
-      ),
+      appBar: AppBar(title: Text(category.label)),
       body: FaloraBackground(
         child: LiveTokenBuilder(
           builder: (context, tokens) {
+            final specialRights =
+                TokenService.instance.liveUser.value?.specialFortuneRights ?? 0;
             return ListView(
               padding: EdgeInsets.fromLTRB(
                 22,
@@ -137,17 +137,16 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                                       .map((r) => r.name)
                                       .toList();
                                   if (visibleNames.isEmpty) {
-                                    return 'Yorumcular jeton ile kişisel yorum hazırlar.';
+                                    return 'Yorumcular Özel Fal Hakkı ile kişisel yorum hazırlar.';
                                   }
                                   final names = visibleNames.length == 1
                                       ? visibleNames.first
                                       : '${visibleNames.first} ve ${visibleNames.last}';
-                                  return 'Yorumcular jeton ile kişisel yorum hazırlar. '
+                                  return 'Yorumcular Özel Fal Hakkı ile kişisel yorum hazırlar. '
                                       '$names birebir özel yorum sunar; '
-                                      '${_manualOffer!.questionLimit} soru '
-                                      '${formatTokenAmount(_manualOffer!.tokenCost)} jeton.';
+                                      '${_manualOffer!.questionLimit} soru için 1 hak gerekir.';
                                 }()
-                              : 'Yorumcular jeton ile kişisel yorum hazırlar.',
+                              : 'Yorumcular Özel Fal Hakkı ile kişisel yorum hazırlar.',
                           style: FaloraTypography.bodyMedium,
                         ),
                         const SizedBox(height: 12),
@@ -155,6 +154,13 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                           tokens: tokens,
                           onTap: widget.onOpenShop,
                           showLabel: true,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Özel Fal Hakkı: $specialRights',
+                          style: FaloraTypography.labelLarge.copyWith(
+                            color: faloraBronzeDark,
+                          ),
                         ),
                       ],
                     ),
@@ -195,84 +201,86 @@ class _FortuneTellerSelectionPageState extends State<FortuneTellerSelectionPage>
                             isActive: isManualReaderActiveNow,
                           ),
                           const SizedBox(height: 12),
-                          ...visibleReaders.map(
-                            (reader) {
-                              final dailyCount = _quota.countFor(reader.id);
-                              final manualStatus =
-                                  _statuses.forReader(reader.id);
-                              final hoursActive = isManualReaderActiveNow;
-                              final quotaAvailable =
-                                  isManualReaderQuotaAvailable(dailyCount);
-                              final statusBlocks =
-                                  !manualStatus.acceptsNewRequests;
-                              final readerActive = !statusBlocks &&
-                                  hoursActive &&
-                                  quotaAvailable;
-                              final statusLabel = statusBlocks
-                                  ? manualStatus.label
-                                  : (readerActive
+                          ...visibleReaders.map((reader) {
+                            final dailyCount = _quota.countFor(reader.id);
+                            final manualStatus = _statuses.forReader(reader.id);
+                            final hoursActive = isManualReaderActiveNow;
+                            final quotaAvailable = isManualReaderQuotaAvailable(
+                              dailyCount,
+                            );
+                            final statusBlocks =
+                                !manualStatus.acceptsNewRequests;
+                            final readerActive =
+                                !statusBlocks && hoursActive && quotaAvailable;
+                            final statusLabel = statusBlocks
+                                ? manualStatus.label
+                                : (readerActive
                                       ? 'Şu an aktif'
                                       : (dailyCount >=
-                                              manualReaderDailyQuotaCloseAt
-                                          ? 'Kota doldu'
-                                          : 'Şu an kapalı'));
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: _ManualFortuneReaderCard(
-                                  reader: reader,
-                                  category: category,
-                                  offer: _manualOffer!,
-                                  dailyCount: dailyCount,
-                                  isActive: readerActive,
-                                  statusLabel: statusLabel,
-                                  onTap: () {
-                                    if (!_statuses.isVisible(reader.id)) {
-                                      return;
-                                    }
-                                    if (statusBlocks) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            manualStatus
-                                                .blockedMessage(reader.name),
-                                          ),
+                                                manualReaderDailyQuotaCloseAt
+                                            ? 'Kota doldu'
+                                            : 'Şu an kapalı'));
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: _ManualFortuneReaderCard(
+                                reader: reader,
+                                category: category,
+                                offer: _manualOffer!,
+                                dailyCount: dailyCount,
+                                isActive: readerActive,
+                                statusLabel: statusLabel,
+                                onTap: () {
+                                  if (specialRights < manualFortuneRightCost) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Özel fal bıraktırmak için Özel Fal Hakkı satın almalısınız.',
                                         ),
-                                      );
-                                      return;
-                                    }
-                                    if (!hoursActive) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content:
-                                              Text(manualReaderInactiveInfo),
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    if (!quotaAvailable) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            manualReaderQuotaFullInfo(
-                                              reader.name,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    widget.onManualReaderChosen(
-                                      context,
-                                      reader,
+                                      ),
                                     );
-                                  },
-                                ),
-                              );
-                            },
-                          ),
+                                    widget.onOpenShop();
+                                    return;
+                                  }
+                                  if (!_statuses.isVisible(reader.id)) {
+                                    return;
+                                  }
+                                  if (statusBlocks) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          manualStatus.blockedMessage(
+                                            reader.name,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  if (!hoursActive) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(manualReaderInactiveInfo),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  if (!quotaAvailable) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          manualReaderQuotaFullInfo(
+                                            reader.name,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  widget.onManualReaderChosen(context, reader);
+                                },
+                              ),
+                            );
+                          }),
                         ],
                       );
                     },
@@ -315,130 +323,128 @@ class _ManualFortuneReaderCard extends StatelessWidget {
       child: ScaleTap(
         onTap: onTap,
         child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-        decoration: faloraParchmentDecoration(
-          base: Color.lerp(faloraParchmentCard, reader.accentColor, 0.08)!,
-          radius: FaloraRadius.lg,
-          raised: true,
-          borderWidth: 1.2,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                ManualFortuneReaderAvatar(
-                  reader: reader,
-                  size: _avatarSize,
-                  borderWidth: 2,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          decoration: faloraParchmentDecoration(
+            base: Color.lerp(faloraParchmentCard, reader.accentColor, 0.08)!,
+            radius: FaloraRadius.lg,
+            raised: true,
+            borderWidth: 1.2,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ManualFortuneReaderAvatar(
+                    reader: reader,
+                    size: _avatarSize,
+                    borderWidth: 2,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ManualReaderBadge(label: manualReaderBadgeLabel),
+                        const SizedBox(height: 5),
+                        Text(
+                          reader.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: faloraInk,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          reader.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: FaloraTypography.labelSmall.copyWith(
+                            color: faloraInkSoft,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _ManualReaderBadge(label: manualReaderBadgeLabel),
-                      const SizedBox(height: 5),
-                      Text(
-                        reader.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: faloraInk,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          height: 1.15,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        reader.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: FaloraTypography.labelSmall.copyWith(
-                          color: faloraInkSoft,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      _CompactQuotaBadge(count: dailyCount),
+                      const SizedBox(height: 6),
+                      const _SpecialFortuneRightBadge(),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _CompactQuotaBadge(count: dailyCount),
-                    const SizedBox(height: 6),
-                    _CompactTokenPriceBadge(amount: offer.tokenCost),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              reader.bio,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: FaloraTypography.bodyMedium.copyWith(
-                color: faloraTextSecondary,
-                fontSize: 12.5,
-                height: 1.32,
+                ],
               ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _InfoChip(
-                    label: manualReaderActiveHoursLabel,
-                    color: reader.accentColor,
-                  ),
+              const SizedBox(height: 10),
+              Text(
+                reader.bio,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: FaloraTypography.bodyMedium.copyWith(
+                  color: faloraTextSecondary,
+                  fontSize: 12.5,
+                  height: 1.32,
                 ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _InfoChip(
-                    label: statusLabel,
-                    color: isActive
-                        ? const Color(0xFF2E7D32)
-                        : faloraBronze,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _InfoChip(
+                      label: manualReaderActiveHoursLabel,
+                      color: reader.accentColor,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _InfoChip(
-                    label: offer.questionLabel,
-                    color: reader.accentColor,
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _InfoChip(
+                      label: statusLabel,
+                      color: isActive ? const Color(0xFF2E7D32) : faloraBronze,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _InfoChip(
-                    label: offer.intentionLabel,
-                    color: faloraBronze,
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _InfoChip(
+                      label: offer.questionLabel,
+                      color: reader.accentColor,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _ManualReaderContinueButton(
-              label: !isManualReaderQuotaAvailable(dailyCount)
-                  ? 'Günlük kota doldu'
-                  : isActive
-                      ? 'Devam Et · ${offer.priceLabel}'
-                      : statusLabel,
-              onPressed: onTap,
-            ),
-          ],
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _InfoChip(
+                      label: offer.intentionLabel,
+                      color: faloraBronze,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _ManualReaderContinueButton(
+                label: !isManualReaderQuotaAvailable(dailyCount)
+                    ? 'Günlük kota doldu'
+                    : isActive
+                    ? 'Devam Et · ${offer.priceLabel}'
+                    : statusLabel,
+                onPressed: onTap,
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }
@@ -453,12 +459,14 @@ class _ManualReaderHoursInfoBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: (isActive ? const Color(0xFF2E7D32) : faloraBronze)
-            .withValues(alpha: 0.1),
+        color: (isActive ? const Color(0xFF2E7D32) : faloraBronze).withValues(
+          alpha: 0.1,
+        ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: (isActive ? const Color(0xFF2E7D32) : faloraBronze)
-              .withValues(alpha: 0.28),
+          color: (isActive ? const Color(0xFF2E7D32) : faloraBronze).withValues(
+            alpha: 0.28,
+          ),
         ),
       ),
       child: Row(
@@ -540,10 +548,8 @@ class _CompactQuotaBadge extends StatelessWidget {
   }
 }
 
-class _CompactTokenPriceBadge extends StatelessWidget {
-  const _CompactTokenPriceBadge({required this.amount});
-
-  final int amount;
+class _SpecialFortuneRightBadge extends StatelessWidget {
+  const _SpecialFortuneRightBadge();
 
   @override
   Widget build(BuildContext context) {
@@ -557,14 +563,14 @@ class _CompactTokenPriceBadge extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const FaIcon(
-            FontAwesomeIcons.coins,
+          const Icon(
+            Icons.workspace_premium_rounded,
             size: 10,
             color: faloraBronzeDark,
           ),
           const SizedBox(height: 2),
           Text(
-            formatTokenAmount(amount),
+            '1',
             style: FaloraTypography.labelLarge.copyWith(
               color: faloraInk,
               fontSize: 12,
@@ -573,7 +579,7 @@ class _CompactTokenPriceBadge extends StatelessWidget {
             ),
           ),
           Text(
-            'jeton',
+            'özel fal hakkı',
             style: FaloraTypography.labelSmall.copyWith(
               color: faloraInkSoft,
               fontSize: 8,

@@ -154,7 +154,7 @@ class _AdminGrantTokensScreenState extends State<AdminGrantTokensScreen> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(
                 labelText: 'Jeton miktarı',
-                hintText: '1500',
+                hintText: '500',
                 border: OutlineInputBorder(),
               ),
             ),

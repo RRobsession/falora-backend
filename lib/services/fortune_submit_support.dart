@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:falora/services/backend_auth_client.dart';
-import 'package:falora/services/fortune_submit_logger.dart';
 import 'package:falora/services/fortune_submit_messages.dart';
 import 'package:falora/services/fortune_storage_service.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
@@ -86,12 +85,8 @@ Future<int> prepareFortuneSubmit({
     );
   }
 
-  final hasToken = await FortuneSubmitLogger.authTokenExists();
-  if (!hasToken) {
-    debugPrint('AUTH_VERIFY_FAILED');
-    debugPrint('FORTUNE_SUBMIT_FAILED_REASON auth_token_missing');
-    throw FortuneSubmitException(fortuneSubmitAuthError);
-  }
+  // refreshAuthBeforeSubmit zaten ID tokenını zorla yenileyip doğruladı.
+  // Burada yeniden getIdToken(true) yapmak ikinci, gereksiz bir ağ isteğiydi.
   debugPrint('AUTH_VERIFY_SUCCESS');
 
   await TokenService.instance.ensureUserDocument(

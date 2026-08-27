@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:falora/picked_image.dart';
 import 'package:falora/theme/falora_theme.dart';
 
@@ -17,6 +18,7 @@ class ImageUploadCard extends StatelessWidget {
     required this.onChanged,
     this.icon = FontAwesomeIcons.image,
     this.accentColor = _accent,
+    this.allowCamera = false,
   });
 
   final String label;
@@ -24,6 +26,70 @@ class ImageUploadCard extends StatelessWidget {
   final ValueChanged<PickedImage?> onChanged;
   final FaIconData icon;
   final Color accentColor;
+  final bool allowCamera;
+
+  Future<void> _pickCamera(BuildContext context) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        requestFullMetadata: false,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
+        throw StateError('Kamera fotoğrafı okunamadı');
+      }
+      onChanged(PickedImage(name: file.name, bytes: bytes));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Kamera açılamadı. Kamera iznini kontrol edip tekrar deneyin.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _chooseSource(BuildContext context) async {
+    if (!allowCamera) {
+      await _pickFile(context);
+      return;
+    }
+    final source = await showModalBottomSheet<_UploadSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Kamera ile çek'),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_UploadSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Galeriden seç'),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_UploadSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!context.mounted || source == null) return;
+    if (source == _UploadSource.camera) {
+      await _pickCamera(context);
+    } else {
+      await _pickFile(context);
+    }
+  }
 
   Future<void> _pickFile(BuildContext context) async {
     final result = await FilePicker.pickFiles(
@@ -60,7 +126,7 @@ class ImageUploadCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _pickFile(context),
+        onTap: () => _chooseSource(context),
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
@@ -175,3 +241,5 @@ class ImageUploadCard extends StatelessWidget {
     );
   }
 }
+
+enum _UploadSource { camera, gallery }

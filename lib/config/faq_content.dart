@@ -61,8 +61,9 @@ const List<FaqItem> faloraFaqItems = [
   FaqItem(
     question: 'Jetonlar ne için kullanılır?',
     answer:
-        'Jetonlar uygulama içerisindeki fal ve bazı özel içeriklerden '
-        'yararlanabilmeniz için kullanılır.',
+        'Jetonlar standart fallar ve bazı uygulama içi içerikler için kullanılır. '
+        'Özel yorumculara fal bıraktırmak için jeton kullanılamaz; bunun için '
+        'ayrıca Özel Fal Hakkı satın alınmalıdır.',
   ),
   FaqItem(
     question: 'Jetonlarım hesabıma gelmedi, ne yapmalıyım?',

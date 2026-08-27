@@ -12,6 +12,7 @@
 .swiftpm/
 migrate_working_dir/
 Thumbs.db
+.tmp_*/
 
 # Environment / secrets (never commit)
 .env

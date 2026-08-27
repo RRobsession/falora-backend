@@ -66,7 +66,16 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       setState(() => _loading = true);
     }
 
-    final user = await _authService.getCurrentUser();
+    AppUser? user;
+    try {
+      user = await _authService.getCurrentUser().timeout(
+        const Duration(seconds: 30),
+      );
+    } catch (e, stackTrace) {
+      // Bir servis hatasi yukleme ekranini sonsuza kadar acik tutmamali.
+      debugPrint('AUTH GATE SESSION CHECK FAILED: $e');
+      debugPrint('$stackTrace');
+    }
     if (!mounted || generation != _sessionGeneration) return;
 
     final fbUser = FirebaseAuth.instance.currentUser;
@@ -130,8 +139,22 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
 
   Future<void> _onLogout() async {
     final uid = _user?.userId;
-    await NotificationService.instance.unregisterForUser(uid);
-    await _authService.logout();
+    // Uzak FCM token temizligi cikisi bloke etmemeli. Firestore yavas veya
+    // kullanilamaz olsa bile kullanici cihazdaki oturumunu kapatabilmeli.
+    unawaited(
+      NotificationService.instance
+          .unregisterForUser(uid)
+          .timeout(const Duration(seconds: 3))
+          .catchError((Object e) {
+            debugPrint('LOGOUT FCM CLEANUP SKIPPED: $e');
+          }),
+    );
+    try {
+      await _authService.logout().timeout(const Duration(seconds: 10));
+    } catch (e, stackTrace) {
+      debugPrint('LOGOUT ERROR: $e');
+      debugPrint('$stackTrace');
+    }
     if (!mounted) return;
     setState(() {
       _user = null;

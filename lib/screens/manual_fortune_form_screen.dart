@@ -501,6 +501,8 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
 
                 ImageUploadCard(
 
+                  allowCamera: true,
+
                   label: 'Fincan 1',
 
                   image: _fincan1,
@@ -513,6 +515,8 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
 
                 ImageUploadCard(
 
+                  allowCamera: true,
+
                   label: 'Fincan 2',
 
                   image: _fincan2,
@@ -524,6 +528,8 @@ class _ManualFortuneFormPageState extends State<ManualFortuneFormPage> {
                 const SizedBox(height: 12),
 
                 ImageUploadCard(
+
+                  allowCamera: true,
 
                   label: 'Tabak',
 
@@ -725,4 +731,3 @@ class _ManualFormHeader extends StatelessWidget {
   }
 
 }
-

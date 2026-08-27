@@ -19,10 +19,12 @@ class BillingBackendException implements Exception {
 class TokenPurchaseVerificationResult {
   const TokenPurchaseVerificationResult({
     required this.tokensGranted,
+    required this.specialFortuneRightsGranted,
     required this.alreadyProcessed,
   });
 
   final int tokensGranted;
+  final int specialFortuneRightsGranted;
   final bool alreadyProcessed;
 }
 
@@ -45,20 +47,19 @@ class BillingBackendService {
     required PlayPurchaseResult purchase,
     required String userId,
   }) async {
-    final data = await _post(
-      '/billing/tokens/complete',
-      {
-        'userId': userId,
-        'productId': purchase.productId,
-        'purchaseToken': purchase.purchaseToken,
-        'purchaseId': purchase.purchaseId,
-        'source': purchase.source.name,
-        'transactionDate': purchase.transactionDate,
-      },
-    );
+    final data = await _post('/billing/tokens/complete', {
+      'userId': userId,
+      'productId': purchase.productId,
+      'purchaseToken': purchase.purchaseToken,
+      'purchaseId': purchase.purchaseId,
+      'source': purchase.source.name,
+      'transactionDate': purchase.transactionDate,
+    });
 
     return TokenPurchaseVerificationResult(
       tokensGranted: (data['tokensGranted'] as num?)?.toInt() ?? 0,
+      specialFortuneRightsGranted:
+          (data['specialFortuneRightsGranted'] as num?)?.toInt() ?? 0,
       alreadyProcessed: data['alreadyProcessed'] == true,
     );
   }
@@ -79,7 +80,8 @@ class BillingBackendService {
     final headers = await BackendAuthClient.authHeaders();
     await FortuneSubmitLogger.logSubmitStart(
       fortuneType: payload['category']?.toString() ?? 'billing',
-      selectedReader: payload['readerId']?.toString() ??
+      selectedReader:
+          payload['readerId']?.toString() ??
           payload['productId']?.toString() ??
           'unknown',
       isManualReader: false,
@@ -121,8 +123,9 @@ class BillingBackendService {
     final sanitized = Map<String, dynamic>.from(payload);
     if (sanitized.containsKey('purchaseToken')) {
       final token = sanitized['purchaseToken']?.toString() ?? '';
-      sanitized['purchaseToken'] =
-          token.isEmpty ? '' : '${token.substring(0, 8)}...';
+      sanitized['purchaseToken'] = token.isEmpty
+          ? ''
+          : '${token.substring(0, 8)}...';
     }
     if (sanitized.containsKey('imageInfo')) {
       final images = sanitized['imageInfo'];

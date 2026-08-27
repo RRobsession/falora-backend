@@ -25,6 +25,7 @@ class NotificationOpenRequest {
       case 'manual':
         return 1;
       case 'daily_horoscope':
+      case 'angel_card':
         return 0;
       default:
         return null;

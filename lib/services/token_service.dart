@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:falora/services/statistics_service.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/services/daily_horoscope_service.dart';
 import 'package:falora/services/fortune_submit_messages.dart';
@@ -16,10 +17,7 @@ class TokenException implements Exception {
 }
 
 class TokenSpendException implements Exception {
-  TokenSpendException({
-    required this.code,
-    required this.userMessage,
-  });
+  TokenSpendException({required this.code, required this.userMessage});
 
   final String code;
   final String userMessage;
@@ -156,12 +154,13 @@ class TokenService {
     required String displayName,
     required String normalizedEmail,
   }) {
-    return <String, dynamic>{
+    final data = <String, dynamic>{
       'uid': uid,
       'name': displayName,
       'displayName': displayName,
       'email': normalizedEmail,
       'tokens': initialUserTokens,
+      'specialFortuneRights': 0,
       'rewardedAdsToday': 0,
       'emailVerified': false,
       'referralRewardClaimed': false,
@@ -169,6 +168,16 @@ class TokenService {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
+    final platform = _currentMobilePlatform();
+    if (platform != null) data['platform'] = platform;
+    return data;
+  }
+
+  String? _currentMobilePlatform() {
+    if (kIsWeb) return null;
+    if (defaultTargetPlatform == TargetPlatform.android) return 'android';
+    if (defaultTargetPlatform == TargetPlatform.iOS) return 'ios';
+    return null;
   }
 
   /// Kullanıcı dokümanını oluşturur veya eksik jeton alanlarını tamamlar.
@@ -228,6 +237,11 @@ class TokenService {
     if (!data.containsKey('rewardedAdsToday')) {
       updates['rewardedAdsToday'] = 0;
     }
+    final currentPlatform = _currentMobilePlatform();
+    if (currentPlatform != null && data['platform'] != currentPlatform) {
+      updates['platform'] = currentPlatform;
+      updates['platformUpdatedAt'] = FieldValue.serverTimestamp();
+    }
     if (updates.isNotEmpty) {
       await ref.update(updates);
     }
@@ -255,14 +269,15 @@ class TokenService {
     final trimmedPhoto = photoUrl?.trim();
 
     if (!snap.exists) {
-      final data = _newUserDocumentData(
-        uid: uid,
-        displayName: trimmedName,
-        normalizedEmail: normalizedEmail,
-      )
-        ..['emailVerified'] = true
-        ..['provider'] = 'google'
-        ..['lastLoginAt'] = FieldValue.serverTimestamp();
+      final data =
+          _newUserDocumentData(
+              uid: uid,
+              displayName: trimmedName,
+              normalizedEmail: normalizedEmail,
+            )
+            ..['emailVerified'] = true
+            ..['provider'] = 'google'
+            ..['lastLoginAt'] = FieldValue.serverTimestamp();
       if (trimmedPhoto != null && trimmedPhoto.isNotEmpty) {
         data['photoUrl'] = trimmedPhoto;
       }
@@ -303,11 +318,17 @@ class TokenService {
       'updatedAt': FieldValue.serverTimestamp(),
       'emailVerified': true,
     };
+    final currentPlatform = _currentMobilePlatform();
+    if (currentPlatform != null) {
+      updates['platform'] = currentPlatform;
+      updates['platformUpdatedAt'] = FieldValue.serverTimestamp();
+    }
 
-    final existingDisplay = (existing['displayName'] as String? ??
-            existing['name'] as String? ??
-            '')
-        .trim();
+    final existingDisplay =
+        (existing['displayName'] as String? ??
+                existing['name'] as String? ??
+                '')
+            .trim();
     if (trimmedName.isNotEmpty &&
         (existingDisplay.isEmpty || existingDisplay == trimmedName)) {
       updates['displayName'] = trimmedName;
@@ -323,7 +344,10 @@ class TokenService {
     await ref.update(updates);
 
     final merged = {...existing, ...updates};
-    final user = AppUser.fromFirestore(uid, merged).copyWith(emailVerified: true);
+    final user = AppUser.fromFirestore(
+      uid,
+      merged,
+    ).copyWith(emailVerified: true);
     if (_boundUid == uid) {
       liveUser.value = user;
     }
@@ -348,10 +372,7 @@ class TokenService {
           );
         }
 
-        final balance = parseTokenBalance(
-          snap.data()?['tokens'],
-          uid: uid,
-        );
+        final balance = parseTokenBalance(snap.data()?['tokens'], uid: uid);
         debugPrint('USER_TOKEN_BALANCE_BEFORE: $balance');
         debugPrint('FORTUNE_COST: $amount');
 
@@ -424,8 +445,10 @@ class TokenService {
 
   int remainingRewardAds(AppUser user) {
     final effectiveCount = _effectiveRewardCount(user);
-    return (maxRewardedAdsPerDay - effectiveCount)
-        .clamp(0, maxRewardedAdsPerDay);
+    return (maxRewardedAdsPerDay - effectiveCount).clamp(
+      0,
+      maxRewardedAdsPerDay,
+    );
   }
 
   /// Türkiye (UTC+3) takvim günü değiştiyse reklam hakkı sıfırlanır.
@@ -455,8 +478,9 @@ class TokenService {
       istanbulNow.month,
       istanbulNow.day + 1,
     );
-    final nextMidnightUtc =
-        nextMidnightIstanbul.subtract(const Duration(hours: 3));
+    final nextMidnightUtc = nextMidnightIstanbul.subtract(
+      const Duration(hours: 3),
+    );
     final remaining = nextMidnightUtc.difference(nowUtc);
     if (remaining <= Duration.zero) return null;
     return remaining;
@@ -464,7 +488,11 @@ class TokenService {
 
   String rewardAdWaitMessage(AppUser user) => rewardAdLimitReachedMessage;
 
-  Future<void> claimRewardedAd(String uid) async {
+  Future<void> claimRewardedAd(
+    String uid, {
+    bool isCompensation = false,
+    String? compensationReason,
+  }) async {
     debugPrint('DAILY_REWARD_LIMIT=$maxRewardedAdsPerDay');
     debugPrint('REWARDED_CLAIM_ATTEMPT uid=$uid');
     try {
@@ -485,7 +513,9 @@ class TokenService {
         }
 
         if (adsToday >= maxRewardedAdsPerDay) {
-          debugPrint('REWARDED_CLAIM_LIMIT_REACHED uid=$uid adsToday=$adsToday');
+          debugPrint(
+            'REWARDED_CLAIM_LIMIT_REACHED uid=$uid adsToday=$adsToday',
+          );
           throw TokenException(rewardAdLimitReachedMessage);
         }
 
@@ -496,10 +526,19 @@ class TokenService {
           'lastRewardAt': Timestamp.fromDate(DateTime.now()),
         });
 
-        debugPrint('REWARDED_CLAIM_SUCCESS: tokens $tokens -> $newTokens (+$rewardAdTokenGrant)');
+        debugPrint(
+          'REWARDED_CLAIM_SUCCESS: tokens $tokens -> $newTokens (+$rewardAdTokenGrant)',
+        );
       });
 
       _applyOptimisticRewardClaim(uid);
+      unawaited(
+        StatisticsService.instance.logRewardedAd(
+          uid,
+          isCompensation: isCompensation,
+          compensationReason: compensationReason,
+        ),
+      );
     } on FirebaseException catch (e) {
       debugPrint('REWARDED CLAIM ERROR: Firebase ${e.code} ${e.message}');
       rethrow;

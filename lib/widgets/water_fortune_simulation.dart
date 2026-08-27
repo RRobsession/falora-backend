@@ -11,7 +11,7 @@ Future<WaterScatterReading?> showWaterFortuneSimulation(BuildContext context) {
     PageRouteBuilder<WaterScatterReading?>(
       opaque: true,
       barrierDismissible: false,
-      transitionDuration: const Duration(milliseconds: 400),
+      transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (_, _, _) => const WaterFortuneSimulationPage(),
       transitionsBuilder: (_, animation, _, child) {
         return FadeTransition(opacity: animation, child: child);
@@ -25,7 +25,8 @@ abstract final class _T {
   static const symbolsStart = 2600;
   static const symbolsEnd = 5200;
   static const interpretingStart = 5200;
-  static const holdAfter = 1300;
+  // Son kompozisyonu algılanabilir tut, fakat bitmiş animasyonda bekletme.
+  static const holdAfter = 300;
 }
 
 enum _WaterSymbol {

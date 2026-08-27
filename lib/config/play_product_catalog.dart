@@ -5,6 +5,7 @@ class TokenProductDefinition {
     required this.subtitle,
     this.badge,
     this.highlight = false,
+    this.specialFortuneRights = 0,
   });
 
   final String productId;
@@ -12,6 +13,9 @@ class TokenProductDefinition {
   final String subtitle;
   final String? badge;
   final bool highlight;
+  final int specialFortuneRights;
+
+  bool get isSpecialFortuneProduct => specialFortuneRights > 0;
 }
 
 const tokenProductCatalog = <TokenProductDefinition>[
@@ -39,8 +43,9 @@ const tokenProductCatalog = <TokenProductDefinition>[
   ),
   TokenProductDefinition(
     productId: 'tokens_1500',
-    tokens: 1500,
-    subtitle: 'Özel Yorum Paketi',
+    tokens: 0,
+    specialFortuneRights: 1,
+    subtitle: '1 Özel Fal Hakkı',
     badge: 'Premium',
   ),
 ];

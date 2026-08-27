@@ -61,24 +61,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openShop(BuildContext context) {
-    Navigator.of(context).push(
-      faloraPageRoute<void>(ShopScreen(userId: widget.user.userId)),
-    );
+    Navigator.of(
+      context,
+    ).push(faloraPageRoute<void>(ShopScreen(userId: widget.user.userId)));
   }
 
   void _openInvite(BuildContext context) {
     Navigator.of(context).push(
-      faloraPageRoute<void>(
-        InviteFriendScreen(userId: widget.user.userId),
-      ),
+      faloraPageRoute<void>(InviteFriendScreen(userId: widget.user.userId)),
     );
   }
 
   void _openReportProblem(BuildContext context) {
     final user = TokenService.instance.liveUser.value ?? widget.user;
-    Navigator.of(context).push(
-      faloraPageRoute<void>(ReportProblemScreen(user: user)),
-    );
+    Navigator.of(
+      context,
+    ).push(faloraPageRoute<void>(ReportProblemScreen(user: user)));
   }
 
   Future<void> _openPrivacyPolicy() async {
@@ -144,9 +142,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _deleteAccount({String? password}) async {
@@ -221,8 +219,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (file == null) return;
       setState(() => _updatingAvatar = true);
       final bytes = await file.readAsBytes();
-      await UserProfileService.instance
-          .saveGalleryAvatar(liveUser.userId, bytes);
+      await UserProfileService.instance.saveGalleryAvatar(
+        liveUser.userId,
+        bytes,
+      );
     } catch (e) {
       _showError('Fotoğraf seçilemedi');
     } finally {
@@ -243,8 +243,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_updatingAvatar) return;
     setState(() => _updatingAvatar = true);
     try {
-      await UserProfileService.instance
-          .saveAvatarAsset(widget.user.userId, assetPath);
+      await UserProfileService.instance.saveAvatarAsset(
+        widget.user.userId,
+        assetPath,
+      );
     } catch (e) {
       _showError('Avatar seçilemedi');
     } finally {
@@ -253,7 +255,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _editName(AppUser liveUser) async {
-    final controller = TextEditingController(text: liveUser.effectiveDisplayName);
+    final controller = TextEditingController(
+      text: liveUser.effectiveDisplayName,
+    );
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -264,8 +268,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           decoration: const InputDecoration(labelText: 'İsim'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('İptal')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Kaydet'),
+          ),
         ],
       ),
     );
@@ -311,8 +321,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('İptal')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Kaydet')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('İptal'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Kaydet'),
+            ),
           ],
         ),
       ),
@@ -416,10 +432,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   LiveUserBuilder(
                     fallbackUser: widget.user,
                     builder: (context, liveUser) {
-                      final rewardAdsUsed =
-                          TokenService.instance.rewardedAdsUsedToday(liveUser);
-                      final hasReward =
-                          adService.hasDailyRewardAvailable(liveUser);
+                      final rewardAdsUsed = TokenService.instance
+                          .rewardedAdsUsedToday(liveUser);
+                      final hasReward = adService.hasDailyRewardAvailable(
+                        liveUser,
+                      );
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -431,6 +448,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             age: liveUser.computedAge,
                             zodiac: liveUser.zodiac,
                             fallbackTokens: liveUser.tokens,
+                            specialFortuneRights: liveUser.specialFortuneRights,
                             avatarAsset: liveUser.avatarAsset,
                             updatingAvatar: _updatingAvatar,
                             onAvatarTap: () => _showAvatarOptions(liveUser),
@@ -574,6 +592,7 @@ class _ProfileUserCard extends StatelessWidget {
     required this.age,
     required this.zodiac,
     required this.fallbackTokens,
+    required this.specialFortuneRights,
     required this.avatarAsset,
     required this.updatingAvatar,
     required this.onAvatarTap,
@@ -586,6 +605,7 @@ class _ProfileUserCard extends StatelessWidget {
   final int? age;
   final String? zodiac;
   final int fallbackTokens;
+  final int specialFortuneRights;
   final String? avatarAsset;
   final bool updatingAvatar;
   final VoidCallback onAvatarTap;
@@ -615,8 +635,10 @@ class _ProfileUserCard extends StatelessWidget {
                 return ScaleTap(
                   onTap: onOpenShop,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       color: faloraParchmentRaised,
@@ -645,6 +667,29 @@ class _ProfileUserCard extends StatelessWidget {
                   ),
                 );
               },
+            ),
+          ),
+          Positioned(
+            top: 25,
+            right: 0,
+            child: ScaleTap(
+              onTap: onOpenShop,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: faloraParchmentRaised,
+                  border: Border.all(color: faloraGoldDark, width: 1),
+                ),
+                child: Text(
+                  'Özel Fal Hakkı: $specialFortuneRights',
+                  style: const TextStyle(
+                    color: faloraInk,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
             ),
           ),
           Row(
@@ -708,7 +753,7 @@ class _ProfileUserCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 52),
+                  padding: const EdgeInsets.only(right: 105),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -823,10 +868,7 @@ class _ReauthPasswordDialogState extends State<_ReauthPasswordDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('İptal'),
         ),
-        TextButton(
-          onPressed: _submit,
-          child: const Text('Devam Et'),
-        ),
+        TextButton(onPressed: _submit, child: const Text('Devam Et')),
       ],
     );
   }
@@ -859,10 +901,7 @@ class _ProfileMiniBadge extends StatelessWidget {
 }
 
 class _ProfileInfoBadges extends StatelessWidget {
-  const _ProfileInfoBadges({
-    required this.age,
-    required this.zodiac,
-  });
+  const _ProfileInfoBadges({required this.age, required this.zodiac});
 
   final int? age;
   final String? zodiac;
@@ -884,10 +923,7 @@ class _ProfileInfoBadges extends StatelessWidget {
 }
 
 class _ProfileInfoChip extends StatelessWidget {
-  const _ProfileInfoChip({
-    required this.label,
-    required this.value,
-  });
+  const _ProfileInfoChip({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1114,9 +1150,7 @@ class _ProfileDeleteSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: _profileDangerColor.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(FaloraRadius.lg),
-        border: Border.all(
-          color: _profileDangerColor.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: _profileDangerColor.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1169,8 +1203,9 @@ class _ProfileDeleteSection extends StatelessWidget {
                           Text(
                             'Tüm veriler kalıcı olarak silinir',
                             style: FaloraTypography.labelSmall.copyWith(
-                              color:
-                                  _profileDangerColor.withValues(alpha: 0.72),
+                              color: _profileDangerColor.withValues(
+                                alpha: 0.72,
+                              ),
                               fontSize: 10.5,
                             ),
                           ),
@@ -1209,7 +1244,8 @@ class _NotificationSettingsSheet extends StatefulWidget {
       _NotificationSettingsSheetState();
 }
 
-class _NotificationSettingsSheetState extends State<_NotificationSettingsSheet> {
+class _NotificationSettingsSheetState
+    extends State<_NotificationSettingsSheet> {
   bool? _enabled;
   bool _busy = false;
 
@@ -1220,8 +1256,9 @@ class _NotificationSettingsSheetState extends State<_NotificationSettingsSheet> 
   }
 
   Future<void> _refreshStatus() async {
-    final enabled =
-        await widget.service.areAppNotificationsEnabled(widget.userId);
+    final enabled = await widget.service.areAppNotificationsEnabled(
+      widget.userId,
+    );
     if (!mounted) return;
     setState(() => _enabled = enabled);
   }
@@ -1248,8 +1285,8 @@ class _NotificationSettingsSheetState extends State<_NotificationSettingsSheet> 
           nowEnabled
               ? 'Bildirimler açıldı.'
               : wasEnabled
-                  ? 'Bildirimler kapatıldı.'
-                  : 'Bildirim izni verilmedi. Sistem ayarlarından açabilirsin.',
+              ? 'Bildirimler kapatıldı.'
+              : 'Bildirim izni verilmedi. Sistem ayarlarından açabilirsin.',
         ),
       ),
     );
@@ -1261,8 +1298,8 @@ class _NotificationSettingsSheetState extends State<_NotificationSettingsSheet> 
     final statusText = enabled == null
         ? 'Bildirim durumu kontrol ediliyor...'
         : enabled
-            ? 'Fal hazır bildirimleri açık. Falın hazır olduğunda haber veririz.'
-            : 'Fal hazır bildirimleri kapalı. Açtığında falın hazır olduğunda haber veririz.';
+        ? 'Fal hazır bildirimleri açık. Falın hazır olduğunda haber veririz.'
+        : 'Fal hazır bildirimleri kapalı. Açtığında falın hazır olduğunda haber veririz.';
 
     return SafeArea(
       child: Padding(
@@ -1294,7 +1331,11 @@ class _NotificationSettingsSheetState extends State<_NotificationSettingsSheet> 
                         color: Colors.white,
                       ),
                     )
-                  : Text(enabled == true ? 'Bildirimleri Kapat' : 'Bildirimleri Aç'),
+                  : Text(
+                      enabled == true
+                          ? 'Bildirimleri Kapat'
+                          : 'Bildirimleri Aç',
+                    ),
             ),
             if (!kIsWeb) ...[
               const SizedBox(height: 10),

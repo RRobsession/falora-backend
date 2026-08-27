@@ -70,6 +70,8 @@ class OpenAiBackendService implements AiService {
 
     List<String> imageNames = const [],
 
+    List<PickedImage> fortuneImages = const [],
+
     List<TarotCardSelection> selectedTarotCards = const [],
 
     List<PlayingCardSelection> selectedPlayingCards = const [],
@@ -81,6 +83,16 @@ class OpenAiBackendService implements AiService {
   }) async {
 
     BackendAuthClient.logRequest('/generate-fortune');
+
+    final preparedFortuneImages = <Map<String, String>>[];
+    for (final image in fortuneImages.take(2)) {
+      final prepared = await prepareImageForUpload(image);
+      preparedFortuneImages.add({
+        'name': prepared.name,
+        'mime': _imageMime(prepared.name),
+        'base64': base64Encode(prepared.bytes),
+      });
+    }
 
     return _post(
 
@@ -105,6 +117,9 @@ class OpenAiBackendService implements AiService {
         if (requestId != null && requestId.isNotEmpty) 'requestId': requestId,
 
         'imageNames': imageNames,
+
+        if (preparedFortuneImages.isNotEmpty)
+          'fortuneImages': preparedFortuneImages,
 
         if (selectedTarotCards.isNotEmpty)
           'selectedCards':
@@ -263,7 +278,9 @@ class OpenAiBackendService implements AiService {
 
 
   Duration _timeoutFor(Map<String, dynamic> body) {
-    if (body.containsKey('chatImages')) return _visionTimeout;
+    if (body.containsKey('chatImages') || body.containsKey('fortuneImages')) {
+      return _visionTimeout;
+    }
     if (body.containsKey('womanImageBase64') ||
         body.containsKey('manImageBase64')) {
       return _visionTimeout;
@@ -290,12 +307,22 @@ class OpenAiBackendService implements AiService {
   Future<String> _post(String path, Map<String, dynamic> body) async {
     final uri = Uri.parse('$_baseUrl$path');
 
+    final logBody = Map<String, dynamic>.from(body);
+    final fortuneImages = body['fortuneImages'];
+    if (fortuneImages is List) {
+      logBody['fortuneImages'] = '${fortuneImages.length} görsel (içerik gizlendi)';
+    }
+    final chatImages = body['chatImages'];
+    if (chatImages is List) {
+      logBody['chatImages'] = '${chatImages.length} görsel (içerik gizlendi)';
+    }
+
     await FortuneSubmitLogger.logSubmitStart(
       fortuneType: body['category']?.toString() ?? 'unknown',
       selectedReader: body['tellerId']?.toString() ?? 'unknown',
       isManualReader: false,
       endpoint: uri.toString(),
-      requestBody: body,
+      requestBody: logBody,
     );
 
     late final http.Response response;
@@ -396,5 +423,3 @@ class AiBackendException implements Exception {
   String toString() => message;
 
 }
-
-

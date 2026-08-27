@@ -11,19 +11,35 @@ import 'package:flutter/material.dart';
 Future<List<TarotCardSelection>?> showTarotCardPickerSheet(
   BuildContext context, {
   List<TarotCardSelection> initialSelection = const [],
+  int selectionCount = tarotSpreadCardCount,
+  String title = 'Tarot Kartlarını Seç',
+  bool allowReset = true,
 }) {
   return showModalBottomSheet<List<TarotCardSelection>>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => _TarotCardPickerSheet(initialSelection: initialSelection),
+    builder: (ctx) => _TarotCardPickerSheet(
+      initialSelection: initialSelection,
+      selectionCount: selectionCount,
+      title: title,
+      allowReset: allowReset,
+    ),
   );
 }
 
 class _TarotCardPickerSheet extends StatefulWidget {
-  const _TarotCardPickerSheet({required this.initialSelection});
+  const _TarotCardPickerSheet({
+    required this.initialSelection,
+    required this.selectionCount,
+    required this.title,
+    required this.allowReset,
+  });
 
   final List<TarotCardSelection> initialSelection;
+  final int selectionCount;
+  final String title;
+  final bool allowReset;
 
   @override
   State<_TarotCardPickerSheet> createState() => _TarotCardPickerSheetState();
@@ -48,15 +64,15 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
   Future<void> _loadDeck() async {
     try {
       var deck = await TarotDeckService.instance.loadDeck();
-      if (deck.length < tarotSpreadCardCount) {
+      if (deck.length < widget.selectionCount) {
         deck = await TarotDeckService.instance.loadDeck(forceReload: true);
       }
       if (!mounted) return;
-      if (deck.length < tarotSpreadCardCount) {
+      if (deck.length < widget.selectionCount) {
         setState(() {
           _loading = false;
           _loadError =
-              'Yeterli tarot kartı bulunamadı (${deck.length}/$tarotSpreadCardCount). '
+              'Yeterli tarot kartı bulunamadı (${deck.length}/${widget.selectionCount}). '
               'Uygulamayı tamamen kapatıp yeniden açın (hot restart: R).';
         });
         return;
@@ -82,7 +98,7 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
 
   void _selectCard(TarotCardDefinition definition) {
     if (_selectedById.containsKey(definition.id)) return;
-    if (_selectedById.length >= tarotSpreadCardCount) return;
+    if (_selectedById.length >= widget.selectionCount) return;
 
     setState(() {
       _selectedById[definition.id] = TarotCardSelection.fromDefinition(
@@ -98,14 +114,14 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
   }
 
   void _complete() {
-    if (_selectedById.length != tarotSpreadCardCount) return;
+    if (_selectedById.length != widget.selectionCount) return;
     Navigator.of(context).pop(_orderedSelection);
   }
 
   @override
   Widget build(BuildContext context) {
     final selectedCount = _selectedById.length;
-    final canComplete = selectedCount == tarotSpreadCardCount;
+    final canComplete = selectedCount == widget.selectionCount;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final height = MediaQuery.sizeOf(context).height * 0.88;
 
@@ -144,7 +160,7 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Tarot Kartlarını Seç',
+                            widget.title,
                             style: FaloraTypography.displayMedium.copyWith(
                               color: faloraInk,
                             ),
@@ -153,7 +169,7 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
                           Text(
                             _loading
                                 ? 'Deste yükleniyor…'
-                                : 'Kapalı kartlardan $tarotSpreadCardCount tanesini seçin',
+                                : 'Kapalı kartlardan ${widget.selectionCount} tanesini seçin',
                             style: FaloraTypography.bodyMedium.copyWith(
                               color: faloraInkSoft,
                             ),
@@ -163,12 +179,12 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
                     ),
                     FaloraSelectionCounter(
                       selected: selectedCount,
-                      total: tarotSpreadCardCount,
-                      prefix: '$selectedCount/$tarotSpreadCardCount',
+                      total: widget.selectionCount,
+                      prefix: '$selectedCount/${widget.selectionCount}',
                     ),
                   ],
                 ),
-                if (selectedCount > 0 && !_loading) ...[
+                if (widget.allowReset && selectedCount > 0 && !_loading) ...[
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
@@ -225,7 +241,7 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
                               final selection = _selectedById[definition.id];
                               final isSelected = selection != null;
                               final canSelect = !isSelected &&
-                                  selectedCount < tarotSpreadCardCount;
+                                  selectedCount < widget.selectionCount;
 
                               return TarotPickerGridCard(
                                 selection: selection,
@@ -250,7 +266,7 @@ class _TarotCardPickerSheetState extends State<_TarotCardPickerSheet> {
             child: FaloraPrimaryButton(
               label: canComplete
                   ? 'Seçimi Tamamla'
-                  : 'Seçimi Tamamla ($selectedCount/$tarotSpreadCardCount)',
+                  : 'Seçimi Tamamla ($selectedCount/${widget.selectionCount})',
               onPressed: canComplete && !_loading ? _complete : null,
             ),
           ),

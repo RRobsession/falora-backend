@@ -2,7 +2,8 @@ import 'package:falora/models/fortune_models.dart';
 import 'package:flutter/foundation.dart';
 
 const manualReaderBadgeLabel = 'Özel Yorumcu';
-const manualFortuneTokenCost = 1500;
+const manualFortuneRightCost = 1;
+const manualFortuneRightLabel = 'Özel Fal Hakkı';
 
 /// Serdar / Hatice günlük aktif saatleri (yerel saat).
 const manualReaderActiveHoursLabel = 'Her gün 10:30 – 17:00';
@@ -48,16 +49,14 @@ const manualFortuneImagesTooLargeMessage =
 /// Fal türüne göre manuel yorum teklifi.
 class ManualFortuneOffer {
   const ManualFortuneOffer({
-    required this.tokenCost,
     required this.questionLimit,
     required this.requiresIntention,
   });
 
-  final int tokenCost;
   final int questionLimit;
   final bool requiresIntention;
 
-  String get priceLabel => '$tokenCost Jeton';
+  String get priceLabel => '1 $manualFortuneRightLabel';
 
   String get questionLabel => '$questionLimit soru hakkı';
 
@@ -69,7 +68,6 @@ ManualFortuneOffer manualOfferFor(FortuneCategory category) {
   switch (category) {
     case FortuneCategory.tarot:
       return const ManualFortuneOffer(
-        tokenCost: manualFortuneTokenCost,
         questionLimit: 4,
         requiresIntention: false,
       );
@@ -77,16 +75,15 @@ ManualFortuneOffer manualOfferFor(FortuneCategory category) {
     case FortuneCategory.bakla:
     case FortuneCategory.su:
       return const ManualFortuneOffer(
-        tokenCost: manualFortuneTokenCost,
         questionLimit: 2,
         requiresIntention: true,
       );
     case FortuneCategory.iskambil:
       return const ManualFortuneOffer(
-        tokenCost: manualFortuneTokenCost,
         questionLimit: 2,
         requiresIntention: false,
       );
+    case FortuneCategory.elFali:
     case FortuneCategory.ciftUyumu:
       throw ArgumentError('Çift uyumu manuel falcı desteklemez');
     case FortuneCategory.ruyaTabiri:
@@ -101,7 +98,7 @@ void logManualReaderConfig(FortuneCategory category) {
   final offer = manualOfferFor(category);
   debugPrint('MANUAL READER CONFIG LOADED category=${category.name}');
   debugPrint(
-    'MANUAL TOKEN COST: ${offer.priceLabel} | questions=${offer.questionLimit}',
+    'MANUAL RIGHT COST: ${offer.priceLabel} | questions=${offer.questionLimit}',
   );
   debugPrint('MANUAL QUESTION_LIMIT: ${offer.questionLimit}');
 }

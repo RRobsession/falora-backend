@@ -12,10 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class ShopScreen extends StatefulWidget {
-  const ShopScreen({
-    super.key,
-    required this.userId,
-  });
+  const ShopScreen({super.key, required this.userId});
 
   final String userId;
 
@@ -64,9 +61,7 @@ class _ShopScreenState extends State<ShopScreen> {
   void _showLoadErrorSnackBar() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ürünler şu anda yüklenemiyor.'),
-      ),
+      const SnackBar(content: Text('Ürünler şu anda yüklenemiyor.')),
     );
   }
 
@@ -79,9 +74,7 @@ class _ShopScreenState extends State<ShopScreen> {
       if (info == null || info.price.isEmpty) {
         debugPrint('SHOP_PRODUCT: $id MISSING');
       } else {
-        debugPrint(
-          'SHOP_PRODUCT: $id FOUND price=${info.price}',
-        );
+        debugPrint('SHOP_PRODUCT: $id FOUND price=${info.price}');
       }
     }
   }
@@ -199,8 +192,12 @@ class _ShopScreenState extends State<ShopScreen> {
       if (!mounted) return;
       final message = result.alreadyProcessed
           ? 'Bu satın alma daha önce işlenmiş.'
+          : result.specialFortuneRightsGranted > 0
+          ? '1 Özel Fal Hakkı hesabınıza eklendi.'
           : '${formatTokenAmount(result.tokensGranted)} jeton hesabına eklendi.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } on PlayBillingCancelledException {
       debugPrint('PURCHASE_CANCELLED productId=${product.productId}');
       // İptal — sessiz; loading finally'de kapanır.
@@ -209,7 +206,9 @@ class _ShopScreenState extends State<ShopScreen> {
       if (e.code == 'timeout') {
         debugPrint('PURCHASE_TIMEOUT productId=${product.productId}');
       } else {
-        debugPrint('PURCHASE_FAILED productId=${product.productId} message=${e.message}');
+        debugPrint(
+          'PURCHASE_FAILED productId=${product.productId} message=${e.message}',
+        );
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -222,7 +221,9 @@ class _ShopScreenState extends State<ShopScreen> {
       );
     } on BillingBackendException catch (_) {
       if (!mounted) return;
-      debugPrint('PURCHASE_FAILED productId=${product.productId} stage=backend');
+      debugPrint(
+        'PURCHASE_FAILED productId=${product.productId} stage=backend',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Satın alma doğrulanamadı. Lütfen tekrar deneyin.'),
@@ -255,11 +256,11 @@ class _ShopScreenState extends State<ShopScreen> {
       var processed = 0;
       for (final purchase in purchases) {
         if (!tokenProductIds.contains(purchase.productId)) continue;
-        final result = await BillingBackendService.instance.completeTokenPurchase(
-          purchase: purchase,
-          userId: widget.userId,
-        );
-        if (result.alreadyProcessed || result.tokensGranted > 0) {
+        final result = await BillingBackendService.instance
+            .completeTokenPurchase(purchase: purchase, userId: widget.userId);
+        if (result.alreadyProcessed ||
+            result.tokensGranted > 0 ||
+            result.specialFortuneRightsGranted > 0) {
           processed++;
         }
       }
@@ -269,26 +270,34 @@ class _ShopScreenState extends State<ShopScreen> {
       final message = totalProcessed > 0
           ? 'Satın almalarınız geri yüklendi.'
           : 'Geri yüklenecek yeni satın alma bulunamadı.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } on PlayBillingException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.'),
+          content: Text(
+            'Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.',
+          ),
         ),
       );
     } on BillingBackendException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.'),
+          content: Text(
+            'Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.',
+          ),
         ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.'),
+          content: Text(
+            'Satın almalar geri yüklenemedi. Lütfen tekrar deneyin.',
+          ),
         ),
       );
     } finally {
@@ -320,9 +329,10 @@ class _ShopScreenState extends State<ShopScreen> {
             Text(
               kIsWeb
                   ? 'Web önizlemesinde örnek fiyatlar gösterilir. '
-                      'Gerçek satın alma Android uygulamasındadır.'
-                  : 'Jetonlarınızı özel yorumlar ve uygulama içi '
-                      'deneyimler için kullanabilirsiniz.',
+                        'Gerçek satın alma Android uygulamasındadır.'
+                  : 'Jetonlarınızı standart fallar ve uygulama içi '
+                        'deneyimler için kullanabilirsiniz. Özel fal yorumları '
+                        'yalnızca ayrı satılan Özel Fal Hakkı ile açılır.',
               style: TextStyle(
                 color: faloraTextSecondary.withValues(alpha: 0.92),
                 fontSize: 13,
@@ -349,6 +359,8 @@ class _ShopScreenState extends State<ShopScreen> {
             padding: const EdgeInsets.only(bottom: 14),
             child: ShopPackageCard(
               tokens: pkg.tokens,
+              title: pkg.isSpecialFortuneProduct ? 'Özel Fal Yorumu' : null,
+              unitLabel: pkg.isSpecialFortuneProduct ? '1 Hak' : 'Jeton',
               subtitle: pkg.subtitle,
               badge: pkg.badge,
               highlight: pkg.highlight,

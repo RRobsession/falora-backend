@@ -6,6 +6,40 @@ service cloud.firestore {
 
   match /databases/{database}/documents {
 
+    match /statistics_events/{eventId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.type == 'rewarded_ad'
+        && (!('isCompensation' in request.resource.data)
+          || request.resource.data.isCompensation is bool)
+        && (!('compensationReason' in request.resource.data)
+          || request.resource.data.compensationReason is string)
+        && (!('outcome' in request.resource.data)
+          || request.resource.data.outcome in [
+            'completed', 'compensation', 'cancelled', 'failed',
+            'shown', 'impression', 'clicked'
+          ])
+        && (!('placement' in request.resource.data)
+          || request.resource.data.placement in [
+            'reward_tokens', 'yes_no_unlock'
+          ])
+        && (!('reason' in request.resource.data)
+          || request.resource.data.reason is string);
+      allow read: if isAdmin();
+    }
+
+    match /app_presence/{userId} {
+      // Emergency quota guard: older app versions wrote every 30 seconds.
+      allow create, update: if false;
+      allow read: if isAdmin();
+    }
+
+    match /app_activity_hours/{activityId} {
+      // Disabled until presence tracking is moved off the Spark write quota.
+      allow create, update: if false;
+      allow read: if isAdmin();
+    }
+
     function isSignedIn() {
 
       return request.auth != null;
@@ -98,11 +132,13 @@ service cloud.firestore {
 
       let newTokens = request.resource.data.get('tokens', 0);
 
-      return newTokens == oldTokens
+      return request.resource.data.get('specialFortuneRights', 0)
+          == resource.data.get('specialFortuneRights', 0)
+        && (newTokens == oldTokens
 
         || (newTokens < oldTokens && newTokens >= 0)
 
-        || validRewardedAdGrant();
+        || validRewardedAdGrant());
 
     }
 
@@ -116,7 +152,9 @@ service cloud.firestore {
 
       let referredBy = resource.data.get('referredBy', '');
 
-      return !oldClaimed
+      return request.resource.data.get('specialFortuneRights', 0)
+          == resource.data.get('specialFortuneRights', 0)
+        && !oldClaimed
 
         && newClaimed == true
 
@@ -138,7 +176,9 @@ service cloud.firestore {
 
       let delta = newTokens - oldTokens;
 
-      return delta == 50;
+      return delta == 50
+        && request.resource.data.get('specialFortuneRights', 0)
+          == resource.data.get('specialFortuneRights', 0);
 
     }
 
@@ -146,7 +186,9 @@ service cloud.firestore {
 
     function validReferralCodeSetUpdate() {
 
-      return !('referralCode' in resource.data)
+      return request.resource.data.get('specialFortuneRights', 0)
+          == resource.data.get('specialFortuneRights', 0)
+        && !('referralCode' in resource.data)
 
         && request.resource.data.referralCode is string
 
@@ -182,6 +224,10 @@ service cloud.firestore {
             || request.resource.data.tokens == 0);
       }
 
+      function allowedCreateSpecialFortuneRights() {
+        return request.resource.data.get('specialFortuneRights', 0) == 0;
+      }
+
       function validReferredByOnCreate() {
         return !('referredBy' in request.resource.data)
           || (request.resource.data.referredBy is string
@@ -194,11 +240,14 @@ service cloud.firestore {
           && request.resource.data.email is string
           && request.resource.data.email.size() >= 3
           && allowedCreateTokenBalance()
+          && allowedCreateSpecialFortuneRights()
           && validReferredByOnCreate();
       }
 
       function validProfileOnlyUpdate() {
         return request.resource.data.get('tokens', 0) == resource.data.get('tokens', 0)
+          && request.resource.data.get('specialFortuneRights', 0)
+            == resource.data.get('specialFortuneRights', 0)
           && request.resource.data.get('rewardedAdsToday', 0)
             == resource.data.get('rewardedAdsToday', 0)
           && request.resource.data.get('referralRewardClaimed', false)
@@ -208,10 +257,20 @@ service cloud.firestore {
       function validMissingTokensBackfill() {
         return (!('tokens' in resource.data) || resource.data.tokens == null)
           && allowedCreateTokenBalance()
+          && request.resource.data.get('specialFortuneRights', 0)
+            == resource.data.get('specialFortuneRights', 0)
           && protectedUserFieldsUnchanged();
       }
 
-      allow read: if isOwner(userId);
+      function validSpecialFortuneRightUse() {
+        let oldRights = resource.data.get('specialFortuneRights', 0);
+        let newRights = request.resource.data.get('specialFortuneRights', 0);
+        return oldRights >= 1
+          && newRights == oldRights - 1
+          && request.resource.data.get('tokens', 0) == resource.data.get('tokens', 0);
+      }
+
+      allow read: if isAdmin() || isOwner(userId);
 
       allow create: if isOwner(userId) && validUserCreate();
 
@@ -222,6 +281,8 @@ service cloud.firestore {
         && (validProfileOnlyUpdate()
 
           || validMissingTokensBackfill()
+
+          || validSpecialFortuneRightUse()
 
           || validTokenEconomyUpdate()
 
@@ -253,13 +314,19 @@ service cloud.firestore {
 
       }
 
+      match /daily_angel_cards/{dateKey} {
+        allow read: if isOwner(userId);
+        allow create, update, delete: if false;
+      }
+
     }
 
 
 
     match /fortune_requests/{requestId} {
 
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
 
 
 
@@ -287,7 +354,8 @@ service cloud.firestore {
 
     match /couple_compatibility_requests/{requestId} {
 
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
 
 
 
@@ -327,9 +395,16 @@ service cloud.firestore {
 
         && request.resource.data.status == 'pending'
 
-        && request.resource.data.paymentStatus == 'tokens'
+        && request.resource.data.paymentStatus == 'special_fortune_right'
 
-        && request.resource.data.tokenCost == 1500
+        && request.resource.data.tokenCost == 0
+
+        && request.resource.data.specialFortuneRightsUsed == 1
+
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('specialFortuneRights', 0) >= 1
+
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('specialFortuneRights', 0)
+          == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('specialFortuneRights', 0) - 1
 
         && request.resource.data.readerId in ['serdar', 'hatice'];
 
@@ -450,5 +525,3 @@ service cloud.firestore {
   }
 
 }
-
-

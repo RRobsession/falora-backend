@@ -1,5 +1,6 @@
 const { getFirestore } = require('./fcm');
 const { sanitizeAiResult } = require('./ai_result_sanitize');
+const admin = require('firebase-admin');
 
 const FORTUNE_COLLECTION = 'fortune_requests';
 const COUPLE_COLLECTION = 'couple_compatibility_requests';
@@ -42,14 +43,15 @@ async function persistFortuneResult({
   }
 
   const existing = typeof data.result === 'string' ? data.result.trim() : '';
-  if (existing) {
+  if (existing && data.status === 'ready') {
     return { ok: true, reason: 'already_saved' };
   }
 
-  const patch = { result: trimmed };
-  if (data.status === 'error') {
-    patch.status = 'pending';
-  }
+  const patch = {
+    result: existing || trimmed,
+    status: 'ready',
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
 
   await ref.update(patch);
   console.log(

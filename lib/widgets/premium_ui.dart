@@ -71,7 +71,9 @@ class _ScaleTapState extends State<ScaleTap> {
     return GestureDetector(
       onTapDown: widget.enabled ? (_) => setState(() => _pressed = true) : null,
       onTapUp: widget.enabled ? (_) => setState(() => _pressed = false) : null,
-      onTapCancel: widget.enabled ? () => setState(() => _pressed = false) : null,
+      onTapCancel: widget.enabled
+          ? () => setState(() => _pressed = false)
+          : null,
       onTap: widget.enabled ? widget.onTap : null,
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1,
@@ -94,7 +96,8 @@ class PremiumTokenBalanceCard extends StatefulWidget {
   final bool compact;
 
   @override
-  State<PremiumTokenBalanceCard> createState() => _PremiumTokenBalanceCardState();
+  State<PremiumTokenBalanceCard> createState() =>
+      _PremiumTokenBalanceCardState();
 }
 
 class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
@@ -148,7 +151,11 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
               color: faloraParchmentInset.withValues(alpha: 0.8),
               border: Border.all(color: faloraGold.withValues(alpha: 0.5)),
             ),
-            child: const Icon(Icons.toll_rounded, color: faloraGoldReadable, size: 22),
+            child: const Icon(
+              Icons.toll_rounded,
+              color: faloraGoldReadable,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Column(
@@ -180,10 +187,7 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
 }
 
 class PremiumWelcomeHeader extends StatelessWidget {
-  const PremiumWelcomeHeader({
-    super.key,
-    required this.userName,
-  });
+  const PremiumWelcomeHeader({super.key, required this.userName});
 
   final String userName;
 
@@ -195,50 +199,50 @@ class PremiumWelcomeHeader extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(22, 26, 22, 24),
         decoration: faloraParchmentDecoration(radius: FaloraRadius.xl),
         child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    const FaIcon(
-                      FontAwesomeIcons.wandMagicSparkles,
-                      color: faloraGoldReadable,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      appDisplayName.toUpperCase(),
-                      style: FaloraTypography.labelLarge.copyWith(
-                        fontSize: 13,
-                        letterSpacing: 4,
-                        color: faloraInkHeading,
-                      ),
-                    ),
-                  ],
+                const FaIcon(
+                  FontAwesomeIcons.wandMagicSparkles,
+                  color: faloraGoldReadable,
+                  size: 18,
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(width: 10),
                 Text(
-                  'Merhaba, $userName',
-                  style: const TextStyle(
-                    color: faloraTextPrimary,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Kadim yorumcunun sayfaları açıldı',
-                  style: FaloraTypography.bodyLarge,
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Bugün hangi falı keşfetmek istiyorsun?',
-                  style: FaloraTypography.titleMedium.copyWith(
-                    fontWeight: FontWeight.w500,
+                  appDisplayName.toUpperCase(),
+                  style: FaloraTypography.labelLarge.copyWith(
+                    fontSize: 13,
+                    letterSpacing: 4,
+                    color: faloraInkHeading,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 18),
+            Text(
+              'Merhaba, $userName',
+              style: const TextStyle(
+                color: faloraTextPrimary,
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Kadim yorumcunun sayfaları açıldı',
+              style: FaloraTypography.bodyLarge,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Bugün hangi falı keşfetmek istiyorsun?',
+              style: FaloraTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -305,11 +309,7 @@ class _HomeRewardAdButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.ondemand_video_rounded,
-                color: faloraGold,
-                size: 18,
-              ),
+              Icon(Icons.ondemand_video_rounded, color: faloraGold, size: 18),
               const SizedBox(width: 6),
               Text(
                 '+${formatTokenAmount(rewardAdTokenGrant)} jeton',
@@ -411,12 +411,45 @@ class PremiumCategoryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      category.label,
-                      style: FaloraTypography.titleLarge.copyWith(
-                        color: faloraInk,
-                        fontSize: 17,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            category.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: FaloraTypography.titleLarge.copyWith(
+                              color: faloraInk,
+                              fontSize: 17,
+                            ),
+                          ),
+                        ),
+                        if (category == FortuneCategory.elFali) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: category.color.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: category.color.withValues(alpha: 0.55),
+                              ),
+                            ),
+                            child: Text(
+                              'YENİ',
+                              style: FaloraTypography.labelSmall.copyWith(
+                                color: category.color,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.7,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 5),
                     Text(
@@ -468,13 +501,13 @@ class GiftRewardCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(20),
-        decoration: faloraParchmentDecoration(
-          base: hasReward
-              ? Color.lerp(faloraParchmentCard, faloraGold, 0.12)!
-              : faloraParchmentInset,
-          radius: FaloraRadius.xl,
-          raised: hasReward,
-        ),
+      decoration: faloraParchmentDecoration(
+        base: hasReward
+            ? Color.lerp(faloraParchmentCard, faloraGold, 0.12)!
+            : faloraParchmentInset,
+        radius: FaloraRadius.xl,
+        raised: hasReward,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -522,8 +555,8 @@ class GiftRewardCard extends StatelessWidget {
                     Text(
                       hasReward
                           ? 'Her reklam +${formatTokenAmount(rewardAdTokenGrant)} jeton '
-                              '(günde $maxRewardedAdsPerDay reklam = '
-                              '${formatTokenAmount(rewardAdTokenGrant * maxRewardedAdsPerDay)} jeton).'
+                                '(günde $maxRewardedAdsPerDay reklam = '
+                                '${formatTokenAmount(rewardAdTokenGrant * maxRewardedAdsPerDay)} jeton).'
                           : rewardAdLimitReachedMessage,
                       style: const TextStyle(
                         fontSize: 12,
@@ -557,7 +590,9 @@ class GiftRewardCard extends StatelessWidget {
                     ? 'Reklam izle (+${formatTokenAmount(rewardAdTokenGrant)} jeton)'
                     : 'Bugünkü hak doldu',
                 style: TextStyle(
-                  color: hasReward ? faloraParchmentRaised : faloraTextSecondary,
+                  color: hasReward
+                      ? faloraParchmentRaised
+                      : faloraTextSecondary,
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),
@@ -595,10 +630,7 @@ class GiftRewardModal extends StatelessWidget {
     final cardWidth = MediaQuery.sizeOf(context).width * 0.85;
 
     return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: cardWidth,
-        maxHeight: 280,
-      ),
+      constraints: BoxConstraints(maxWidth: cardWidth, maxHeight: 280),
       child: Container(
         width: cardWidth,
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
@@ -616,7 +648,9 @@ class GiftRewardModal extends StatelessWidget {
             Text(
               '🎁 Ücretsiz jeton kazan',
               textAlign: TextAlign.center,
-              style: FaloraTypography.titleLarge.copyWith(color: faloraInkHeading),
+              style: FaloraTypography.titleLarge.copyWith(
+                color: faloraInkHeading,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -836,6 +870,8 @@ class ShopPackageCard extends StatelessWidget {
   const ShopPackageCard({
     super.key,
     required this.tokens,
+    this.title,
+    this.unitLabel = 'Jeton',
     required this.subtitle,
     required this.badge,
     required this.highlight,
@@ -846,6 +882,8 @@ class ShopPackageCard extends StatelessWidget {
   });
 
   final int tokens;
+  final String? title;
+  final String unitLabel;
   final String subtitle;
   final String? badge;
   final bool highlight;
@@ -859,111 +897,114 @@ class ShopPackageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-        decoration: faloraParchmentDecoration(
-          base: highlight
-              ? Color.lerp(faloraParchmentCard, faloraGold, 0.16)!
-              : faloraParchmentCard,
-          radius: FaloraRadius.xl,
-          raised: true,
-          borderWidth: highlight ? 1.5 : 1.2,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (badge != null) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: faloraParchmentDecoration(
+        base: highlight
+            ? Color.lerp(faloraParchmentCard, faloraGold, 0.16)!
+            : faloraParchmentCard,
+        radius: FaloraRadius.xl,
+        raised: true,
+        borderWidth: highlight ? 1.5 : 1.2,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (badge != null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: highlight
+                      ? faloraGold.withValues(alpha: 0.2)
+                      : faloraAccent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
                     color: highlight
-                        ? faloraGold.withValues(alpha: 0.2)
-                        : faloraAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: highlight
-                          ? faloraGold.withValues(alpha: 0.45)
-                          : faloraAccent.withValues(alpha: 0.3),
-                    ),
+                        ? faloraGold.withValues(alpha: 0.45)
+                        : faloraAccent.withValues(alpha: 0.3),
                   ),
-                  child: Text(
-                    badge!,
-                    style: TextStyle(
-                      color: highlight ? faloraGoldReadable : faloraBronzeDark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                      letterSpacing: 0.4,
-                    ),
+                ),
+                child: Text(
+                  badge!,
+                  style: TextStyle(
+                    color: highlight ? faloraGoldReadable : faloraBronzeDark,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    letterSpacing: 0.4,
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-            ],
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            formatTokenAmount(tokens),
-                            style: TextStyle(
-                              fontSize: highlight ? 36 : 32,
-                              fontWeight: FontWeight.w800,
-                              color: highlight ? faloraGoldReadable : faloraInk,
-                              height: 1,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.only(left: 8, bottom: 4),
-                            child: Text(
-                              'Jeton',
-                              style: TextStyle(
-                                color: faloraTextSecondary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: highlight
-                              ? faloraInkHeading
-                              : faloraInkSoft.withValues(alpha: 0.95),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FaloraGoldPrice(
-                  price: price,
-                  compareAtPrice: compareAtPrice,
-                  large: highlight,
-                ),
-              ],
             ),
-            const SizedBox(height: 18),
-            _BuyButton(
-              highlight: highlight,
-              enabled: _canBuy,
-              isPurchasing: isPurchasing,
-              onPressed: _canBuy ? onBuy : null,
-            ),
+            const SizedBox(height: 14),
           ],
-        ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          title ?? formatTokenAmount(tokens),
+                          style: TextStyle(
+                            fontSize: highlight ? 36 : 32,
+                            fontWeight: FontWeight.w800,
+                            color: highlight ? faloraGoldReadable : faloraInk,
+                            height: 1,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.only(left: 8, bottom: 4),
+                          child: Text(
+                            unitLabel,
+                            style: TextStyle(
+                              color: faloraTextSecondary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: highlight
+                            ? faloraInkHeading
+                            : faloraInkSoft.withValues(alpha: 0.95),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              FaloraGoldPrice(
+                price: price,
+                compareAtPrice: compareAtPrice,
+                large: highlight,
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _BuyButton(
+            highlight: highlight,
+            enabled: _canBuy,
+            isPurchasing: isPurchasing,
+            onPressed: _canBuy ? onBuy : null,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -996,9 +1037,7 @@ class _BuyButton extends StatelessWidget {
                 ? (highlight ? faloraBronzeDark : faloraBronze)
                 : faloraParchmentMid,
             border: Border.all(
-              color: enabled
-                  ? faloraGold
-                  : faloraBronze.withValues(alpha: 0.2),
+              color: enabled ? faloraGold : faloraBronze.withValues(alpha: 0.2),
             ),
           ),
           child: Center(
@@ -1051,7 +1090,9 @@ class CompatibilityRing extends StatelessWidget {
               value: value,
               strokeWidth: 12,
               backgroundColor: faloraProgressTrack,
-              valueColor: const AlwaysStoppedAnimation<Color>(faloraProgressFill),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                faloraProgressFill,
+              ),
             ),
           ),
           Column(
@@ -1216,7 +1257,8 @@ List<String> splitFortuneParagraphs(String text) {
   final normalized = text.replaceAll('\r\n', '\n').trim();
   if (normalized.isEmpty) return const [];
   final parts = normalized.split(RegExp(r'\n\s*\n'));
-  if (parts.length > 1) return parts.map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+  if (parts.length > 1)
+    return parts.map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
   return [normalized];
 }
 

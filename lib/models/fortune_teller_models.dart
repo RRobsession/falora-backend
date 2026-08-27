@@ -9,6 +9,9 @@ const premiumTellerTokenCosts = <int>[50, 150, 200];
 /// Kahve, Su, İskambil, Bakla ve diğer standart AI fal kategorileri.
 const standardTellerTokenCosts = <int>[50, 100, 150];
 
+/// Bu dört fal türünde Medyum Aylin ve Üstat Hakan için +50 jeton uygulanır.
+const _raisedStandardTellerTokenCosts = <int>[50, 150, 200];
+
 /// Kullanıcının seçtiği falcı — jeton ücreti ve yorum uzunluğu tier'ına göre değişir.
 class FortuneTeller {
   const FortuneTeller({
@@ -130,11 +133,28 @@ const spiritualFortuneTellers = <FortuneTeller>[
   ),
 ];
 
+const palmFortuneTellers = <FortuneTeller>[
+  FortuneTeller(
+    id: 'pinar_baci',
+    name: 'Pınar Bacı',
+    title: 'El Çizgileri Yorumcusu',
+    bio:
+        'Sağ ve sol avuçtaki yaşam, kalp, akıl ve kader çizgilerini birlikte yorumlar.',
+    tokenCost: 100,
+    lengthLabel: '',
+    accentColor: Color(0xFF9A6B62),
+    avatarAsset: 'assets/avatars/pinar_baci.png',
+    highlight: true,
+    badge: 'El Falı Uzmanı',
+  ),
+];
+
 bool categoryUsesSpiritualTellers(FortuneCategory category) {
   return isAutoOnlyCategory(category);
 }
 
 List<FortuneTeller> _baseTellersForCategory(FortuneCategory category) {
+  if (category == FortuneCategory.elFali) return palmFortuneTellers;
   return categoryUsesSpiritualTellers(category)
       ? spiritualFortuneTellers
       : fortuneTellers;
@@ -145,6 +165,16 @@ bool categoryUsesPremiumTellerPricing(FortuneCategory category) {
 }
 
 List<int> tellerTokenCostsForCategory(FortuneCategory category) {
+  if (category == FortuneCategory.elFali) return const [100];
+  switch (category) {
+    case FortuneCategory.bakla:
+    case FortuneCategory.kahve:
+    case FortuneCategory.iskambil:
+    case FortuneCategory.su:
+      return _raisedStandardTellerTokenCosts;
+    default:
+      break;
+  }
   return categoryUsesPremiumTellerPricing(category)
       ? premiumTellerTokenCosts
       : standardTellerTokenCosts;
@@ -173,10 +203,7 @@ int resolveTellerTokenCost(FortuneCategory category, String tellerId) {
   return tellers.first.tokenCost;
 }
 
-FortuneTeller resolveFortuneTeller(
-  FortuneCategory category,
-  String tellerId,
-) {
+FortuneTeller resolveFortuneTeller(FortuneCategory category, String tellerId) {
   final cost = resolveTellerTokenCost(category, tellerId);
   final tellers = fortuneTellersForCategory(category);
   for (final teller in tellers) {
@@ -213,7 +240,7 @@ FortuneTeller? fortuneTellerById(String? id, {FortuneCategory? category}) {
   if (id == null || id.isEmpty) return null;
   final list = category != null
       ? fortuneTellersForCategory(category)
-      : [...spiritualFortuneTellers, ...fortuneTellers];
+      : [...palmFortuneTellers, ...spiritualFortuneTellers, ...fortuneTellers];
   for (final t in list) {
     if (t.id == id) return t;
   }

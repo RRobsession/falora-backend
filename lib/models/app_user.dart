@@ -10,6 +10,7 @@ class AppUser {
     required this.name,
     required this.email,
     this.tokens = 0,
+    this.specialFortuneRights = 0,
     this.rewardedAdsToday = 0,
     this.lastRewardAt,
     this.emailVerified = false,
@@ -27,6 +28,7 @@ class AppUser {
   final String name;
   final String email;
   final int tokens;
+  final int specialFortuneRights;
   final int rewardedAdsToday;
   final DateTime? lastRewardAt;
   final bool emailVerified;
@@ -65,6 +67,7 @@ class AppUser {
     String? name,
     String? email,
     int? tokens,
+    int? specialFortuneRights,
     int? rewardedAdsToday,
     DateTime? lastRewardAt,
     bool? emailVerified,
@@ -82,6 +85,7 @@ class AppUser {
       name: name ?? this.name,
       email: email ?? this.email,
       tokens: tokens ?? this.tokens,
+      specialFortuneRights: specialFortuneRights ?? this.specialFortuneRights,
       rewardedAdsToday: rewardedAdsToday ?? this.rewardedAdsToday,
       lastRewardAt: lastRewardAt ?? this.lastRewardAt,
       emailVerified: emailVerified ?? this.emailVerified,
@@ -98,14 +102,15 @@ class AppUser {
   }
 
   Map<String, dynamic> toJson() => {
-        'userId': userId,
-        'name': name,
-        'email': email,
-        'tokens': tokens,
-        'rewardedAdsToday': rewardedAdsToday,
-        'lastRewardAt': lastRewardAt?.toIso8601String(),
-        'emailVerified': emailVerified,
-      };
+    'userId': userId,
+    'name': name,
+    'email': email,
+    'tokens': tokens,
+    'specialFortuneRights': specialFortuneRights,
+    'rewardedAdsToday': rewardedAdsToday,
+    'lastRewardAt': lastRewardAt?.toIso8601String(),
+    'emailVerified': emailVerified,
+  };
 
   factory AppUser.fromFirestore(String uid, Map<String, dynamic> json) {
     DateTime? lastReward;
@@ -130,6 +135,8 @@ class AppUser {
       displayName: resolvedName,
       email: (json['email'] as String?)?.trim().toLowerCase() ?? '',
       tokens: TokenService.parseTokenBalance(json['tokens'], uid: uid),
+      specialFortuneRights:
+          (json['specialFortuneRights'] as num?)?.toInt() ?? 0,
       rewardedAdsToday: (json['rewardedAdsToday'] as num?)?.toInt() ?? 0,
       lastRewardAt: lastReward,
       age: displayAgeFromUserData(json),

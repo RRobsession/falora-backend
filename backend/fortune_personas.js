@@ -583,6 +583,18 @@ const FORTUNE_TELLERS = {
     maxWords: 500,
     maxCompletionTokens: 700,
   },
+  pinar_baci: {
+    id: 'pinar_baci',
+    name: 'Pınar Bacı',
+    voice:
+      'Sıcak, tecrübeli ve gözlemci. Avuç çizgilerini anlaşılır bir dille anlatır; kesin kader iddiasında bulunmaz.',
+    vocabulary:
+      'Yaşam çizgisi, kalp çizgisi, akıl çizgisi, kader çizgisi, avuç tepeleri ve çizgi kesişimleri.',
+    approach:
+      'Sağ ve sol eli ayrı gözlemleyip ortak temaları birleştirir; çizgileri niyet ve günlük hayatla ilişkilendirir.',
+    maxWords: 350,
+    maxCompletionTokens: 650,
+  },
 };
 
 const COUPLE_EXTRA_RULES = `ÇİFT UYUMU EK KURALLAR:
@@ -602,6 +614,8 @@ const CATEGORY_GUIDANCE = {
     'Bakla: taş dizilimi, açık/kapalı yollar, niyet halkasıyla kişiye özel yorum.',
   'İskambil Falı':
     'İskambil: kupa, karo, sinek, maça sembolleriyle duygusal ve pratik mesaj.',
+  'El Falı':
+    'El falı: sağ ve sol avuçtaki yaşam, kalp, akıl ve kader çizgilerini; avuç tepeleri ve belirgin kesişimlerle birlikte yorumla. Görselde seçilemeyen ayrıntıyı uydurma.',
 };
 
 function categoryGuidance(category) {

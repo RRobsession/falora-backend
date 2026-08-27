@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:falora/config/manual_fortune_config.dart';
@@ -20,43 +18,24 @@ import 'package:falora/picked_image.dart';
 
 import 'package:flutter/foundation.dart';
 
-
-
 class ManualFortuneException implements Exception {
-
   ManualFortuneException(this.message);
 
   final String message;
 
-
-
   @override
-
   String toString() => message;
-
 }
 
-
-
 class ManualFortuneStorageService {
-
   ManualFortuneStorageService._();
 
-
-
   static final ManualFortuneStorageService instance =
-
       ManualFortuneStorageService._();
-
-
 
   static const _collection = 'manual_fortune_requests';
 
-
-
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-
-
 
   String newRequestId() => _db.collection(_collection).doc().id;
 
@@ -76,62 +55,38 @@ class ManualFortuneStorageService {
         .toList();
   }
 
-
-
   Future<List<FortuneReading>> loadUserReadings(String userId) async {
-
     try {
-
       final snap = await _db
-
           .collection(_collection)
-
           .where('userId', isEqualTo: userId)
-
           .get();
 
-      final readings = snap.docs
-
-          .map((d) => ManualFortuneRequest.fromFirestore(d.id, d.data()))
-
-          .map((r) => r.toFortuneReading())
-
-          .toList()
-
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final readings =
+          snap.docs
+              .map((d) => ManualFortuneRequest.fromFirestore(d.id, d.data()))
+              .map((r) => r.toFortuneReading())
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       return readings;
-
     } catch (e) {
-
       debugPrint('MANUAL REQUEST CREATE ERROR load: $e');
 
       return [];
-
     }
-
   }
 
-
-
   Stream<ManualFortuneRequest?> watchRequest(String id) {
-
     return _db.collection(_collection).doc(id).snapshots().map((snap) {
-
       if (!snap.exists) return null;
 
       return ManualFortuneRequest.fromFirestore(snap.id, snap.data()!);
-
     });
-
   }
 
-
-
   Future<FortuneReading?> fetchReadingById(String userId, String id) async {
-
     try {
-
       final doc = await _db.collection(_collection).doc(id).get();
 
       if (!doc.exists) return null;
@@ -140,56 +95,40 @@ class ManualFortuneStorageService {
 
       if (data == null || data['userId'] != userId) return null;
 
-      return ManualFortuneRequest.fromFirestore(doc.id, data)
-
-          .toFortuneReading();
-
+      return ManualFortuneRequest.fromFirestore(
+        doc.id,
+        data,
+      ).toFortuneReading();
     } catch (e) {
-
       debugPrint('MANUAL fetchReadingById error: $e');
 
       return null;
-
     }
-
   }
 
-
-
   Stream<List<ManualFortuneRequest>> watchPendingForAdmin() {
-
     debugPrint('ADMIN REQUESTS LISTEN START');
 
     return _db
-
         .collection(_collection)
-
         .where('status', isEqualTo: 'pending')
-
         .snapshots()
-
         .map((snap) {
+          debugPrint('ADMIN_PENDING_REQUESTS_COUNT: ${snap.docs.length}');
 
-      debugPrint('ADMIN_PENDING_REQUESTS_COUNT: ${snap.docs.length}');
+          final items =
+              snap.docs
+                  .map(
+                    (d) => ManualFortuneRequest.fromFirestore(d.id, d.data()),
+                  )
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      final items = snap.docs
-
-          .map((d) => ManualFortuneRequest.fromFirestore(d.id, d.data()))
-
-          .toList()
-
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      return items;
-
-    });
-
+          return items;
+        });
   }
 
-
-
   Future<void> createRequest({
-
     required String id,
 
     required String userId,
@@ -204,8 +143,6 @@ class ManualFortuneStorageService {
 
     required ManualFortuneOffer offer,
 
-    required int tokenCost,
-
     required String name,
 
     required int age,
@@ -219,9 +156,7 @@ class ManualFortuneStorageService {
     required List<String> questions,
 
     List<PickedImage>? images,
-
   }) async {
-
     debugPrint('MANUAL REQUEST SUBMIT START id=$id reader=$readerId');
 
     debugPrint('MANUAL QUESTION_LIMIT: ${offer.questionLimit}');
@@ -240,20 +175,29 @@ class ManualFortuneStorageService {
     final quotaDayKey = ManualReaderQuotaService.instance.quotaDayKey(created);
 
     try {
-
       await _db.runTransaction((tx) async {
+        final userRef = _db.collection('users').doc(userId);
+        final userSnap = await tx.get(userRef);
+        final specialRights =
+            (userSnap.data()?['specialFortuneRights'] as num?)?.toInt() ?? 0;
+        if (specialRights < manualFortuneRightCost) {
+          throw ManualFortuneException(
+            'Özel Fal Hakkınız bulunmuyor. Mağazadan satın alabilirsiniz.',
+          );
+        }
         final statusSnap = await tx.get(
           _db.collection('manual_reader_status').doc('current'),
         );
         final statusData = statusSnap.data();
-        final visibleField =
-            readerId == 'hatice' ? 'haticeVisible' : 'serdarVisible';
+        final visibleField = readerId == 'hatice'
+            ? 'haticeVisible'
+            : 'serdarVisible';
         final visibleRaw = statusData?[visibleField];
         final isVisible = visibleRaw is bool
             ? visibleRaw
             : (visibleRaw == null
-                ? true
-                : visibleRaw.toString().trim().toLowerCase() != 'false');
+                  ? true
+                  : visibleRaw.toString().trim().toLowerCase() != 'false');
         if (!isVisible) {
           throw ManualFortuneException(
             ManualReaderStatusService.hiddenMessage(readerName),
@@ -263,30 +207,32 @@ class ManualFortuneStorageService {
           statusData?[readerId]?.toString(),
         );
         if (!manualStatus.acceptsNewRequests) {
-          throw ManualFortuneException(
-            manualStatus.blockedMessage(readerName),
-          );
+          throw ManualFortuneException(manualStatus.blockedMessage(readerName));
         }
 
         final reserved = await ManualReaderQuotaService.instance
             .tryIncrementInTransaction(
-          tx: tx,
-          readerId: readerId,
-          dayKey: quotaDayKey,
-        );
+              tx: tx,
+              readerId: readerId,
+              dayKey: quotaDayKey,
+            );
         if (!reserved) {
           throw ManualFortuneException(manualReaderQuotaFullInfo(readerName));
         }
 
         final requestRef = _db.collection(_collection).doc(id);
+        tx.update(userRef, {
+          'specialFortuneRights': specialRights - manualFortuneRightCost,
+        });
         tx.set(requestRef, {
           'userId': userId,
           'userEmail': userEmail,
           'fortuneType': category.name,
           'readerId': readerId,
           'readerName': readerName,
-          'tokenCost': tokenCost,
-          'priceTRY': 0,
+          'tokenCost': 0,
+          'specialFortuneRightsUsed': manualFortuneRightCost,
+          'priceTRY': 350,
           'questionLimit': offer.questionLimit,
           'requiresIntention': offer.requiresIntention,
           'status': 'pending',
@@ -297,7 +243,7 @@ class ManualFortuneStorageService {
           'intention': intention,
           'questions': questions,
           if (imageInfo.isNotEmpty) 'imageInfo': imageInfo,
-          'paymentStatus': 'tokens',
+          'paymentStatus': 'special_fortune_right',
           'createdAt': Timestamp.fromDate(created),
           'readyAt': Timestamp.fromDate(ready),
         });
@@ -305,27 +251,19 @@ class ManualFortuneStorageService {
 
       debugPrint('MANUAL REQUEST CREATE SUCCESS id=$id');
 
-      debugPrint('MANUAL REQUEST CREATED id=$id tokenCost=$tokenCost');
-
+      debugPrint('MANUAL REQUEST CREATED id=$id rightUsed=1');
     } catch (e, stack) {
-
       debugPrint('MANUAL REQUEST CREATE ERROR: $e');
 
       debugPrint(stack.toString());
 
       rethrow;
-
     }
-
   }
-
-
 
   Future<void> deleteRequest(String id) async {
     await _db.collection(_collection).doc(id).delete();
   }
-
-
 
   Stream<List<ManualFortuneRequest>> watchAnsweredForAdmin() {
     return _db
@@ -333,17 +271,20 @@ class ManualFortuneStorageService {
         .where('status', isEqualTo: 'answered')
         .snapshots()
         .map((snap) {
-      debugPrint('ADMIN_ANSWERED_REQUESTS_COUNT: ${snap.docs.length}');
-      final items = snap.docs
-          .map((d) => ManualFortuneRequest.fromFirestore(d.id, d.data()))
-          .toList()
-        ..sort((a, b) {
-          final aTime = a.answeredAt ?? a.createdAt;
-          final bTime = b.answeredAt ?? b.createdAt;
-          return bTime.compareTo(aTime);
+          debugPrint('ADMIN_ANSWERED_REQUESTS_COUNT: ${snap.docs.length}');
+          final items =
+              snap.docs
+                  .map(
+                    (d) => ManualFortuneRequest.fromFirestore(d.id, d.data()),
+                  )
+                  .toList()
+                ..sort((a, b) {
+                  final aTime = a.answeredAt ?? a.createdAt;
+                  final bTime = b.answeredAt ?? b.createdAt;
+                  return bTime.compareTo(aTime);
+                });
+          return items;
         });
-      return items;
-    });
   }
 
   Future<void> updateAdminAnswer({
@@ -381,7 +322,6 @@ class ManualFortuneStorageService {
   }
 
   Future<void> submitAdminAnswer({
-
     required String requestId,
 
     required String answerText,
@@ -389,13 +329,10 @@ class ManualFortuneStorageService {
     required String adminUid,
 
     PickedImage? answerImage,
-
   }) async {
-
     debugPrint('ADMIN ANSWER SUBMIT START id=$requestId');
 
     final updates = <String, dynamic>{
-
       'answerText': answerText.trim(),
 
       'status': 'answered',
@@ -403,83 +340,58 @@ class ManualFortuneStorageService {
       'answeredAt': FieldValue.serverTimestamp(),
 
       'answeredByAdminUid': adminUid,
-
     };
 
     if (answerImage != null) {
-
       updates['answerImageInfo'] = {
-
         'name': answerImage.name,
 
         'mime': _mimeForName(answerImage.name),
 
         'base64': base64Encode(answerImage.bytes),
-
       };
-
     }
 
-
-
     try {
-
       await _db.collection(_collection).doc(requestId).update(updates);
 
       debugPrint('ADMIN ANSWER SUBMIT SUCCESS id=$requestId');
-
     } catch (e, stack) {
-
       debugPrint('ADMIN ANSWER SUBMIT ERROR: $e');
 
       debugPrint(stack.toString());
 
       rethrow;
-
     }
-
   }
 
-
-
   Future<void> deleteUserRequests(String userId) async {
-
     final snap = await _db
-
         .collection(_collection)
-
         .where('userId', isEqualTo: userId)
-
         .get();
 
     if (snap.docs.isEmpty) return;
-
-
 
     const batchSize = 500;
 
     final docs = snap.docs;
 
     for (var i = 0; i < docs.length; i += batchSize) {
-
       final batch = _db.batch();
 
       final end = i + batchSize < docs.length ? i + batchSize : docs.length;
 
       for (var j = i; j < end; j++) {
-
         batch.delete(docs[j].reference);
-
       }
 
       await batch.commit();
-
     }
-
   }
+
   String _mimeForName(String name) {
     return _mimeForNameStatic(name);
-
   }
 
   static String _mimeForNameStatic(String name) {
@@ -491,6 +403,4 @@ class ManualFortuneStorageService {
 
     return 'image/jpeg';
   }
-
 }
-

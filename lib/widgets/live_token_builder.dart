@@ -44,14 +44,45 @@ class FaloraLiveTappableTokenBalance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LiveTokenBuilder(
-      fallbackTokens: fallbackTokens,
-      builder: (context, tokens) => FaloraTappableTokenBalance(
-        tokens: tokens,
-        onTap: onOpenShop,
-        compact: compact,
-        showLabel: showLabel,
-        showHint: showHint,
+    return ValueListenableBuilder<AppUser?>(
+      valueListenable: TokenService.instance.liveUser,
+      builder: (context, user, _) => Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          FaloraTappableTokenBalance(
+            tokens: user?.tokens ?? fallbackTokens,
+            onTap: onOpenShop,
+            compact: compact,
+            showLabel: showLabel,
+            showHint: showHint,
+          ),
+          InkWell(
+            onTap: onOpenShop,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 8 : 10,
+                vertical: compact ? 5 : 7,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: Theme.of(context).colorScheme.surface,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              child: Text(
+                'Özel Fal Hakkı: ${user?.specialFortuneRights ?? 0}',
+                style: TextStyle(
+                  fontSize: compact ? 11 : 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

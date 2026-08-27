@@ -1,6 +1,5 @@
 const path = require('path');
 const admin = require('firebase-admin');
-const { google } = require('googleapis');
 const { getFirestore, initFirebaseAdmin } = require('./fcm');
 const { loadServiceAccount } = require('./service_account_config');
 
@@ -14,11 +13,18 @@ const TOKEN_PRODUCTS = {
   tokens_100: { tokens: 100 },
   tokens_150: { tokens: 150 },
   tokens_200: { tokens: 200 },
-  tokens_1500: { tokens: 1500 },
+  tokens_1500: { tokens: 0, specialFortuneRights: 1, kind: 'special_fortune_right' },
 };
 
 let androidPublisher = null;
 let resolvedPlayBillingAccount = null;
+let googleApi = null;
+
+function getGoogleApi() {
+  if (googleApi) return googleApi;
+  googleApi = require('googleapis').google;
+  return googleApi;
+}
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -27,23 +33,11 @@ function isNonEmptyString(value) {
 function resolveGooglePlayServiceAccount() {
   if (resolvedPlayBillingAccount) return resolvedPlayBillingAccount;
 
-  const playLoaded = loadServiceAccount({
-    label: 'Google Play',
-    jsonEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
-    pathEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_PATH',
-    defaultPath: path.join(__dirname, 'google-play-service-account.json'),
-  });
-  if (playLoaded) {
-    resolvedPlayBillingAccount = {
-      credentials: playLoaded.credentials,
-      source: playLoaded.source,
-      clientEmail: playLoaded.credentials.client_email,
-    };
-    return resolvedPlayBillingAccount;
-  }
-
+  // TombikTeyze Play Console erisimi dogrulanmis Firebase servis hesabini
+  // once kullan. Eski falora-play-billing hesabi mevcut olsa da Android
+  // Publisher API'de 401 permissionDenied veriyor.
   const firebaseLoaded = loadServiceAccount({
-    label: 'Google Play (Firebase fallback)',
+    label: 'Google Play (Firebase)',
     jsonEnv: 'FIREBASE_SERVICE_ACCOUNT_JSON',
     pathEnv: 'FIREBASE_SERVICE_ACCOUNT_PATH',
     defaultPath: path.join(__dirname, 'firebase-service-account.json'),
@@ -53,6 +47,21 @@ function resolveGooglePlayServiceAccount() {
       credentials: firebaseLoaded.credentials,
       source: firebaseLoaded.source,
       clientEmail: firebaseLoaded.credentials.client_email,
+    };
+    return resolvedPlayBillingAccount;
+  }
+
+  const playLoaded = loadServiceAccount({
+    label: 'Google Play fallback',
+    jsonEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
+    pathEnv: 'GOOGLE_PLAY_SERVICE_ACCOUNT_PATH',
+    defaultPath: path.join(__dirname, 'google-play-service-account.json'),
+  });
+  if (playLoaded) {
+    resolvedPlayBillingAccount = {
+      credentials: playLoaded.credentials,
+      source: playLoaded.source,
+      clientEmail: playLoaded.credentials.client_email,
     };
     return resolvedPlayBillingAccount;
   }
@@ -140,6 +149,7 @@ function getAndroidPublisher() {
   }
 
   logPlayBillingAccountUsage('init');
+  const google = getGoogleApi();
 
   const auth = new google.auth.GoogleAuth({
     credentials: resolved.credentials,
@@ -250,6 +260,7 @@ function buildPurchaseLedger({
   kind,
   linkedRequestId,
   tokensGranted,
+  specialFortuneRightsGranted,
 }) {
   return {
     uid,
@@ -267,6 +278,7 @@ function buildPurchaseLedger({
     purchaseType: purchaseData.purchaseType ?? null,
     linkedRequestId: linkedRequestId || null,
     tokensGranted: tokensGranted || 0,
+    specialFortuneRightsGranted: specialFortuneRightsGranted || 0,
     verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
@@ -292,6 +304,8 @@ async function completeTokenPurchase(auth, body) {
       }
       return {
         tokensGranted: Number(existingData.tokensGranted) || 0,
+        specialFortuneRightsGranted:
+          Number(existingData.specialFortuneRightsGranted) || 0,
         alreadyProcessed: true,
       };
     }
@@ -304,9 +318,18 @@ async function completeTokenPurchase(auth, body) {
     }
 
     const currentTokens = Number(userSnap.data()?.tokens || 0);
-    tx.update(userRef, {
-      tokens: currentTokens + definition.tokens,
-    });
+    const currentSpecialRights = Number(
+      userSnap.data()?.specialFortuneRights || 0,
+    );
+    const userUpdate = {};
+    if (definition.tokens > 0) {
+      userUpdate.tokens = currentTokens + definition.tokens;
+    }
+    if (definition.specialFortuneRights > 0) {
+      userUpdate.specialFortuneRights =
+        currentSpecialRights + definition.specialFortuneRights;
+    }
+    tx.update(userRef, userUpdate);
 
     tx.set(ledgerRef, buildPurchaseLedger({
       uid: auth.uid,
@@ -316,12 +339,14 @@ async function completeTokenPurchase(auth, body) {
       source: body.source,
       transactionDate: body.transactionDate,
       purchaseData,
-      kind: 'token_pack',
+      kind: definition.kind || 'token_pack',
       tokensGranted: definition.tokens,
+      specialFortuneRightsGranted: definition.specialFortuneRights || 0,
     }));
 
     return {
       tokensGranted: definition.tokens,
+      specialFortuneRightsGranted: definition.specialFortuneRights || 0,
       alreadyProcessed: false,
     };
   });

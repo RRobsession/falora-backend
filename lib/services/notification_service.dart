@@ -88,20 +88,20 @@ class NotificationService {
   Future<void> _initLocalNotifications() async {
     if (kIsWeb) return;
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings();
     await _localNotifications.initialize(
-      const InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      ),
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
       onDidReceiveNotificationResponse: _onLocalNotificationTapped,
     );
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
           _androidChannelId,
@@ -196,8 +196,15 @@ class NotificationService {
 
     final payload = jsonEncode({
       'type': message.data['type'],
-      if (message.data['readingId'] != null) 'readingId': message.data['readingId'],
-      if (message.data['requestId'] != null) 'requestId': message.data['requestId'],
+      if (title.isNotEmpty) 'title': title,
+      if (body.isNotEmpty) 'body': body,
+      if (message.data['readingId'] != null)
+        'readingId': message.data['readingId'],
+      if (message.data['requestId'] != null)
+        'requestId': message.data['requestId'],
+      if (message.data['date'] != null) 'date': message.data['date'],
+      if (message.data['cardIndex'] != null)
+        'cardIndex': message.data['cardIndex'],
     });
 
     await _localNotifications.show(
@@ -317,10 +324,14 @@ class NotificationService {
   }
 
   Future<void> _saveToken(String userId, String token) async {
-    await _db.collection('users').doc(userId).set(
-      {'fcmToken': token},
-      SetOptions(merge: true),
-    );
+    final platform = defaultTargetPlatform == TargetPlatform.android
+        ? 'android'
+        : (defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'other');
+    await _db.collection('users').doc(userId).set({
+      'fcmToken': token,
+      'platform': platform,
+      'platformUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     debugPrint('FCM TOKEN saved for userId=$userId');
   }
 

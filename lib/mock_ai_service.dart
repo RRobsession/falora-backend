@@ -242,11 +242,18 @@ class MockAiService implements AiService {
     required String tellerId,
     String? requestId,
     List<String> imageNames = const [],
+    List<PickedImage> fortuneImages = const [],
     List<TarotCardSelection> selectedTarotCards = const [],
     List<PlayingCardSelection> selectedPlayingCards = const [],
     BaklaScatterReading? baklaScatter,
     WaterScatterReading? waterScatter,
   }) async {
+    if (category == 'El Falı') {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      return 'Sevgili $name, Pınar Bacı olarak sağ ve sol avucundaki yaşam, '
+          'kalp, akıl ve kader çizgilerini birlikte inceledim. Niyetin '
+          '"$intention" için çizgilerin sabırlı ama kararlı bir döneme işaret ediyor.';
+    }
     if (selectedPlayingCards.isNotEmpty &&
         _categoryFromLabel(category) == FalCategory.iskambil) {
       await Future<void>.delayed(const Duration(milliseconds: 900));

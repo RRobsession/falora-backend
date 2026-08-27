@@ -29,6 +29,7 @@ abstract class AiService {
     required String tellerId,
     String? requestId,
     List<String> imageNames = const [],
+    List<PickedImage> fortuneImages = const [],
     List<TarotCardSelection> selectedTarotCards = const [],
     List<PlayingCardSelection> selectedPlayingCards = const [],
     BaklaScatterReading? baklaScatter,

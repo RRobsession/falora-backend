@@ -4,7 +4,7 @@ import 'package:falora/models/fortune_models.dart';
 const autoCategoryTokenCost = 50;
 
 /// İlişki Tavsiyesi — sabit ücret.
-const relationshipAdviceTokenCost = 150;
+const relationshipAdviceTokenCost = 200;
 
 const partnerGenderOptions = ['Kadın', 'Erkek'];
 
@@ -31,10 +31,7 @@ const horoscopeFocusUiOptions = <String, String>{
 };
 
 class HomeCategorySection {
-  const HomeCategorySection({
-    required this.title,
-    required this.categories,
-  });
+  const HomeCategorySection({required this.title, required this.categories});
 
   final String title;
   final List<FortuneCategory> categories;
@@ -49,6 +46,7 @@ const homeCategorySections = <HomeCategorySection>[
       FortuneCategory.kahve,
       FortuneCategory.su,
       FortuneCategory.iskambil,
+      FortuneCategory.elFali,
     ],
   ),
   HomeCategorySection(
@@ -61,10 +59,7 @@ const homeCategorySections = <HomeCategorySection>[
   ),
   HomeCategorySection(
     title: 'İlişkiler',
-    categories: [
-      FortuneCategory.ciftUyumu,
-      FortuneCategory.iliskiTavsiyesi,
-    ],
+    categories: [FortuneCategory.ciftUyumu, FortuneCategory.iliskiTavsiyesi],
   ),
 ];
 

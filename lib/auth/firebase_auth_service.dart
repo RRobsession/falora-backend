@@ -57,7 +57,17 @@ class FirebaseAuthService implements AuthService {
       debugPrint('$logPrefix BEFORE RELOAD emailVerified: ${before.emailVerified}');
     }
 
-    await FirebaseAuth.instance.currentUser?.reload();
+    // Uygulama acilisini ag hatasina baglama. Firebase Auth yenilemesi bazen
+    // cevap vermeden bekleyebiliyor; cihazdaki gecerli oturumu kullanmaya devam
+    // ederek kullaniciyi sonsuz yukleme ekraninda birakma.
+    try {
+      await FirebaseAuth.instance.currentUser?.reload().timeout(
+        const Duration(seconds: 8),
+      );
+    } catch (e) {
+      debugPrint('AUTH RELOAD SKIPPED, USING CACHED SESSION: $e');
+      return FirebaseAuth.instance.currentUser ?? before;
+    }
 
     final after = FirebaseAuth.instance.currentUser;
     if (logPrefix != null && after != null) {
@@ -143,20 +153,26 @@ class FirebaseAuthService implements AuthService {
     debugPrint('GET CURRENT USER emailVerified (Firebase Auth): $emailVerified');
 
     try {
-      final profile = await _loadUserProfile(fbUser);
+      final profile = await _loadUserProfile(
+        fbUser,
+      ).timeout(const Duration(seconds: 10));
       if (emailVerified) {
-        await _syncEmailVerifiedToFirestore(fbUser.uid);
+        await _syncEmailVerifiedToFirestore(
+          fbUser.uid,
+        ).timeout(const Duration(seconds: 6));
       }
       return _appUserFromFirebaseAndFirestore(fbUser, profile);
     } catch (e, stackTrace) {
       debugPrint('Firestore user fetch failed: $e');
       debugPrint(stackTrace.toString());
       try {
-        final recovered = await TokenService.instance.ensureUserDocument(
-          uid: fbUser.uid,
-          name: fbUser.displayName?.trim() ?? '',
-          email: fbUser.email?.trim().toLowerCase() ?? '',
-        );
+        final recovered = await TokenService.instance
+            .ensureUserDocument(
+              uid: fbUser.uid,
+              name: fbUser.displayName?.trim() ?? '',
+              email: fbUser.email?.trim().toLowerCase() ?? '',
+            )
+            .timeout(const Duration(seconds: 8));
         debugPrint('ENSURE_USER_DOC_RECOVERY_SUCCESS uid=${fbUser.uid}');
         return _appUserFromFirebaseAndFirestore(fbUser, recovered);
       } catch (ensureError, ensureStack) {
@@ -550,12 +566,14 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<void> logout() async {
+    // Firebase oturumu yerel olarak once kapatilir. Google veya ag temizligi
+    // gecikse bile kullanici uygulamada oturum acik kalmaz.
+    await _auth.signOut().timeout(const Duration(seconds: 5));
     try {
-      await GoogleSignIn.instance.signOut();
+      await GoogleSignIn.instance.signOut().timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('GOOGLE_SIGN_OUT_ERROR: $e');
     }
-    await _auth.signOut();
     debugPrint('FIREBASE LOGOUT ok');
   }
 

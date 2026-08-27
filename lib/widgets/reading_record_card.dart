@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:falora/models/fortune_models.dart';
-import 'package:falora/services/reading_ready_logger.dart';
 import 'package:falora/widgets/falora_component_library.dart';
 import 'package:flutter/material.dart';
 
@@ -27,48 +24,7 @@ class ReadingRecordCard extends StatefulWidget {
 }
 
 class _ReadingRecordCardState extends State<ReadingRecordCard> {
-  Timer? _tickTimer;
-
   FortuneReading get _reading => widget.reading;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncTimer();
-  }
-
-  @override
-  void didUpdateWidget(ReadingRecordCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _syncTimer();
-  }
-
-  @override
-  void dispose() {
-    _tickTimer?.cancel();
-    super.dispose();
-  }
-
-  void _syncTimer() {
-    final needsTick = _reading.showsCountdown;
-    if (needsTick && _tickTimer == null) {
-      ReadingReadyLogger.countdownStart(_reading.id);
-      _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!mounted) return;
-        final remaining = _reading.remainingUntilReady;
-        ReadingReadyLogger.countdownTick(_reading.id, remaining);
-        if (!_reading.showsCountdown) {
-          ReadingReadyLogger.countdownDone(_reading.id);
-          _tickTimer?.cancel();
-          _tickTimer = null;
-        }
-        setState(() {});
-      });
-    } else if (!needsTick) {
-      _tickTimer?.cancel();
-      _tickTimer = null;
-    }
-  }
 
   FaloraReadingStatus get _status {
     if (_reading.isReadyDisplay) return FaloraReadingStatus.ready;

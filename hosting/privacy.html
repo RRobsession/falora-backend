@@ -1,57 +1,91 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2f6849" />
+  <meta name="description" content="Tombik Teyze mobil uygulaması gizlilik politikası." />
   <title>Gizlilik Politikası — Tombik Teyze</title>
   <style>
-    body { font-family: Georgia, serif; max-width: 720px; margin: 0 auto; padding: 24px 20px 48px; line-height: 1.6; color: #2a2118; background: #f7f0e4; }
-    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
-    h2 { font-size: 1.05rem; margin-top: 1.5rem; }
-    p { margin: 0.5rem 0; }
-    .meta { color: #6b5a45; font-size: 0.95rem; }
+    :root { color-scheme: light; --bg:#f5ecdc; --surface:#fffaf1; --soft:#efe1ca; --green:#2f6849; --green-dark:#214c35; --brown:#6f432b; --brown-dark:#4e2e20; --text:#30251e; --muted:#6f6257; --border:rgba(111,67,43,.18); --shadow:0 18px 45px rgba(78,46,32,.12); }
+    * { box-sizing:border-box; }
+    body { margin:0; min-width:320px; min-height:100vh; font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; line-height:1.7; color:var(--text); background:radial-gradient(circle at 12% 8%,rgba(255,255,255,.82),transparent 26rem),var(--bg); }
+    .page { width:min(100% - 32px,780px); margin:0 auto; padding:56px 0 28px; }
+    .hero,.section { border:1px solid var(--border); background:rgba(255,250,241,.94); }
+    .hero { position:relative; overflow:hidden; padding:clamp(28px,6vw,52px); border-radius:28px; box-shadow:var(--shadow); }
+    .hero::after { content:""; position:absolute; right:-70px; top:-85px; width:210px; height:210px; border-radius:50%; background:rgba(47,104,73,.08); pointer-events:none; }
+    .eyebrow { display:inline-flex; align-items:center; gap:8px; margin:0 0 12px; color:var(--brown); font-size:.78rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .eyebrow::before { content:""; width:28px; height:2px; border-radius:999px; background:var(--brown); }
+    h1,h2 { font-family:Georgia,"Times New Roman",serif; line-height:1.2; }
+    h1 { position:relative; z-index:1; margin:0; color:var(--green); font-size:clamp(2rem,7vw,3.35rem); letter-spacing:-.035em; }
+    .intro { max-width:630px; margin:20px 0 0; color:var(--muted); }
+    .meta { display:inline-block; margin-top:22px; padding:8px 12px; border-radius:999px; color:var(--brown-dark); background:var(--soft); font-size:.84rem; font-weight:700; }
+    .section { margin-top:24px; padding:clamp(24px,5vw,36px); border-radius:24px; }
+    h2 { margin:0 0 10px; color:var(--green-dark); font-size:clamp(1.25rem,4vw,1.55rem); }
+    p { margin:0; }
+    .section p { color:var(--muted); }
+    .contact { display:flex; align-items:center; justify-content:space-between; gap:20px; background:var(--soft); }
+    .contact p { color:var(--brown-dark); }
+    .button { flex:0 0 auto; display:inline-flex; min-height:46px; align-items:center; justify-content:center; padding:11px 19px; border-radius:12px; color:#fffaf2; background:var(--brown); font-weight:750; text-decoration:none; box-shadow:0 7px 18px rgba(78,46,32,.18); }
+    .button:hover { background:var(--brown-dark); }
+    a:focus-visible { outline:3px solid rgba(47,104,73,.35); outline-offset:3px; }
+    footer { display:flex; flex-wrap:wrap; justify-content:center; gap:10px 18px; padding:28px 8px 6px; color:var(--muted); font-size:.86rem; text-align:center; }
+    footer nav { display:flex; flex-wrap:wrap; justify-content:center; gap:10px 18px; }
+    footer a { color:var(--brown); font-weight:700; text-decoration:none; }
+    footer a:hover { text-decoration:underline; }
+    .copyright { width:100%; }
+    @media (max-width:620px) { .page{width:min(100% - 22px,780px);padding-top:18px}.hero,.section{border-radius:20px}.contact{align-items:stretch;flex-direction:column}.button{width:100%} }
   </style>
 </head>
 <body>
-  <h1>Gizlilik Politikası</h1>
-  <p class="meta">Tombik Teyze mobil uygulaması</p>
+  <main class="page">
+    <header class="hero">
+      <p class="eyebrow">Yasal bilgiler</p>
+      <h1>Gizlilik Politikası</h1>
+      <p class="intro">Tombik Teyze, kullanıcılarının gizliliğine önem verir. Bu politika, uygulamayı kullanırken hangi verilerin hangi amaçlarla işlenebileceğini açıklar.</p>
+      <span class="meta">Son güncelleme: 27 Ağustos 2026</span>
+    </header>
 
-  <h2>1. Giriş</h2>
-  <p>Uygulamayı kullanarak bu gizlilik politikasını kabul etmiş olursunuz.</p>
+    <section class="section">
+      <h2>Toplanan bilgiler</h2>
+      <p>Hesap bilgileri, e-posta adresi, doğum tarihi ve burç bilgisi gibi kullanıcı tarafından sağlanan veriler; hesap oluşturma, kişiselleştirme ve uygulama işlevlerinin sunulması amacıyla kullanılabilir.</p>
+    </section>
+    <section class="section">
+      <h2>Fal fotoğrafları</h2>
+      <p>Kullanıcının yüklediği fincan, tabak veya diğer fal fotoğrafları yalnızca ilgili fal yorumlama hizmetinin hazırlanması ve kullanıcıya sunulması için işlenebilir.</p>
+    </section>
+    <section class="section">
+      <h2>Altyapı hizmetleri</h2>
+      <p>Kimlik doğrulama, veri saklama, bildirim, güvenlik ve uygulama performansı için Firebase gibi altyapı servislerinden yararlanılabilir. Bu servisler verileri kendi gizlilik koşulları doğrultusunda işleyebilir.</p>
+    </section>
+    <section class="section">
+      <h2>Reklamlar ve ölçüm</h2>
+      <p>Uygulamada reklam hizmetleri kullanılması hâlinde reklam gösterimi, kötüye kullanımın önlenmesi ve performans ölçümü amacıyla cihaz bilgileri, reklam tanımlayıcıları ve etkileşim verileri gibi sınırlı bilgiler işlenebilir.</p>
+    </section>
+    <section class="section">
+      <h2>Uygulama içi satın almalar</h2>
+      <p>Uygulama içi satın alma işlemleri Apple App Store veya Google Play ödeme sistemleri üzerinden gerçekleştirilir. Ödeme bilgileriniz Tombik Teyze tarafından doğrudan saklanmaz; işlemler ilgili mağazanın koşullarına tabidir.</p>
+    </section>
+    <section class="section">
+      <h2>Verilerin paylaşılması</h2>
+      <p>Kişisel verileriniz üçüncü taraflara satılmaz. Veriler yalnızca hizmetin sunulması, yasal yükümlülüklerin yerine getirilmesi veya güvenliğin sağlanması için gerekli hizmet sağlayıcılarla sınırlı olarak paylaşılabilir.</p>
+    </section>
+    <section class="section">
+      <h2>Haklarınız ve veri silme</h2>
+      <p>Hesabınızın ve hesabınızla ilişkili kişisel verilerin silinmesini talep edebilirsiniz. Uygulamadaki “Hesabımı Sil” seçeneğini kullanabilir veya <a href="/privacy-choices">Gizlilik Tercihleri</a> sayfasından talep yöntemlerini inceleyebilirsiniz.</p>
+    </section>
+    <section class="section contact">
+      <div>
+        <h2>Gizlilik desteği</h2>
+        <p>Gizlilik ve kişisel verilerinizle ilgili sorularınız için <strong>prserdar.cakir@gmail.com</strong> adresinden bizimle iletişime geçebilirsiniz.</p>
+      </div>
+      <a class="button" href="mailto:prserdar.cakir@gmail.com?subject=Tombik%20Teyze%20Gizlilik">E-posta Gönder</a>
+    </section>
 
-  <h2>2. Veri Sorumlusu</h2>
-  <p>Veri sorumlusu: Falora / Tombik Teyze uygulama hizmet sağlayıcısı.<br />
-  İletişim: <a href="mailto:prserdar.cakir@gmail.com">prserdar.cakir@gmail.com</a></p>
-
-  <h2>3. Toplanan Veriler</h2>
-  <p>Hesap bilgileri, doğum tarihi, burç, profil görseli, fal formlarında girilen veriler, yüklenen fotoğraflar, bildirim token'ı, jeton bakiyesi ve satın alma doğrulama kayıtları işlenebilir.</p>
-
-  <h2>4. Kullanım ve Hukuki Dayanak</h2>
-  <p>Veriler hizmetin sunulması, güvenlik, bildirimler ve reklam gösterimi amacıyla işlenir.</p>
-
-  <h2>5. Fal ve Tavsiye İçerikleri</h2>
-  <p>Tüm yorumlar eğlence ve kişisel farkındalık amaçlıdır; profesyonel danışmanlık yerine geçmez.</p>
-
-  <h2>6. Yapay Zeka ve Manuel Yorum</h2>
-  <p>Otomatik yorumlar OpenAI hizmetleriyle oluşturulabilir. Özel yorumcu talepleri insan tarafından değerlendirilir.</p>
-
-  <h2>7. Üçüncü Taraf Hizmetler</h2>
-  <p>Google Firebase, Google AdMob, OpenAI ve Google Play kullanılabilir.</p>
-
-  <h2>8. Yurt Dışına Aktarım</h2>
-  <p>Veriler Türkiye dışındaki sunucularda işlenebilir.</p>
-
-  <h2>9. Saklama</h2>
-  <p>Fal kayıtları ve manuel fal talepleri (görseller dahil) en fazla 15 gün saklanır ve otomatik silinir. Hesap bilgileri ve jeton bakiyesi bu kapsam dışındadır.</p>
-
-  <h2>10. Haklarınız</h2>
-  <p>Erişim, düzeltme, silme ve itiraz haklarına sahipsiniz. Hesabınızı uygulama içinden (Profil → Hesabımı Sil) silebilir, e-posta ile başvurabilir veya web üzerinden hesap silme talebi gönderebilirsiniz:<br />
-  <a href="https://falora-backend-production-6602.up.railway.app/delete-account">https://falora-backend-production-6602.up.railway.app/delete-account</a></p>
-
-  <h2>11. Çocuklar</h2>
-  <p>Uygulama 18 yaş altı kullanıcılar için tasarlanmamıştır.</p>
-
-  <h2>12. İletişim</h2>
-  <p><a href="mailto:prserdar.cakir@gmail.com">prserdar.cakir@gmail.com</a></p>
+    <footer>
+      <nav aria-label="Sayfa bağlantıları"><a href="/support">Destek</a><a href="/privacy-choices">Gizlilik Tercihleri</a><a href="/terms">Kullanım Koşulları</a></nav>
+      <div class="copyright">© Tombik Teyze 2026</div>
+    </footer>
+  </main>
 </body>
 </html>

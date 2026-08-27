@@ -40,6 +40,8 @@ class FortuneShareService {
         return 'Numeroloji Yorumum';
       case FortuneCategory.burcYorumu:
         return 'Burç Yorumum';
+      case FortuneCategory.elFali:
+        return 'El Falım';
       default:
         return '${reading.category.label} — Fal Yorumum';
     }
