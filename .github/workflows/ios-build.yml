@@ -138,6 +138,60 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload IPA to App Store Connect
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          test -n "$APP_STORE_CONNECT_KEY_ID"
+          test -n "$APP_STORE_CONNECT_ISSUER_ID"
+          test -n "$APP_STORE_CONNECT_PRIVATE_KEY"
+
+          UPLOAD_TEMP_DIR="$RUNNER_TEMP/appstoreconnect-upload"
+          API_KEY_DIR="$UPLOAD_TEMP_DIR/private_keys"
+          API_KEY_PATH="$API_KEY_DIR/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8"
+          mkdir -p "$API_KEY_DIR"
+          printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$API_KEY_PATH"
+          chmod 600 "$API_KEY_PATH"
+
+          if ! grep -q -- 'BEGIN PRIVATE KEY' "$API_KEY_PATH"; then
+            echo "::error::APP_STORE_CONNECT_PRIVATE_KEY is not a valid PEM private key."
+            exit 1
+          fi
+
+          shopt -s nullglob
+          IPA_FILES=("$GITHUB_WORKSPACE"/build/ios/ipa/*.ipa)
+          if [ "${#IPA_FILES[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one IPA in build/ios/ipa, found ${#IPA_FILES[@]}."
+            exit 1
+          fi
+          IPA_PATH="${IPA_FILES[0]}"
+
+          cd "$UPLOAD_TEMP_DIR"
+          if ! xcrun altool \
+            --validate-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"; then
+            echo "::error::Apple rejected IPA validation. Review the altool diagnostics above."
+            exit 1
+          fi
+
+          if ! xcrun altool \
+            --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"; then
+            echo "::error::App Store Connect upload failed. Review the altool diagnostics above."
+            exit 1
+          fi
+
       - name: Clean up signing assets
         if: always()
         env:
@@ -149,6 +203,11 @@ jobs:
             "$RUNNER_TEMP/app-store-profile.plist" \
             "$RUNNER_TEMP/ExportOptions.plist" \
             ios/Flutter/Signing.xcconfig
+
+          UPLOAD_TEMP_DIR="$RUNNER_TEMP/appstoreconnect-upload"
+          if [[ "$UPLOAD_TEMP_DIR" == "$RUNNER_TEMP/"* ]] && [ -d "$UPLOAD_TEMP_DIR" ]; then
+            rm -rf -- "$UPLOAD_TEMP_DIR"
+          fi
 
           if [ -n "${PROFILE_INSTALL_PATH:-}" ]; then
             rm -f "$PROFILE_INSTALL_PATH"
