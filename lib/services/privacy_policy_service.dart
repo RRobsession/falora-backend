@@ -8,6 +8,26 @@ class PrivacyPolicyService {
 
   static final PrivacyPolicyService instance = PrivacyPolicyService._();
 
+  Future<void> openPrivacyChoices(BuildContext context) async {
+    try {
+      final launched = await launchUrl(
+        Uri.parse(privacyChoicesUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) throw StateError('Privacy choices URL could not open');
+    } catch (e, stack) {
+      debugPrint('PRIVACY_CHOICES_OPEN_ERROR: $e');
+      debugPrint(stack.toString());
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gizlilik tercihleri şu anda açılamıyor.'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> openPrivacyPolicy(BuildContext context) async {
     debugPrint('PRIVACY_POLICY_OPEN_START');
     try {

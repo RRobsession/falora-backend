@@ -9,6 +9,7 @@ class AdConsentService {
   AdConsentService._();
 
   static bool? lastCanRequestAds;
+  static bool privacyOptionsRequired = false;
 
   static Future<void> requestConsentIfNeeded() async {
     if (kIsWeb) return;
@@ -37,6 +38,11 @@ class AdConsentService {
         onTimeout: () => AdMobLogger.log('AD CONSENT INFO TIMEOUT'),
       );
 
+      privacyOptionsRequired =
+          await ConsentInformation.instance
+              .getPrivacyOptionsRequirementStatus() ==
+          PrivacyOptionsRequirementStatus.required;
+
       final formDone = Completer<void>();
       await ConsentForm.loadAndShowConsentFormIfRequired((formError) {
         if (formError != null) {
@@ -51,15 +57,37 @@ class AdConsentService {
         onTimeout: () => AdMobLogger.log('AD CONSENT FORM TIMEOUT'),
       );
 
-      lastCanRequestAds =
-          await ConsentInformation.instance.canRequestAds();
+      lastCanRequestAds = await ConsentInformation.instance.canRequestAds();
       final status = await ConsentInformation.instance.getConsentStatus();
       AdMobLogger.log(
-        'AD CONSENT STATUS: $status canRequestAds=$lastCanRequestAds',
+        'AD CONSENT STATUS: $status canRequestAds=$lastCanRequestAds '
+        'privacyOptionsRequired=$privacyOptionsRequired',
       );
     } catch (e) {
       AdMobLogger.log('AD CONSENT SKIPPED: $e');
       lastCanRequestAds = null;
     }
+  }
+
+  static Future<String?> showPrivacyOptions() async {
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return 'Reklam gizlilik tercihleri bu cihazda kullanılamıyor.';
+    }
+
+    final done = Completer<String?>();
+    ConsentForm.showPrivacyOptionsForm((error) {
+      if (error != null) {
+        AdMobLogger.log(
+          'AD PRIVACY OPTIONS ERROR: ${error.errorCode} ${error.message}',
+        );
+      }
+      if (!done.isCompleted) done.complete(error?.message);
+    });
+    return done.future.timeout(
+      const Duration(seconds: 60),
+      onTimeout: () => 'Gizlilik seçenekleri zaman aşımına uğradı.',
+    );
   }
 }

@@ -655,6 +655,11 @@ class FirebaseAuthService implements AuthService {
       throw AuthException('Oturum bulunamadı.');
     }
 
+    String? appleAuthorizationCode;
+    final providerIds = user.providerData
+        .map((provider) => provider.providerId)
+        .toSet();
+
     if (password != null) {
       final email = user.email?.trim();
       if (email == null || email.isEmpty) {
@@ -667,6 +672,51 @@ class FirebaseAuthService implements AuthService {
       } on FirebaseAuthException catch (e) {
         throw AuthException(_mapReauthError(e));
       }
+    } else if (providerIds.contains('apple.com')) {
+      try {
+        final provider = AppleAuthProvider()
+          ..addScope('email')
+          ..addScope('name');
+        final credential = await user.reauthenticateWithProvider(provider);
+        appleAuthorizationCode =
+            credential.additionalUserInfo?.authorizationCode;
+        if (appleAuthorizationCode == null || appleAuthorizationCode.isEmpty) {
+          throw AuthException(
+            'Apple hesabı silme doğrulaması tamamlanamadı. Lütfen tekrar deneyin.',
+          );
+        }
+      } on FirebaseAuthException catch (e) {
+        if (_isAppleSignInCancellation(e)) {
+          throw AuthException('', userCancelled: true);
+        }
+        throw AuthException(_mapAppleSignInError(e));
+      }
+    } else if (providerIds.contains('google.com')) {
+      try {
+        await _ensureGoogleSignInReady();
+        final googleUser = await GoogleSignIn.instance.authenticate(
+          scopeHint: const ['email', 'profile'],
+        );
+        final idToken = googleUser.authentication.idToken;
+        if (idToken == null || idToken.isEmpty) {
+          throw AuthException('Google hesabı doğrulanamadı.');
+        }
+        await user.reauthenticateWithCredential(
+          GoogleAuthProvider.credential(idToken: idToken),
+        );
+      } on GoogleSignInException catch (e) {
+        if (_isGoogleSignInCancellation(e)) {
+          throw AuthException('', userCancelled: true);
+        }
+        throw AuthException(mapGoogleSignInError(e));
+      } on FirebaseAuthException catch (e) {
+        throw AuthException(_mapReauthError(e));
+      }
+    } else {
+      throw AuthException(
+        'Hesabını silmek için güvenlik nedeniyle şifreni tekrar girmelisin.',
+        requiresReauth: true,
+      );
     }
 
     final uid = user.uid;
@@ -675,12 +725,15 @@ class FirebaseAuthService implements AuthService {
       await NotificationService.instance.clearForAccountDeletion(uid);
       await FortuneStorageService.instance.deleteAllUserData(uid);
       await ManualFortuneStorageService.instance.deleteUserRequests(uid);
+      if (appleAuthorizationCode != null) {
+        await _auth.revokeTokenWithAuthorizationCode(appleAuthorizationCode);
+      }
       await user.delete();
       debugPrint('ACCOUNT DELETE SUCCESS');
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         throw AuthException(
-          'Hesabını silmek için güvenlik nedeniyle şifreni tekrar girmelisin.',
+          'Hesabını silmek için kimliğini yeniden doğrulamalısın.',
           requiresReauth: true,
         );
       }

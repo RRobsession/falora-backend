@@ -1,7 +1,9 @@
 /// Boş bırakılırsa gizlilik politikası uygulama içinde gösterilir.
-const privacyPolicyUrl = 'https://tombikteyze.web.app/privacy.html';
+const privacyPolicyUrl = 'https://tombikteyze.web.app/privacy';
 
-const termsOfServiceUrl = 'https://tombikteyze.web.app/terms.html';
+const privacyChoicesUrl = 'https://tombikteyze.web.app/privacy-choices';
+
+const termsOfServiceUrl = 'https://tombikteyze.web.app/terms';
 
 /// Firebase Auth e-posta doğrulama continueUrl (Hosting sonuç sayfası).
 const emailVerificationContinueUrl =

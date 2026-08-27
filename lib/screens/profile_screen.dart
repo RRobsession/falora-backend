@@ -7,6 +7,7 @@ import 'package:falora/widgets/compact_birth_date_dialog.dart';
 import 'package:falora/widgets/preset_avatar_picker.dart';
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/services/notification_service.dart';
+import 'package:falora/services/ads/ad_consent_service.dart';
 import 'package:falora/services/user_profile_service.dart';
 import 'package:falora/services/privacy_policy_service.dart';
 import 'package:falora/services/terms_of_service_service.dart';
@@ -83,8 +84,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await PrivacyPolicyService.instance.openPrivacyPolicy(context);
   }
 
+  Future<void> _openPrivacyChoices() async {
+    await PrivacyPolicyService.instance.openPrivacyChoices(context);
+  }
+
   Future<void> _openTermsOfService() async {
     await TermsOfServiceService.instance.openTermsOfService(context);
+  }
+
+  Future<void> _openAdPrivacyOptions() async {
+    final error = await AdConsentService.showPrivacyOptions();
+    if (error != null) _showError(error);
   }
 
   Future<void> _openFaq() async {
@@ -184,6 +194,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } on AuthException catch (e) {
       if (!mounted) return;
 
+      if (e.userCancelled) return;
+
       if (e.requiresReauth) {
         final password = await _askPasswordForReauth();
         if (password == null || !mounted) return;
@@ -192,6 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         try {
           await _deleteAccount(password: password);
         } on AuthException catch (e2) {
+          if (e2.userCancelled) return;
           _showError(e2.message);
         } catch (_) {
           _showError('Hesap silinemedi. Lütfen tekrar deneyin.');
@@ -532,12 +545,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: _openPrivacyPolicy,
                       ),
                       _ProfileMenuTile(
+                        icon: Icons.tune_rounded,
+                        iconColor: faloraInkSoft,
+                        title: 'Gizlilik Tercihleri',
+                        subtitle: 'Veri ve hesap taleplerini yönet',
+                        onTap: _openPrivacyChoices,
+                      ),
+                      _ProfileMenuTile(
                         icon: Icons.description_outlined,
                         iconColor: faloraInkSoft,
                         title: 'Kullanıcı Sözleşmesi',
                         subtitle: 'Hizmet şartları ve feragatler',
                         onTap: _openTermsOfService,
                       ),
+                      if (AdConsentService.privacyOptionsRequired)
+                        _ProfileMenuTile(
+                          icon: Icons.ads_click_outlined,
+                          iconColor: faloraInkSoft,
+                          title: 'Reklam Gizlilik Tercihleri',
+                          subtitle: 'Reklam onaylarını görüntüle ve değiştir',
+                          onTap: _openAdPrivacyOptions,
+                        ),
                       _ProfileMenuTile(
                         icon: Icons.report_problem_outlined,
                         iconColor: faloraGoldDark,
