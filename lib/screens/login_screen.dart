@@ -2,8 +2,10 @@ import 'package:falora/auth/auth_service.dart';
 import 'package:falora/auth/auth_validators.dart';
 import 'package:falora/screens/register_screen.dart';
 import 'package:falora/theme/falora_theme.dart';
+import 'package:falora/widgets/apple_sign_in_button.dart';
 import 'package:falora/widgets/falora_logo_header.dart';
 import 'package:falora/widgets/google_sign_in_button.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -26,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
   bool _googleLoading = false;
+  bool _appleLoading = false;
   bool _obscure = true;
   bool _showForgotPassword = false;
 
@@ -36,7 +39,10 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  bool get _busy => _loading || _googleLoading;
+  bool get _busy => _loading || _googleLoading || _appleLoading;
+
+  bool get _showAppleSignIn =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   Future<void> _submit() async {
     debugPrint('LOGIN BUTTON CLICKED');
@@ -50,27 +56,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _loading = true);
     try {
-      await widget.authService.login(
-        email: email,
-        password: password,
-      );
+      await widget.authService.login(email: email, password: password);
       if (!mounted) return;
       setState(() => _showForgotPassword = false);
       widget.onLoggedIn();
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() => _showForgotPassword = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e, stackTrace) {
       debugPrint('Unknown login error: $e');
       debugPrint(stackTrace.toString());
       if (!mounted) return;
       setState(() => _showForgotPassword = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Giriş hatası: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Giriş hatası: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -85,18 +88,42 @@ class _LoginScreenState extends State<LoginScreen> {
       widget.onLoggedIn();
     } on AuthException catch (e) {
       if (!mounted || e.userCancelled) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e, stackTrace) {
       debugPrint('Unknown Google login error: $e');
       debugPrint(stackTrace.toString());
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google ile giriş hatası: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Google ile giriş hatası: $e')));
     } finally {
       if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    debugPrint('APPLE SIGN IN BUTTON CLICKED');
+    setState(() => _appleLoading = true);
+    try {
+      await widget.authService.signInWithApple();
+      if (!mounted) return;
+      widget.onLoggedIn();
+    } on AuthException catch (e) {
+      if (!mounted || e.userCancelled) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e, stackTrace) {
+      debugPrint('Unknown Apple login error: $e');
+      debugPrint(stackTrace.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Apple ile giriş yapılamadı.')),
+      );
+    } finally {
+      if (mounted) setState(() => _appleLoading = false);
     }
   }
 
@@ -116,9 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final emailError = AuthValidators.validateEmail(email);
     if (emailError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Önce geçerli e-posta adresinizi girin.'),
-        ),
+        const SnackBar(content: Text('Önce geçerli e-posta adresinizi girin.')),
       );
       return;
     }
@@ -135,14 +160,14 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } on AuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Şifre sıfırlama hatası: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Şifre sıfırlama hatası: $e')));
     }
   }
 
@@ -181,7 +206,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Text(
                               'Fallarına kaldığın yerden devam et',
                               style: TextStyle(
-                                color: faloraTextSecondary.withValues(alpha: 0.85),
+                                color: faloraTextSecondary.withValues(
+                                  alpha: 0.85,
+                                ),
                                 fontSize: 13,
                               ),
                             ),
@@ -275,6 +302,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
+                            if (_showAppleSignIn) ...[
+                              AppleSignInButton(
+                                loading: _appleLoading,
+                                onPressed: _busy ? null : _signInWithApple,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                             GoogleSignInButton(
                               loading: _googleLoading,
                               onPressed: _busy ? null : _signInWithGoogle,
@@ -287,8 +321,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 side: BorderSide(
                                   color: faloraBronze.withValues(alpha: 0.6),
                                 ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                               ),
                               child: const Text('Kayıt Ol'),
                             ),

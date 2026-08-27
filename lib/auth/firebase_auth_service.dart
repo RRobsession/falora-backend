@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:falora/auth/email_verification_helper.dart' as email_verification;
+import 'package:falora/auth/email_verification_helper.dart'
+    as email_verification;
 import 'package:falora/auth/auth_service.dart';
 import 'package:falora/auth/google_sign_in_config.dart';
 import 'package:falora/models/app_user.dart';
@@ -45,8 +46,7 @@ class FirebaseAuthService implements AuthService {
   String _normalizeEmail(String email) => email.trim().toLowerCase();
 
   @override
-  Stream<void> watchAuthState() =>
-      _auth.authStateChanges().map((_) {});
+  Stream<void> watchAuthState() => _auth.authStateChanges().map((_) {});
 
   /// Firebase Auth kullanıcısını sunucudan yeniler; güncel currentUser döner.
   Future<User?> _reloadCurrentUser({String? logPrefix}) async {
@@ -54,7 +54,9 @@ class FirebaseAuthService implements AuthService {
     if (before == null) return null;
 
     if (logPrefix != null) {
-      debugPrint('$logPrefix BEFORE RELOAD emailVerified: ${before.emailVerified}');
+      debugPrint(
+        '$logPrefix BEFORE RELOAD emailVerified: ${before.emailVerified}',
+      );
     }
 
     // Uygulama acilisini ag hatasina baglama. Firebase Auth yenilemesi bazen
@@ -71,7 +73,9 @@ class FirebaseAuthService implements AuthService {
 
     final after = FirebaseAuth.instance.currentUser;
     if (logPrefix != null && after != null) {
-      debugPrint('$logPrefix AFTER RELOAD emailVerified: ${after.emailVerified}');
+      debugPrint(
+        '$logPrefix AFTER RELOAD emailVerified: ${after.emailVerified}',
+      );
     }
 
     return after;
@@ -150,7 +154,9 @@ class FirebaseAuthService implements AuthService {
     if (fbUser == null) return null;
 
     final emailVerified = _firebaseEmailVerified(fbUser);
-    debugPrint('GET CURRENT USER emailVerified (Firebase Auth): $emailVerified');
+    debugPrint(
+      'GET CURRENT USER emailVerified (Firebase Auth): $emailVerified',
+    );
 
     try {
       final profile = await _loadUserProfile(
@@ -252,7 +258,9 @@ class FirebaseAuthService implements AuthService {
         debugPrint('REGISTER_USER_DOC_CREATE_FAILED uid: $uid error: $e');
         debugPrint(stackTrace.toString());
         await _rollbackNewAuthAccount(newUser);
-        throw AuthException('Hesap kaydı tamamlanamadı. Lütfen tekrar deneyin.');
+        throw AuthException(
+          'Hesap kaydı tamamlanamadı. Lütfen tekrar deneyin.',
+        );
       }
 
       return RegisterResult(
@@ -372,7 +380,7 @@ class FirebaseAuthService implements AuthService {
         debugPrint(
           'GOOGLE_SIGN_IN_ACCOUNT uid=${fbUser.uid} email=${fbUser.email}',
         );
-        return _completeGoogleSignIn(fbUser);
+        return _completeSocialSignIn(fbUser, provider: 'google');
       }
 
       if (!GoogleSignIn.instance.supportsAuthenticate()) {
@@ -402,7 +410,7 @@ class FirebaseAuthService implements AuthService {
       debugPrint(
         'GOOGLE_SIGN_IN_ACCOUNT uid=${fbUser.uid} email=${fbUser.email}',
       );
-      return _completeGoogleSignIn(fbUser);
+      return _completeSocialSignIn(fbUser, provider: 'google');
     } on AuthException {
       rethrow;
     } on GoogleSignInException catch (e) {
@@ -424,13 +432,54 @@ class FirebaseAuthService implements AuthService {
     } catch (e, stackTrace) {
       debugPrint('GOOGLE_SIGN_IN_UNKNOWN_ERROR: $e');
       debugPrint(stackTrace.toString());
-      throw AuthException('Google ile giriş yapılamadı. Lütfen tekrar deneyin.');
+      throw AuthException(
+        'Google ile giriş yapılamadı. Lütfen tekrar deneyin.',
+      );
     }
   }
 
-  Future<AppUser> _completeGoogleSignIn(User fbUser) async {
+  @override
+  Future<AppUser> signInWithApple() async {
+    debugPrint('APPLE_SIGN_IN_START');
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
+      throw AuthException(
+        'Apple ile giriş yalnızca iOS uygulamasında kullanılabilir.',
+      );
+    }
+
+    try {
+      final provider = AppleAuthProvider()
+        ..addScope('email')
+        ..addScope('name');
+      final credential = await _auth.signInWithProvider(provider);
+      final fbUser =
+          credential.user ?? await _reloadCurrentUser(logPrefix: 'APPLE');
+      if (fbUser == null) {
+        throw AuthException('Apple ile giriş tamamlanamadı.');
+      }
+      return _completeSocialSignIn(fbUser, provider: 'apple');
+    } on AuthException {
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      if (_isAppleSignInCancellation(e)) {
+        debugPrint('APPLE_SIGN_IN_CANCELLED code=${e.code}');
+        throw AuthException('', userCancelled: true);
+      }
+      debugPrint('APPLE_FIREBASE_AUTH_ERROR code=${e.code}');
+      throw AuthException(_mapAppleSignInError(e));
+    } catch (e, stackTrace) {
+      debugPrint('APPLE_SIGN_IN_UNKNOWN_ERROR: $e');
+      debugPrint(stackTrace.toString());
+      throw AuthException('Apple ile giriş yapılamadı. Lütfen tekrar deneyin.');
+    }
+  }
+
+  Future<AppUser> _completeSocialSignIn(
+    User fbUser, {
+    required String provider,
+  }) async {
     debugPrint(
-      'GOOGLE_SIGN_IN_SUCCESS uid=${fbUser.uid} '
+      '${provider.toUpperCase()}_SIGN_IN_SUCCESS uid=${fbUser.uid} '
       'emailVerified=${fbUser.emailVerified}',
     );
 
@@ -440,11 +489,12 @@ class FirebaseAuthService implements AuthService {
 
     AppUser profile;
     try {
-      profile = await TokenService.instance.syncGoogleUserDocument(
+      profile = await TokenService.instance.syncSocialUserDocument(
         uid: fbUser.uid,
         email: email,
         displayName: displayName,
         photoUrl: photoUrl,
+        provider: provider,
       );
     } on FirebaseException catch (e, stackTrace) {
       debugPrint('GOOGLE_USER_DOC_SYNC_FAILED code=${e.code}');
@@ -463,6 +513,27 @@ class FirebaseAuthService implements AuthService {
       fbUser,
       profile.copyWith(emailVerified: true),
     );
+  }
+
+  static bool _isAppleSignInCancellation(FirebaseAuthException e) {
+    return e.code == 'web-context-canceled' ||
+        e.code == 'canceled' ||
+        e.code == 'cancelled';
+  }
+
+  static String _mapAppleSignInError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'account-exists-with-different-credential':
+        return 'Bu e-posta başka bir giriş yöntemiyle kayıtlı. Önce mevcut yöntemle giriş yapın.';
+      case 'credential-already-in-use':
+        return 'Bu Apple hesabı başka bir kullanıcıyla bağlantılı.';
+      case 'operation-not-allowed':
+        return 'Apple ile giriş henüz kullanıma açılmamış.';
+      case 'network-request-failed':
+        return 'İnternet bağlantınızı kontrol edip tekrar deneyin.';
+      default:
+        return 'Apple ile giriş yapılamadı. Lütfen tekrar deneyin.';
+    }
   }
 
   static bool _isFirebaseGoogleSignInCancellation(FirebaseAuthException e) {
@@ -591,10 +662,7 @@ class FirebaseAuthService implements AuthService {
       }
       try {
         await user.reauthenticateWithCredential(
-          EmailAuthProvider.credential(
-            email: email,
-            password: password,
-          ),
+          EmailAuthProvider.credential(email: email, password: password),
         );
       } on FirebaseAuthException catch (e) {
         throw AuthException(_mapReauthError(e));
@@ -681,7 +749,9 @@ class FirebaseAuthService implements AuthService {
         return 'Firebase Console\'da Email/Password giriş yöntemi açık değil.';
       case 'invalid-credential':
       case 'invalid-login-credentials':
-        return login ? 'E-posta veya şifre hatalı.' : 'Kimlik doğrulama hatası.';
+        return login
+            ? 'E-posta veya şifre hatalı.'
+            : 'Kimlik doğrulama hatası.';
       case 'wrong-password':
         return 'Şifre hatalı.';
       case 'user-not-found':

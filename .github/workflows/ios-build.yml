@@ -80,11 +80,13 @@ jobs:
           PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST_PATH")
           PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST_PATH")
           PROFILE_APS_ENV=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:aps-environment' "$PROFILE_PLIST_PATH")
+          PROFILE_APPLE_SIGN_IN=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.applesignin:0' "$PROFILE_PLIST_PATH")
           PROFILE_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$PROFILE_PLIST_PATH")
 
           test "$PROFILE_TEAM_ID" = "$APPLE_TEAM_ID"
           test "$PROFILE_APP_ID" = "$APPLE_TEAM_ID.$APP_BUNDLE_ID"
           test "$PROFILE_APS_ENV" = "production"
+          test "$PROFILE_APPLE_SIGN_IN" = "Default"
           test "$PROFILE_GET_TASK_ALLOW" = "false"
           if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$PROFILE_PLIST_PATH" >/dev/null 2>&1; then
             echo "The provisioning profile is not an App Store distribution profile." >&2

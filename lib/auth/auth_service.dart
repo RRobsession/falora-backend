@@ -21,13 +21,13 @@ abstract class AuthService {
     String? referralCode,
   });
 
-  Future<AppUser> login({
-    required String email,
-    required String password,
-  });
+  Future<AppUser> login({required String email, required String password});
 
   /// Google hesabı ile giriş. Kullanıcı iptal ederse [AuthException.userCancelled].
   Future<AppUser> signInWithGoogle();
+
+  /// Apple hesabı ile native iOS girişi.
+  Future<AppUser> signInWithApple();
 
   Future<void> sendPasswordResetEmail({required String email});
 

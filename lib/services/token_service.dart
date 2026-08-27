@@ -254,12 +254,13 @@ class TokenService {
     return user;
   }
 
-  /// Google girişi sonrası Firestore profil senkronizasyonu.
+  /// Google veya Apple girişi sonrası Firestore profil senkronizasyonu.
   /// Yeni kullanıcıda belge oluşturur; mevcut kullanıcıda jeton/profil korunur.
-  Future<AppUser> syncGoogleUserDocument({
+  Future<AppUser> syncSocialUserDocument({
     required String uid,
     required String email,
     required String displayName,
+    required String provider,
     String? photoUrl,
   }) async {
     final ref = _userRef(uid);
@@ -276,7 +277,7 @@ class TokenService {
               normalizedEmail: normalizedEmail,
             )
             ..['emailVerified'] = true
-            ..['provider'] = 'google'
+            ..['provider'] = provider
             ..['lastLoginAt'] = FieldValue.serverTimestamp();
       if (trimmedPhoto != null && trimmedPhoto.isNotEmpty) {
         data['photoUrl'] = trimmedPhoto;
@@ -293,10 +294,10 @@ class TokenService {
         throw FirebaseException(
           plugin: 'cloud_firestore',
           code: 'aborted',
-          message: 'Google user document could not be created',
+          message: 'Social user document could not be created',
         );
       }
-      debugPrint('GOOGLE_USER_DOC_CREATED uid=$uid');
+      debugPrint('${provider.toUpperCase()}_USER_DOC_CREATED uid=$uid');
       final user = AppUser(
         userId: uid,
         name: trimmedName,
@@ -313,7 +314,7 @@ class TokenService {
 
     final existing = snap.data() ?? {};
     final updates = <String, dynamic>{
-      'provider': 'google',
+      'provider': provider,
       'lastLoginAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       'emailVerified': true,
