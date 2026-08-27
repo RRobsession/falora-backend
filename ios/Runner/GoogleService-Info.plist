@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>36770284037-t0ligt8b4c2410gclkdl172vrjs6pfg9.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.36770284037-t0ligt8b4c2410gclkdl172vrjs6pfg9</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>36770284037-56sbkkc8h1j4kfghjntlfj6dkhjibtek.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyC5zGpKEMYF7pHJe-UiiRrOkO3lf_6Jnv8</string>
+	<key>GCM_SENDER_ID</key>
+	<string>36770284037</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.rrlime.falora</string>
+	<key>PROJECT_ID</key>
+	<string>tombikteyze</string>
+	<key>STORAGE_BUCKET</key>
+	<string>tombikteyze.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<true/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:36770284037:ios:4c182193f62c4a2e9ad26c</string>
+</dict>
+</plist>

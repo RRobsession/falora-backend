@@ -65,10 +65,12 @@ class DefaultFirebaseOptions {
   );
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyC5zGpKEMYF7pHJe-UiiRrOkO3lf_6Jnv8',
-    appId: '1:36770284037:ios:5be2b1b86be377da9ad26c',
+    appId: '1:36770284037:ios:4c182193f62c4a2e9ad26c',
     messagingSenderId: '36770284037',
     projectId: 'tombikteyze',
     storageBucket: 'tombikteyze.firebasestorage.app',
-    iosBundleId: 'com.example.falora',
+    androidClientId: '36770284037-56sbkkc8h1j4kfghjntlfj6dkhjibtek.apps.googleusercontent.com',
+    iosClientId: '36770284037-t0ligt8b4c2410gclkdl172vrjs6pfg9.apps.googleusercontent.com',
+    iosBundleId: 'com.rrlime.falora',
   );
 }
