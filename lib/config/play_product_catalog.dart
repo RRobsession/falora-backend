@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class TokenProductDefinition {
   const TokenProductDefinition({
     required this.productId,
@@ -112,4 +114,3 @@ TokenProductDefinition? tokenProductById(String productId) {
   }
   return null;
 }
-import 'package:flutter/foundation.dart';
