@@ -16,6 +16,7 @@ class PlayPurchaseResult {
     required this.productId,
     required this.purchaseToken,
     required this.source,
+    required this.platform,
     this.purchaseId,
     this.transactionDate,
   });
@@ -25,6 +26,7 @@ class PlayPurchaseResult {
   final String? purchaseId;
   final String? transactionDate;
   final PurchaseSource source;
+  final String platform;
 }
 
 class PlayBillingException implements Exception {
@@ -140,6 +142,14 @@ class PlayBillingService {
     }
 
     _offerTokenByProductId.clear();
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final products = await queryProducts(productIds);
+      return {
+        for (final product in products)
+          if (product.price.isNotEmpty)
+            product.id: ShopProductPrice(price: product.price),
+      };
+    }
     final offerPrices = await PlayOfferPriceChannel.queryOfferPrices(productIds);
     for (final entry in offerPrices.entries) {
       final token = entry.value.offerToken;
@@ -223,12 +233,13 @@ class PlayBillingService {
     );
 
     try {
-      final started = await _iap.buyConsumable(
-        purchaseParam: GooglePlayPurchaseParam(
-          productDetails: products.first,
-          offerToken: offerToken,
-        ),
-      );
+      final purchaseParam = defaultTargetPlatform == TargetPlatform.android
+          ? GooglePlayPurchaseParam(
+              productDetails: products.first,
+              offerToken: offerToken,
+            )
+          : PurchaseParam(productDetails: products.first);
+      final started = await _iap.buyConsumable(purchaseParam: purchaseParam);
 
       if (!started) {
         _purchaseCompleters.remove(productId);
@@ -358,6 +369,8 @@ class PlayBillingService {
         purchaseToken: token,
         purchaseId: purchase.purchaseID,
         transactionDate: purchase.transactionDate,
+        platform:
+            defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
         source: purchase.status == PurchaseStatus.restored
             ? PurchaseSource.restored
             : PurchaseSource.purchased,

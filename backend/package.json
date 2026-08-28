@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js",
     "audit:repetition": "node scripts/audit-fortune-repetition.js",
     "billing:setup": "node scripts/setup-play-billing-access.js",
     "billing:verify": "node scripts/verify-play-billing.js",
@@ -16,6 +17,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

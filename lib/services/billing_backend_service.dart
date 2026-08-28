@@ -53,6 +53,7 @@ class BillingBackendService {
       'purchaseToken': purchase.purchaseToken,
       'purchaseId': purchase.purchaseId,
       'source': purchase.source.name,
+      'platform': purchase.platform,
       'transactionDate': purchase.transactionDate,
     });
 

@@ -2,6 +2,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 const { getFirestore, initFirebaseAdmin } = require('./fcm');
 const { loadServiceAccount } = require('./service_account_config');
+const { completeAppleTokenPurchase } = require('./apple_billing');
 
 const PLAY_PURCHASES_COLLECTION = 'play_purchases';
 const USERS_COLLECTION = 'users';
@@ -285,6 +286,14 @@ function buildPurchaseLedger({
 }
 
 async function completeTokenPurchase(auth, body) {
+  if (body.platform === 'ios') {
+    return completeAppleTokenPurchase(auth, body);
+  }
+  if (body.platform && body.platform !== 'android') {
+    const error = new Error('Desteklenmeyen satın alma platformu.');
+    error.statusCode = 400;
+    throw error;
+  }
   const firestore = getFirestoreOrThrow();
   const definition = validateTokenPayload(body);
   const purchaseData = await verifyProductPurchase(body.productId, body.purchaseToken);
