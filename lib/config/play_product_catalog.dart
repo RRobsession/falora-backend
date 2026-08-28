@@ -25,11 +25,6 @@ const tokenProductCatalog = <TokenProductDefinition>[
     subtitle: 'Hızlı Başlangıç',
   ),
   TokenProductDefinition(
-    productId: 'tokens_100',
-    tokens: 100,
-    subtitle: 'Başlangıç Paketi',
-  ),
-  TokenProductDefinition(
     productId: 'tokens_150',
     tokens: 150,
     subtitle: 'En Popüler',
@@ -37,9 +32,14 @@ const tokenProductCatalog = <TokenProductDefinition>[
     highlight: true,
   ),
   TokenProductDefinition(
-    productId: 'tokens_200',
-    tokens: 200,
+    productId: 'tokens_500',
+    tokens: 500,
     subtitle: 'Avantajlı Paket',
+  ),
+  TokenProductDefinition(
+    productId: 'tokens_1000',
+    tokens: 1000,
+    subtitle: 'Büyük Jeton Paketi',
   ),
   TokenProductDefinition(
     productId: 'tokens_1500',
@@ -52,9 +52,9 @@ const tokenProductCatalog = <TokenProductDefinition>[
 
 const tokenProductIds = <String>{
   'tokens_50',
-  'tokens_100',
   'tokens_150',
-  'tokens_200',
+  'tokens_500',
+  'tokens_1000',
   'tokens_1500',
 };
 
@@ -63,9 +63,9 @@ const allBillingProductIds = tokenProductIds;
 /// Web / geliştirme önizlemesi için sabit fiyatlar (Play Billing yok).
 const tokenProductMockPrices = <String, String>{
   'tokens_50': '₺9,94',
-  'tokens_100': '₺19,90',
+  'tokens_500': '₺99,90',
   'tokens_150': '₺29,75',
-  'tokens_200': '₺49,93',
+  'tokens_1000': '₺199,90',
   'tokens_1500': '₺349,99',
 };
 

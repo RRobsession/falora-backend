@@ -195,7 +195,7 @@ async function testServiceAccountVerification(serviceAccount) {
   try {
     await publisher.purchases.products.get({
       packageName: PACKAGE_NAME,
-      productId: 'tokens_100',
+      productId: 'tokens_500',
       token: 'invalid-test-token',
     });
     console.log('Beklenmeyen: geçersiz token ile başarı döndü.');

@@ -58,9 +58,9 @@ node scripts/print-railway-play-env.js
 Managed product kimlikleri (yalnızca jeton paketleri):
 
 - `tokens_50`
-- `tokens_100`
+- `tokens_500`
 - `tokens_150`
-- `tokens_200`
+- `tokens_1000`
 - `tokens_1500`
 
 ## 4. Test purchase
