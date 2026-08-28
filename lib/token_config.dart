@@ -21,4 +21,4 @@ const grantRewardWhenAdUnavailable = true;
 const rewardGrantedWithoutAdMessage =
     'Reklam şu an gösterilemedi; günlük ödülünüz hesabınıza eklendi.';
 
-const shopPackageCatalog = tokenProductCatalog;
+List<TokenProductDefinition> get shopPackageCatalog => tokenProductCatalog;

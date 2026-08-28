@@ -77,11 +77,11 @@ async function testAccount(credentials) {
 
   try {
     console.log(
-      `PLAY BILLING API call method=${PLAY_VERIFY_API_METHOD} packageName=${PACKAGE_NAME} productId=tokens_500 purchaseToken=invalid-test-token`,
+      `PLAY BILLING API call method=${PLAY_VERIFY_API_METHOD} packageName=${PACKAGE_NAME} productId=tokens_100 purchaseToken=invalid-test-token`,
     );
     await publisher.purchases.products.get({
       packageName: PACKAGE_NAME,
-      productId: 'tokens_500',
+      productId: 'tokens_100',
       token: 'invalid-test-token',
     });
     console.log(`Beklenmeyen başarı (${credentials.client_email})`);
