@@ -33,18 +33,21 @@ void main() {
     await tester.tap(find.byType(TextFormField));
     await tester.pump();
 
-    final focusedField = tester.widget<TextFormField>(
+    final focusedField = tester.widget<EditableText>(find.byType(EditableText));
+    expect(focusedField.focusNode.hasFocus, isTrue);
+    await tester.enterText(
       find.byType(TextFormField),
+      'Niyetimi yazmaya devam ediyorum',
     );
-    expect(focusedField.focusNode?.hasFocus, isTrue);
 
-    await tester.pumpWidget(buildForm(336));
-    await tester.pump();
+    for (final keyboardInset in <double>[336, 310, 352]) {
+      await tester.pumpWidget(buildForm(keyboardInset));
+      await tester.pump();
+    }
 
-    final rebuiltField = tester.widget<TextFormField>(
-      find.byType(TextFormField),
-    );
+    final rebuiltField = tester.widget<EditableText>(find.byType(EditableText));
     expect(rebuiltField.focusNode, same(focusedField.focusNode));
-    expect(rebuiltField.focusNode?.hasFocus, isTrue);
+    expect(rebuiltField.focusNode.hasFocus, isTrue);
+    expect(controller.text, 'Niyetimi yazmaya devam ediyorum');
   });
 }

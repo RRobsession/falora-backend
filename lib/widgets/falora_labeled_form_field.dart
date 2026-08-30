@@ -36,13 +36,12 @@ class FaloraLabeledFormField extends StatefulWidget {
 
 class _FaloraLabeledFormFieldState extends State<FaloraLabeledFormField>
     with AutomaticKeepAliveClientMixin {
-  late final FocusNode _focusNode;
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    _focusNode = FocusNode(debugLabel: widget.label)
-      ..addListener(_handleFocusChange);
+    _focusNode.addListener(_handleFocusChange);
   }
 
   void _handleFocusChange() => updateKeepAlive();
