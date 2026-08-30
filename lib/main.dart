@@ -5,7 +5,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:falora/ai_config.dart';
@@ -83,20 +82,6 @@ import 'package:falora/widgets/playing_card_widgets.dart';
 import 'package:falora/widgets/tarot_card_picker_sheet.dart';
 import 'package:falora/widgets/tarot_card_widgets.dart';
 
-bool get _isAndroidPlatform =>
-    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-
-Future<void> _configureMobileSystemUi() async {
-  if (!_isAndroidPlatform) return;
-  // Never change system overlays while a text field owns focus. On some
-  // devices that platform call closes the software keyboard immediately.
-  if (FocusManager.instance.primaryFocus?.hasFocus == true) return;
-  // Keep system overlays stable while the keyboard opens and closes. Android
-  // temporarily reveals its overlays for text input, which conflicts with
-  // immersiveSticky and can make the keyboard repeatedly retreat.
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-}
-
 double _mobileBottomInset(BuildContext context) {
   if (kIsWeb) return 0;
   return MediaQuery.viewPaddingOf(context).bottom;
@@ -104,7 +89,6 @@ double _mobileBottomInset(BuildContext context) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await _configureMobileSystemUi();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await AnalyticsService.init();
   StatisticsService.instance.init();
@@ -159,10 +143,6 @@ class _FaloraAppState extends State<FaloraApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     StatisticsService.instance.onLifecycleChanged(state);
-    if (state == AppLifecycleState.resumed &&
-        FocusManager.instance.primaryFocus?.hasFocus != true) {
-      _configureMobileSystemUi();
-    }
   }
 
   @override
