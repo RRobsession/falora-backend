@@ -12,8 +12,8 @@ const PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.rrlime.falora'
 const TOKEN_PRODUCTS = {
   tokens_50: { tokens: 50 },
   tokens_100: { tokens: 100 },
-  tokens_150: { tokens: 150 },
-  tokens_200: { tokens: 200 },
+  tokens_150: { tokens: 500 },
+  tokens_200: { tokens: 1000 },
   tokens_1500: { tokens: 0, specialFortuneRights: 1, kind: 'special_fortune_right' },
 };
 

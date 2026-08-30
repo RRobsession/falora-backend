@@ -33,14 +33,14 @@ const androidTokenProductCatalog = <TokenProductDefinition>[
   ),
   TokenProductDefinition(
     productId: 'tokens_150',
-    tokens: 150,
+    tokens: 500,
     subtitle: 'En Popüler',
     badge: 'En Popüler',
     highlight: true,
   ),
   TokenProductDefinition(
     productId: 'tokens_200',
-    tokens: 200,
+    tokens: 1000,
     subtitle: 'Avantajlı Paket',
   ),
   TokenProductDefinition(
