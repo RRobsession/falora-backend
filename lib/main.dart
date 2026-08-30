@@ -83,10 +83,14 @@ import 'package:falora/widgets/playing_card_widgets.dart';
 import 'package:falora/widgets/tarot_card_picker_sheet.dart';
 import 'package:falora/widgets/tarot_card_widgets.dart';
 
-bool get _isMobilePlatform => !kIsWeb;
+bool get _isAndroidPlatform =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 Future<void> _configureMobileSystemUi() async {
-  if (!_isMobilePlatform) return;
+  if (!_isAndroidPlatform) return;
+  // Never change system overlays while a text field owns focus. On some
+  // devices that platform call closes the software keyboard immediately.
+  if (FocusManager.instance.primaryFocus?.hasFocus == true) return;
   // Keep system overlays stable while the keyboard opens and closes. Android
   // temporarily reveals its overlays for text input, which conflicts with
   // immersiveSticky and can make the keyboard repeatedly retreat.
@@ -155,7 +159,8 @@ class _FaloraAppState extends State<FaloraApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     StatisticsService.instance.onLifecycleChanged(state);
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed &&
+        FocusManager.instance.primaryFocus?.hasFocus != true) {
       _configureMobileSystemUi();
     }
   }
