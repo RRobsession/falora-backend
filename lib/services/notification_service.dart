@@ -36,7 +36,6 @@ class NotificationService {
         await _initWeb();
         return;
       }
-      await _requestPermissions();
       _setupForegroundListener();
       _messaging.onTokenRefresh.listen(
         _onTokenRefresh,
@@ -259,9 +258,14 @@ class NotificationService {
     }
   }
 
-  Future<void> _registerMobileToken(String userId) async {
+  Future<void> _registerMobileToken(
+    String userId, {
+    bool requestPermission = false,
+  }) async {
     try {
-      final granted = await _requestPermissions();
+      final granted = requestPermission
+          ? await _requestPermissions()
+          : await areNotificationsEnabled();
       if (!granted) {
         debugPrint('FCM TOKEN NOT FOUND | reason=permission_denied');
         return;
@@ -378,7 +382,7 @@ class NotificationService {
     if (kIsWeb) {
       await _registerWebToken(userId);
     } else {
-      await _registerMobileToken(userId);
+      await _registerMobileToken(userId, requestPermission: true);
     }
     return areAppNotificationsEnabled(userId);
   }
