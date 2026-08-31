@@ -220,8 +220,7 @@ service cloud.firestore {
       function allowedCreateTokenBalance() {
         return ('tokens' in request.resource.data)
           && request.resource.data.tokens is number
-          && (request.resource.data.tokens == 50
-            || request.resource.data.tokens == 0);
+          && request.resource.data.tokens == 0;
       }
 
       function allowedCreateSpecialFortuneRights() {

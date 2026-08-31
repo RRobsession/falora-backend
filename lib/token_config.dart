@@ -1,7 +1,7 @@
 import 'package:falora/config/play_product_catalog.dart';
 
 /// Başlangıç jeton bakiyesi — `firestore.rules` içindeki `allowedCreateTokenBalance` ile senkron.
-const initialUserTokens = 50;
+const initialUserTokens = 0;
 
 /// Standart falcı 1. seviye (Kahve/Su/İskambil). Tarot 1. seviye: 50 (Gizem Ana).
 const fortuneTokenCost = 50;
