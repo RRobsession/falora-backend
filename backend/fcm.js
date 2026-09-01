@@ -261,12 +261,68 @@ async function getAdminFcmTokens() {
   return tokens;
 }
 
+async function notifyAdmins({ title, body, type, data = {} }) {
+  if (!isFcmReady()) {
+    return { success: false, reason: 'fcm_not_configured' };
+  }
+
+  const admins = await getAdminFcmTokens();
+  if (admins.length === 0) {
+    return { success: false, reason: 'no_admin_tokens' };
+  }
+
+  let sent = 0;
+  for (const { uid, token } of admins) {
+    const messageId = await sendNotification({
+      token,
+      title,
+      body,
+      data: { type, ...data },
+      userId: uid,
+    });
+    if (messageId) sent += 1;
+  }
+
+  return { success: sent > 0, sent, total: admins.length };
+}
+
+async function notifyAdminsNewTokenPurchase({
+  productId,
+  tokensGranted,
+  userEmail,
+  orderId,
+}) {
+  const amount = Number(tokensGranted) || 0;
+  const buyer = userEmail?.trim() || 'Bir kullanıcı';
+  const packageLabel = amount > 0 ? `${amount} jeton` : productId;
+  return notifyAdmins({
+    title: 'Yeni jeton satın alımı',
+    body: `${buyer} • ${packageLabel}${orderId ? ` • ${orderId}` : ''}`,
+    type: 'admin_token_purchase',
+    data: { productId: productId || '', orderId: orderId || '' },
+  });
+}
+
+async function notifyAdminsNewProblemReport({ reportId, displayName }) {
+  const reporter = displayName?.trim() || 'Bir kullanıcı';
+  return notifyAdmins({
+    title: 'Yeni sorun bildirimi',
+    body: `${reporter} yeni bir sorun bildirdi.`,
+    type: 'admin_problem_report',
+    data: { requestId: String(reportId) },
+  });
+}
+
 async function notifyAdminsNewManualRequest({
   requestId,
+  readerId,
   readerName,
   categoryLabel,
   clientName,
 }) {
+  if (readerId !== 'serdar' && readerId !== 'hatice') {
+    return { success: false, reason: 'reader_not_notifiable' };
+  }
   if (!isFcmReady()) {
     console.log(
       'FCM ADMIN NOTIFY | reason=not_configured | requestId=',
@@ -512,6 +568,8 @@ module.exports = {
   sendNotification,
   notifyFortuneReady,
   notifyAdminsNewManualRequest,
+  notifyAdminsNewTokenPurchase,
+  notifyAdminsNewProblemReport,
   scheduleFortuneNotify,
   restorePendingNotificationSchedules,
   READY_MESSAGES,

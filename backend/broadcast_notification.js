@@ -1,6 +1,7 @@
 /** Tüm kullanıcılara FCM broadcast. */
 const admin = require('firebase-admin');
 const { getFirestore, isFcmReady, sendNotification } = require('./fcm');
+const { isAdminUser } = require('./admin_config');
 
 async function collectAllPushTokens() {
   const db = getFirestore();
@@ -16,7 +17,9 @@ async function collectAllPushTokens() {
   let usersWithToken = 0;
 
   for (const doc of snap.docs) {
-    const token = doc.data()?.fcmToken;
+    const data = doc.data() || {};
+    if (isAdminUser(doc.id, data.email)) continue;
+    const token = data.fcmToken;
     if (typeof token === 'string' && token.trim()) {
       const t = token.trim();
       tokens.push(t);

@@ -605,6 +605,8 @@ const {
   sendNotification,
   notifyFortuneReady,
   notifyAdminsNewManualRequest,
+  notifyAdminsNewTokenPurchase,
+  notifyAdminsNewProblemReport,
   scheduleFortuneNotify,
 } = require('./fcm');
 const {
@@ -1015,6 +1017,7 @@ app.post('/notify-admin-manual-request', requireAuth, async (req, res) => {
 
     const result = await notifyAdminsNewManualRequest({
       requestId: requestId.trim(),
+      readerId: data.readerId,
       readerName: readerName || data.readerName,
       categoryLabel: categoryLabel || data.fortuneType,
       clientName: clientName || data.name,
@@ -1022,6 +1025,36 @@ app.post('/notify-admin-manual-request', requireAuth, async (req, res) => {
     return res.json(result);
   } catch (err) {
     console.error('FCM ADMIN MANUAL REQUEST ERROR:', err.message);
+    return res.status(500).json({ error: 'Admin bildirimi gönderilemedi' });
+  }
+});
+
+app.post('/notify-admin-problem-report', requireAuth, async (req, res) => {
+  const reportId = req.body?.reportId?.toString().trim();
+  if (!reportId) return res.status(400).json({ error: 'reportId gerekli' });
+
+  const db = getFirestore();
+  if (!db) {
+    return res.status(503).json({ error: 'Firebase Admin yapılandırılmadı' });
+  }
+
+  try {
+    const doc = await db.collection('problem_reports').doc(reportId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Bildirim bulunamadı' });
+    const data = doc.data() || {};
+    if (data.userId !== req.auth.uid) {
+      return res.status(403).json({ error: 'Yetkisiz' });
+    }
+    if (data.status !== 'open') {
+      return res.json({ success: false, reason: 'not_open' });
+    }
+    const result = await notifyAdminsNewProblemReport({
+      reportId,
+      displayName: data.displayName,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('FCM ADMIN PROBLEM REPORT ERROR:', err.message);
     return res.status(500).json({ error: 'Admin bildirimi gönderilemedi' });
   }
 });
@@ -1057,6 +1090,19 @@ app.post(
   async (req, res) => {
     try {
       const result = await completeTokenPurchase(req.auth, req.body ?? {});
+      if (!result.alreadyProcessed) {
+        try {
+          await notifyAdminsNewTokenPurchase({
+            productId: req.body?.productId,
+            tokensGranted: result.tokensGranted,
+            userEmail: req.auth.email,
+            orderId: result.orderId,
+          });
+        } catch (notifyError) {
+          // Admin push sorunu başarılı satın alma yanıtını bozmamalı.
+          console.error('FCM ADMIN TOKEN PURCHASE ERROR:', notifyError.message);
+        }
+      }
       return res.json(result);
     } catch (err) {
       console.error('token billing error:', err.message);
