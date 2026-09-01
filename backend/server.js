@@ -606,7 +606,7 @@ const {
   notifyFortuneReady,
   notifyAdminsNewManualRequest,
   notifyAdminsNewTokenPurchase,
-  notifyAdminsNewProblemReport,
+  notifyAdminsForProblemReport,
   scheduleFortuneNotify,
 } = require('./fcm');
 const {
@@ -1048,10 +1048,7 @@ app.post('/notify-admin-problem-report', requireAuth, async (req, res) => {
     if (data.status !== 'open') {
       return res.json({ success: false, reason: 'not_open' });
     }
-    const result = await notifyAdminsNewProblemReport({
-      reportId,
-      displayName: data.displayName,
-    });
+    const result = await notifyAdminsForProblemReport(reportId);
     return res.json(result);
   } catch (err) {
     console.error('FCM ADMIN PROBLEM REPORT ERROR:', err.message);
