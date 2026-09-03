@@ -336,8 +336,9 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
               TextField(
                 controller: _cardCtrls[i],
                 enabled: !_sending,
-                maxLines: 3,
-                maxLength: 500,
+                minLines: 5,
+                maxLines: 10,
+                maxLength: 3000,
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   labelText: 'Kart ${i + 1}',

@@ -6,7 +6,7 @@ const { isAdminUser } = require('./admin_config');
 const ALLOWED_GROUP_SIZES = [10, 20];
 const MIN_CARDS = 2;
 const MAX_CARDS = 50;
-const MAX_CARD_LEN = 500;
+const MAX_CARD_LEN = 3000;
 const MAX_TITLE_LEN = 80;
 const ISTANBUL_OFFSET_MS = 3 * 60 * 60 * 1000;
 

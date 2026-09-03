@@ -905,10 +905,10 @@ app.post(
       let system;
       let user;
       if (type === 'horoscope') {
-        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Tam olarak 12 burç için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. Her yorum 45-80 kelime olsun; kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Yalnızca JSON döndür: {"signs":{"Koç":"...","Boğa":"...","İkizler":"...","Yengeç":"...","Aslan":"...","Başak":"...","Terazi":"...","Akrep":"...","Yay":"...","Oğlak":"...","Kova":"...","Balık":"..."}}`;
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Tam olarak 12 burç için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. HER BURÇ YORUMU 350-380 KELİME OLMALIDIR; kısa özet yazma. Yorumu akıcı paragraflara böl; duygu, ilişki, gündelik yaşam, içsel farkındalık ve uygulanabilir önerileri burca özgü biçimde işle. Kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Yalnızca JSON döndür: {"signs":{"Koç":"...","Boğa":"...","İkizler":"...","Yengeç":"...","Aslan":"...","Başak":"...","Terazi":"...","Akrep":"...","Yay":"...","Oğlak":"...","Kova":"...","Balık":"..."}}`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Bugüne özgü farklı temalar ve somut, kişisel hissettiren öneriler kullan.`;
       } else if (type === 'angel_cards') {
-        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. Her biri 25-55 kelime olsun; kesin gelecek, sağlık veya finans vaadi verme. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART EN AZ 200, EN FAZLA 240 KELİME OLMALIDIR; kısa mesaj veya özet yazma. Her kartta ayrı bir ana tema, duygusal farkındalık, günlük hayata uygulanabilir öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Tam olarak ${count} farklı kart üret; her kartın teması ve açılış cümlesi farklı olsun.`;
       } else {
         return res.status(400).json({ error: 'Geçersiz içerik türü' });
@@ -918,6 +918,7 @@ app.post(
         temperature: 1,
         frequency_penalty: 0.65,
         presence_penalty: 0.45,
+        max_tokens: type === 'horoscope' ? 12000 : 16000,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: system },

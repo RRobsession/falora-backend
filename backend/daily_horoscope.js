@@ -45,8 +45,8 @@ function normalizeSigns(input) {
       err.zodiac = zodiac;
       throw err;
     }
-    if (text.length > 800) {
-      const err = new Error(`${zodiac} yorumu çok uzun (max 800 karakter)`);
+    if (text.length > 4500) {
+      const err = new Error(`${zodiac} yorumu çok uzun (max 4500 karakter)`);
       err.code = 'sign_too_long';
       err.zodiac = zodiac;
       throw err;
