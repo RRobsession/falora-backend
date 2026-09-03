@@ -118,7 +118,8 @@ class _AdminDailyHoroscopeScreenState extends State<AdminDailyHoroscopeScreen>
       );
       final signs = Map<String, dynamic>.from(result['signs'] ?? const {});
       for (final sign in burclar) {
-        final text = signs[sign]?.toString().trim() ?? '';
+        final value = signs[sign];
+        final text = value is String ? value.trim() : '';
         if (text.isNotEmpty) _controllers[sign]!.text = text;
       }
       if (mounted) {

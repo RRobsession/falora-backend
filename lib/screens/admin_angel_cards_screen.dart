@@ -172,7 +172,7 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
         count: _slotCount,
       );
       final generated = (data['cards'] as List? ?? [])
-          .map((x) => '$x')
+          .whereType<String>()
           .toList();
       for (var i = 0; i < _cardCtrls.length; i++) {
         _cardCtrls[i].text = i < generated.length ? generated[i] : '';

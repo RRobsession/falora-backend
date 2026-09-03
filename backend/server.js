@@ -905,28 +905,59 @@ app.post(
       let system;
       let user;
       if (type === 'horoscope') {
-        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Tam olarak 12 burç için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. HER BURÇ YORUMU 350-380 KELİME OLMALIDIR; kısa özet yazma. Yorumu akıcı paragraflara böl; duygu, ilişki, gündelik yaşam, içsel farkındalık ve uygulanabilir önerileri burca özgü biçimde işle. Kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Yalnızca JSON döndür: {"signs":{"Koç":"...","Boğa":"...","İkizler":"...","Yengeç":"...","Aslan":"...","Başak":"...","Terazi":"...","Akrep":"...","Yay":"...","Oğlak":"...","Kova":"...","Balık":"..."}}`;
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Tam olarak 12 burç için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. HER BURÇ YORUMU 350-380 KELİME OLMALIDIR; kısa özet yazma. Yorumu akıcı paragraflara böl; duygu, ilişki, gündelik yaşam, içsel farkındalık ve uygulanabilir önerileri burca özgü biçimde işle. Kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Her değer yalnızca tamamlanmış düz metin cümlelerinden oluşmalı ve son cümle nokta, ünlem veya soru işaretiyle bitmelidir. Nesne, tema etiketi, anahtar, markdown veya yer tutucu kullanma. Yalnızca JSON döndür: {"signs":{"Koç":"...","Boğa":"...","İkizler":"...","Yengeç":"...","Aslan":"...","Başak":"...","Terazi":"...","Akrep":"...","Yay":"...","Oğlak":"...","Kova":"...","Balık":"..."}}`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Bugüne özgü farklı temalar ve somut, kişisel hissettiren öneriler kullan.`;
       } else if (type === 'angel_cards') {
-        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART EN AZ 200, EN FAZLA 240 KELİME OLMALIDIR; kısa mesaj veya özet yazma. Her kartta ayrı bir ana tema, duygusal farkındalık, günlük hayata uygulanabilir öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART EN AZ 200, EN FAZLA 240 KELİME OLMALIDIR; kısa mesaj veya özet yazma. Her kartta ayrı bir ana tema, duygusal farkındalık, günlük hayata uygulanabilir öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. cards dizisinin her elemanı SADECE DÜZ METİN STRING olmalıdır; nesne, theme/message anahtarı, etiket, markdown, süslü parantez veya yer tutucu asla kullanma. Her kartın son cümlesini mutlaka nokta, ünlem veya soru işaretiyle tamamla. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Tam olarak ${count} farklı kart üret; her kartın teması ve açılış cümlesi farklı olsun.`;
       } else {
         return res.status(400).json({ error: 'Geçersiz içerik türü' });
       }
-      const completion = await openai.chat.completions.create({
-        model: MODEL,
-        temperature: 1,
-        frequency_penalty: 0.65,
-        presence_penalty: 0.45,
-        max_tokens: type === 'horoscope' ? 12000 : 16000,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
+      const wordCount = (text) => text.trim().split(/\s+/u).filter(Boolean).length;
+      const complete = (text) => /[.!?…]$/u.test(text.trim());
+      const validate = (parsed) => {
+        if (type === 'angel_cards') {
+          if (!Array.isArray(parsed?.cards) || parsed.cards.length !== count) return false;
+          return parsed.cards.every((card) =>
+            typeof card === 'string' &&
+            wordCount(card) >= 200 &&
+            wordCount(card) <= 260 &&
+            complete(card) &&
+            !/[{}]/u.test(card));
+        }
+        const signs = parsed?.signs;
+        const names = ['Koç','Boğa','İkizler','Yengeç','Aslan','Başak','Terazi','Akrep','Yay','Oğlak','Kova','Balık'];
+        return signs && names.every((sign) =>
+          typeof signs[sign] === 'string' &&
+          wordCount(signs[sign]) >= 350 &&
+          wordCount(signs[sign]) <= 410 &&
+          complete(signs[sign]) &&
+          !/[{}]/u.test(signs[sign]));
+      };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const completion = await openai.chat.completions.create({
+          model: MODEL,
+          temperature: attempt === 0 ? 1 : 0.75,
+          frequency_penalty: 0.65,
+          presence_penalty: 0.45,
+          max_tokens: type === 'horoscope' ? 12000 : 16000,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: system },
+            {
+              role: 'user',
+              content: attempt === 0
+                ? user
+                : `${user} Önceki çıktı biçim veya uzunluk kontrolünü geçemedi. Bu kez kelimeleri say, yalnızca string değerler kullan ve bütün son cümleleri tamamla.`,
+            },
+          ],
+        });
+        const parsed = JSON.parse(completion.choices?.[0]?.message?.content || '{}');
+        if (validate(parsed)) return res.json(parsed);
+      }
+      return res.status(502).json({
+        error: 'AI metni eksik veya hatalı biçimde oluşturdu. Lütfen yeniden deneyin.',
       });
-      const parsed = JSON.parse(completion.choices?.[0]?.message?.content || '{}');
-      return res.json(parsed);
     } catch (err) {
       console.error('ADMIN EDITORIAL AI ERROR:', err.message);
       return res.status(500).json({ error: 'AI içeriği oluşturulamadı' });
