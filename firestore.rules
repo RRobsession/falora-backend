@@ -98,14 +98,8 @@ service cloud.firestore {
 
           || request.resource.data.referredBy == resource.data.referredBy)
 
-        && request.resource.data.get('communityRole', 'member')
-          == resource.data.get('communityRole', 'member')
-
-        && request.resource.data.get('communityBanned', false)
-          == resource.data.get('communityBanned', false)
-
-        && request.resource.data.get('communitySuspendedUntil', null)
-          == resource.data.get('communitySuspendedUntil', null);
+        && request.resource.data.get('canPublishBulletin', false)
+          == resource.data.get('canPublishBulletin', false);
 
     }
 
@@ -532,50 +526,27 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Fal Meclisi yazmaları ve premium cevap okumaları yalnızca doğrulamalı
-    // backend tarafından yapılır. Client kendi rolünü/sayacını değiştiremez.
-    match /community_categories/{categoryId} {
-      allow read: if isSignedIn();
-      allow write: if false;
-    }
-
-    match /community_topics/{topicId} {
-      allow read: if isSignedIn()
-        && resource.data.visibility == 'public'
-        && resource.data.moderationStatus == 'published';
+    // Bülten istemcisi API üzerinden çalışır. İçerik yayını, sayaçlar,
+    // moderasyon, oy ve ban işlemleri yalnızca doğrulanmış backend tarafından yapılır.
+    match /bulletin_posts/{postId} {
+      allow read: if isSignedIn() && resource.data.status == 'published';
       allow create, update, delete: if false;
-
-      match /replies/{replyId} {
-        // Cevap payload'u ücretsiz cihaza ulaşmamalı. Backend entitlement
-        // doğrulamasından sonra sayfalı olarak döndürür; admin SDK kuralları aşar.
-        allow read, create, update, delete: if false;
+      match /comments/{commentId} {
+        allow read: if isSignedIn() && resource.data.moderationStatus == 'published';
+        allow create, update, delete: if false;
       }
+      match /likes/{userId} { allow read, write: if false; }
     }
-
-    match /community_entitlements/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow write: if false;
+    match /bulletin_polls/{pollId} {
+      allow read: if isSignedIn() && resource.data.status in ['active', 'closed'];
+      allow create, update, delete: if false;
+      match /votes/{userId} { allow read, write: if false; }
     }
-
-    match /community_subscription_transactions/{transactionId} {
-      allow read, write: if false;
-    }
-
-    match /community_reports/{reportId} {
-      allow read, write: if false;
-    }
-
-    match /community_blocks/{blockId} {
-      allow read, write: if false;
-    }
-
-    match /community_config/{docId} {
-      allow read, write: if false;
-    }
-
-    match /community_moderation_events/{eventId} {
-      allow read, write: if false;
-    }
+    match /bulletin_reports/{id} { allow read, write: if false; }
+    match /bulletin_bans/{id} { allow read, write: if false; }
+    match /bulletin_blocks/{id} { allow read, write: if false; }
+    match /bulletin_config/{id} { allow read, write: if false; }
+    match /bulletin_moderation_events/{id} { allow read, write: if false; }
 
   }
 

@@ -9,8 +9,6 @@ const { getFirestore, initFirebaseAdmin } = require('./fcm');
 const APPLE_PURCHASES_COLLECTION = 'apple_purchases';
 const USERS_COLLECTION = 'users';
 const APPLE_BUNDLE_ID = process.env.APPLE_IAP_BUNDLE_ID || 'com.rrlime.falora';
-const APPLE_COMMUNITY_SUBSCRIPTION_ID =
-  process.env.APPLE_COMMUNITY_SUBSCRIPTION_ID || 'tombik_teyze_plus_monthly';
 
 const APPLE_TOKEN_PRODUCTS = {
   tokens_50: { tokens: 50 },
@@ -245,102 +243,11 @@ async function completeAppleTokenPurchase(auth, body) {
   });
 }
 
-function assertCommunitySubscription(body, verified) {
-  const t = verified.transaction;
-  if (t.transactionId !== body.purchaseId?.trim() ||
-      t.productId !== APPLE_COMMUNITY_SUBSCRIPTION_ID ||
-      t.bundleId !== APPLE_BUNDLE_ID ||
-      t.type !== 'Auto-Renewable Subscription' ||
-      t.environment !== verified.environment) {
-    const error = new Error('Tombik Teyze+ aboneliği uygulamayla eşleşmiyor.');
-    error.statusCode = 409;
-    throw error;
-  }
-}
-
-async function completeCommunitySubscription(auth, body) {
-  if (!isNonEmptyString(body.purchaseId)) {
-    const error = new Error('Apple transactionId gerekli.');
-    error.statusCode = 400;
-    throw error;
-  }
-  const firestore = getFirestoreOrThrow();
-  const verified = await fetchAppleTransaction(body.purchaseId.trim());
-  assertCommunitySubscription(body, verified);
-  const t = verified.transaction;
-  const expiresMillis = Number(t.expiresDate || 0);
-  const active = t.revocationDate == null && expiresMillis > Date.now();
-  const ref = firestore.collection('community_entitlements').doc(auth.uid);
-  const originalId = t.originalTransactionId || t.transactionId;
-  const ownershipRef = firestore.collection('community_subscription_transactions').doc(originalId);
-  const entitlementData = {
-    uid: auth.uid,
-    productId: t.productId,
-    transactionId: t.transactionId,
-    originalTransactionId: originalId,
-    environment: t.environment,
-    status: active ? 'active' : (t.revocationDate ? 'revoked' : 'expired'),
-    expiresAt: expiresMillis ? admin.firestore.Timestamp.fromMillis(expiresMillis) : null,
-    revokedAt: t.revocationDate ? admin.firestore.Timestamp.fromMillis(Number(t.revocationDate)) : null,
-    verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-  await firestore.runTransaction(async (tx) => {
-    const [current, owner] = await Promise.all([tx.get(ref), tx.get(ownershipRef)]);
-    if ((owner.exists && owner.get('uid') !== auth.uid) ||
-        (current.exists && current.get('originalTransactionId') && current.get('originalTransactionId') !== originalId)) {
-      const error = new Error('Bu Apple aboneliği başka bir hesapta kullanılmış.');
-      error.statusCode = 409;
-      throw error;
-    }
-    tx.set(ownershipRef, { uid: auth.uid, originalTransactionId: originalId, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-    tx.set(ref, entitlementData, { merge: true });
-  });
-  return { active, status: active ? 'active' : (t.revocationDate ? 'revoked' : 'expired'), expiresAt: expiresMillis || null };
-}
-
-function decodeJwsPayload(jws) {
-  if (!isNonEmptyString(jws)) return null;
-  try { return JSON.parse(Buffer.from(jws.split('.')[1], 'base64url').toString('utf8')); }
-  catch (_) { return null; }
-}
-
-async function processCommunityAppStoreNotification(signedPayload) {
-  // Bildirim JWS'sine tek başına güvenilmez. Yalnızca transactionId çıkarılır,
-  // gerçek durum Apple Server API'den yeniden alınır.
-  const notification = decodeJwsPayload(signedPayload);
-  const transactionHint = decodeJwsPayload(notification?.data?.signedTransactionInfo);
-  if (!transactionHint?.transactionId) return { accepted: true, updated: false };
-  const verified = await fetchAppleTransaction(String(transactionHint.transactionId));
-  const t = verified.transaction;
-  if (t.bundleId !== APPLE_BUNDLE_ID || t.productId !== APPLE_COMMUNITY_SUBSCRIPTION_ID) {
-    return { accepted: true, updated: false };
-  }
-  const firestore = getFirestoreOrThrow();
-  const matches = await firestore.collection('community_entitlements')
-    .where('originalTransactionId', '==', t.originalTransactionId || t.transactionId).limit(2).get();
-  const expiresMillis = Number(t.expiresDate || 0);
-  const active = t.revocationDate == null && expiresMillis > Date.now();
-  const batch = firestore.batch();
-  for (const doc of matches.docs) batch.set(doc.ref, {
-    transactionId: t.transactionId,
-    status: active ? 'active' : (t.revocationDate ? 'revoked' : 'expired'),
-    expiresAt: expiresMillis ? admin.firestore.Timestamp.fromMillis(expiresMillis) : null,
-    revokedAt: t.revocationDate ? admin.firestore.Timestamp.fromMillis(Number(t.revocationDate)) : null,
-    verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-  await batch.commit();
-  return { accepted: true, updated: matches.size > 0 };
-}
-
 module.exports = {
   APPLE_PURCHASES_COLLECTION,
   completeAppleTokenPurchase,
-  completeCommunitySubscription,
-  APPLE_COMMUNITY_SUBSCRIPTION_ID,
-  processCommunityAppStoreNotification,
   _test: {
     assertAppleTransaction,
-    assertCommunitySubscription,
       decodeAppleSignedTransaction,
   },
 };

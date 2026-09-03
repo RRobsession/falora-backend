@@ -613,8 +613,7 @@ const {
   completeTokenPurchase,
   restorePurchasesForUser,
 } = require('./play_billing');
-const { completeCommunitySubscription, processCommunityAppStoreNotification } = require('./apple_billing');
-const community = require('./community');
+const bulletin = require('./bulletin');
 const { parseServiceAccountJson } = require('./service_account_config');
 
 function resolveDeployGitCommit() {
@@ -1112,125 +1111,37 @@ app.post(
   },
 );
 
-function communityError(res, err) {
-  console.error('COMMUNITY ERROR:', err.message);
+function bulletinError(res, err) {
+  console.error('BULLETIN ERROR:', err.message);
   return res.status(err.statusCode || 500).json({
-    error: err.message || 'Fal Meclisi işlemi tamamlanamadı.',
-    code: err.code || 'community_error',
+    error: err.message || 'Bülten işlemi tamamlanamadı.',
+    code: err.code || 'bulletin_error',
   });
 }
-
-app.get('/community/categories', requireAuth, async (_req, res) => {
-  try { return res.json({ items: await community.categories() }); }
-  catch (err) { return communityError(res, err); }
-});
-app.get('/community/topics', requireAuth, async (req, res) => {
-  try { return res.json(await community.listTopics({ ...(req.query || {}), uid: req.auth.uid })); }
-  catch (err) { return communityError(res, err); }
-});
-app.get('/community/topics/:id', requireAuth, async (req, res) => {
-  try { return res.json(await community.topicDetail(req.auth.uid, req.params.id, req.query.replyCursor)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/community/topics', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try {
-    const result = await community.createTopic(req.auth.uid, req.body || {});
-    try {
-      const { notifyAdminsCommunityEvent } = require('./fcm');
-      await notifyAdminsCommunityEvent({ title: 'Fal Meclisi: yeni konu', body: String(req.body?.title || '').slice(0, 100), topicId: result.id });
-    } catch (e) { console.error('COMMUNITY ADMIN PUSH ERROR:', e.message); }
-    return res.status(201).json(result);
-  } catch (err) { return communityError(res, err); }
-});
-app.post('/community/topics/:id/replies', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try {
-    const result=await community.createReply(req.auth.uid, req.params.id, req.body || {});
-    if(result.topicOwnerId&&result.topicOwnerId!==req.auth.uid){const token=await require('./fcm').getUserFcmToken(result.topicOwnerId);if(token)await sendNotification({token,userId:result.topicOwnerId,title:result.verifiedReader?'Bir yorumcu cevapladı':'Fal Meclisi’nde yeni cevap',body:'Açtığın konuya yeni bir cevap geldi.',data:{type:'community_reply',topicId:req.params.id}});}
-    return res.status(201).json({id:result.id});
-  }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/community/topics/:id/images', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try { return res.status(201).json(await community.attachImages(req.auth.uid, req.params.id, req.body?.images)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/community/topics/:id/vote', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try { return res.json(await community.voteTopic(req.auth.uid, req.params.id, req.body?.value)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/community/reports', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try { return res.status(201).json(await community.report(req.auth.uid, req.body || {})); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/community/blocks', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try { return res.status(201).json(await community.block(req.auth.uid, req.body?.userId, req.body?.topicId)); }
-  catch (err) { return communityError(res, err); }
-});
-app.get('/community/entitlement', requireAuth, async (req, res) => {
-  try { return res.json(await community.entitlement(req.auth.uid, true)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/community/subscription/complete', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try { return res.json(await completeCommunitySubscription(req.auth, req.body || {})); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/billing/apple/notifications', async (req, res) => {
-  try { return res.json(await processCommunityAppStoreNotification(req.body?.signedPayload)); }
-  catch (err) { return communityError(res, err); }
-});
-app.get('/admin/community/overview', requireAuth, requireAdmin, async (_req, res) => {
-  try { return res.json(await community.adminOverview()); }
-  catch (err) { return communityError(res, err); }
-});
-app.get('/admin/community/topics', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json({ items: await community.adminList(community.C.topics, req.query.status, req.query.limit) }); }
-  catch (err) { return communityError(res, err); }
-});
-app.get('/admin/community/topics/:id', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json(await community.adminTopicDetail(req.params.id)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/topics/:id/replies', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.status(201).json(await community.adminReply(req.auth.uid, req.params.id, req.body || {})); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/topics/:id/replies/:replyId/action', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json(await community.adminReplyAction(req.auth.uid, req.params.id, req.params.replyId, req.body?.action)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/topics/:id/replies/:replyId/solution', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json(await community.adminAcceptSolution(req.auth.uid, req.params.id, req.params.replyId)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/test-entitlement', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json(await community.adminGrantTestEntitlement(req.body?.email, req.body?.days, req.auth.uid)); }
-  catch (err) { return communityError(res, err); }
-});
-app.get('/admin/community/reports', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json({ items: await community.adminList(community.C.reports, req.query.status || 'open', req.query.limit) }); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/moderate', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json(await community.adminModerate(req.body || {}, req.auth.uid)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/users/action', requireAuth, requireAdmin, async (req, res) => {
-  try { return res.json(await community.adminUserAction(req.body || {}, req.auth.uid)); }
-  catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/categories/:id', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const id = String(req.params.id || '').trim(); if (!id) throw Object.assign(new Error('Kategori kimliği gerekli.'), { statusCode: 400 });
-    const allowed = ['name','description','icon','enabled','order','retentionMode','retentionDays']; const data = {};
-    for (const key of allowed) if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) data[key] = req.body[key];
-    data.updatedAt = require('firebase-admin').firestore.FieldValue.serverTimestamp();
-    await getFirestore().collection(community.C.categories).doc(id).set(data, { merge: true }); return res.json({ success: true });
-  } catch (err) { return communityError(res, err); }
-});
-app.post('/admin/community/cleanup', requireAuth, requireAdmin, async (_req, res) => {
-  try { return res.json(await community.cleanupExpired()); }
-  catch (err) { return communityError(res, err); }
-});
+app.get('/bulletin/feed',requireAuth,async(req,res)=>{try{return res.json(await bulletin.feed(req.auth.uid,req.query));}catch(e){return bulletinError(res,e);}});
+app.get('/bulletin/posts/:id',requireAuth,async(req,res)=>{try{return res.json(await bulletin.detail(req.auth.uid,req.params.id,req.query.commentCursor));}catch(e){return bulletinError(res,e);}});
+app.post('/bulletin/posts/:id/like',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.json(await bulletin.toggleLike(req.auth.uid,req.params.id));}catch(e){return bulletinError(res,e);}});
+app.post('/bulletin/posts/:id/comments',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.status(201).json(await bulletin.addComment(req.auth.uid,req.params.id,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.post('/bulletin/comments/report',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.status(201).json(await bulletin.reportComment(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.post('/bulletin/blocks',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.status(201).json(await bulletin.block(req.auth.uid,req.body?.userId));}catch(e){return bulletinError(res,e);}});
+app.get('/bulletin/polls/active',requireAuth,async(req,res)=>{try{return res.json(await bulletin.activePoll(req.auth.uid));}catch(e){return bulletinError(res,e);}});
+app.post('/bulletin/polls/:id/vote',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.json(await bulletin.votePoll(req.auth.uid,req.params.id,req.body?.optionId));}catch(e){return bulletinError(res,e);}});
+app.get('/admin/bulletin/overview',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json(await bulletin.adminOverview());}catch(e){return bulletinError(res,e);}});
+app.get('/admin/bulletin/posts',requireAuth,requireAdmin,async(req,res)=>{try{return res.json({items:await bulletin.adminPosts(req.query)});}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/posts',requireAuth,requireAdmin,async(req,res)=>{try{return res.status(201).json(await bulletin.adminSavePost(req.auth.uid,null,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/posts/:id',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminSavePost(req.auth.uid,req.params.id,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/posts/:id/image',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminUploadImage(req.params.id,req.body?.image));}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/posts/:id/action',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminPostAction(req.auth.uid,req.params.id,req.body?.action));}catch(e){return bulletinError(res,e);}});
+app.get('/admin/bulletin/polls',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json({items:await bulletin.adminPolls()});}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/polls',requireAuth,requireAdmin,async(req,res)=>{try{return res.status(201).json(await bulletin.adminCreatePoll(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/polls/:id/action',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminPollAction(req.params.id,req.body?.action,req.body?.optionId));}catch(e){return bulletinError(res,e);}});
+app.get('/admin/bulletin/reports',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json({items:await bulletin.adminReports()});}catch(e){return bulletinError(res,e);}});
+app.get('/admin/bulletin/comments',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json({items:await bulletin.adminComments()});}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/comments/action',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminCommentAction(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/reports/action',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminReportAction(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.get('/admin/bulletin/bans',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json({items:await bulletin.adminBans()});}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/bans/:uid/unban',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminUnban(req.params.uid));}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/cleanup',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json(await bulletin.cleanupExpired());}catch(e){return bulletinError(res,e);}});
 
 app.post(
   '/referrals/claim',
@@ -1610,7 +1521,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('Firebase Admin aktif (auth + FCM + Firestore).');
     startFortuneRetentionCleanupLoop();
     console.log(`Fal kayit saklama suresi: ${RETENTION_DAYS} gun.`);
-    community.startCleanupLoop();
+    bulletin.startCleanupLoop();
   } else {
     console.error(
       'Firebase Admin kapalı — Railway Variables içine FIREBASE_SERVICE_ACCOUNT_JSON ekleyin.',

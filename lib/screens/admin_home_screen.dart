@@ -9,7 +9,7 @@ import 'package:falora/screens/admin_manual_reader_status_screen.dart';
 import 'package:falora/screens/admin_problem_reports_screen.dart';
 import 'package:falora/screens/admin_statistics_screen.dart';
 import 'package:falora/screens/admin_token_sales_screen.dart';
-import 'package:falora/community/admin_community_screen.dart';
+import 'package:falora/bulletin/admin_bulletin_screen.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/problem_report_service.dart';
@@ -227,13 +227,25 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children:[Expanded(child:Text(
-                          'Uygulama Yönetimi',
-                          style: FaloraTypography.titleLarge.copyWith(
-                            fontSize: wide ? 22 : 20,
-                            color: faloraInkHeading,
-                          ),
-                        )),FilledButton.icon(onPressed:()=>_push(const AdminCommunityScreen()),icon:const Icon(Icons.forum_outlined),label:const Text('Fal Meclisi'))]),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Uygulama Yönetimi',
+                                style: FaloraTypography.titleLarge.copyWith(
+                                  fontSize: wide ? 22 : 20,
+                                  color: faloraInkHeading,
+                                ),
+                              ),
+                            ),
+                            FilledButton.icon(
+                              onPressed: () =>
+                                  _push(const AdminBulletinScreen()),
+                              icon: const Icon(Icons.auto_stories_outlined),
+                              label: const Text('Bülten'),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           'Bir alana dokunarak devam et',

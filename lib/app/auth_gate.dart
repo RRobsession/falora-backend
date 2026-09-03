@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:falora/auth/auth_service.dart';
 import 'package:falora/config/admin_config.dart';
-import 'package:falora/community/community_screens.dart';
+import 'package:falora/bulletin/bulletin_screens.dart';
 import 'package:falora/main.dart';
 import 'package:falora/models/app_user.dart';
 import 'package:falora/screens/admin_home_screen.dart';
@@ -27,7 +27,8 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
-  late final AuthService _authService = widget.authService ?? createAuthService();
+  late final AuthService _authService =
+      widget.authService ?? createAuthService();
   AppUser? _user;
   bool _firebaseEmailVerified = false;
   bool _loading = true;
@@ -121,12 +122,12 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     } catch (_) {}
 
     try {
-      final notice =
-          await ReferralService.instance.claimPendingReferralIfNeeded(userId);
+      final notice = await ReferralService.instance
+          .claimPendingReferralIfNeeded(userId);
       if (!mounted || notice == null || notice.isEmpty) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(notice)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(notice)));
     } catch (_) {
       debugPrint('REFERRAL_IGNORED_REGISTRATION_CONTINUES');
     }
@@ -227,7 +228,8 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       return IosProductGatewayScreen(
         onOpenFortune: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => FaloraShell(user: verifiedUser, onLogout: _onLogout),
+            builder: (_) =>
+                FaloraShell(user: verifiedUser, onLogout: _onLogout),
           ),
         ),
       );

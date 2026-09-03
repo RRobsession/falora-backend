@@ -318,15 +318,6 @@ async function notifyAdminsNewProblemReport({ reportId, displayName }) {
   });
 }
 
-async function notifyAdminsCommunityEvent({ title, body, topicId }) {
-  return notifyAdmins({
-    title,
-    body,
-    type: 'admin_community',
-    data: { topicId: String(topicId || '') },
-  });
-}
-
 async function notifyAdminsForProblemReport(reportId) {
   const ref = firestore.collection(PROBLEM_REPORTS).doc(reportId);
   const claimed = await firestore.runTransaction(async (tx) => {
@@ -680,7 +671,6 @@ module.exports = {
   notifyAdminsNewTokenPurchase,
   notifyAdminsNewProblemReport,
   notifyAdminsForProblemReport,
-  notifyAdminsCommunityEvent,
   scheduleFortuneNotify,
   restorePendingNotificationSchedules,
   READY_MESSAGES,
