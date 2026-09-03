@@ -107,6 +107,7 @@ class _CommunityHomeState extends State<CommunityHomeScreen> {
   List<CommunityCategory> cats = [];
   List<CommunityTopic> topics = [];
   String? selected, cursor;
+  String sort = 'active', status = 'all';
   bool loading = true, more = false;
   @override
   void initState() {
@@ -133,6 +134,8 @@ class _CommunityHomeState extends State<CommunityHomeScreen> {
       final p = await CommunityService.instance.topics(
         categoryId: selected,
         search: _search.text.trim(),
+        status: status,
+        sort: sort,
         cursor: reset ? null : cursor,
       );
       if (!mounted) return;
@@ -226,38 +229,18 @@ class _CommunityHomeState extends State<CommunityHomeScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Kategoriler',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 9),
-            SizedBox(
-              height: 42,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  ChoiceChip(
-                    label: const Text('Tümü'),
-                    selected: selected == null,
-                    onSelected: (_) {
-                      selected = null;
-                      _load(reset: true);
-                    },
-                  ),
-                  for (final x in cats)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ChoiceChip(
-                        label: Text(x.name),
-                        selected: selected == x.id,
-                        onSelected: (_) {
-                          selected = x.id;
-                          _load(reset: true);
-                        },
-                      ),
-                    ),
-                ],
-              ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: faloraParchmentDecoration(),
+              child: Row(children: [
+                const Icon(Icons.tune, color: faloraBronzeDark),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,children:[
+                  const Text('Akıllı filtreler',style:TextStyle(fontWeight:FontWeight.w800)),
+                  Text('${_categoryLabel()} • ${status == 'resolved' ? 'Çözülenler' : status == 'open' ? 'Cevap bekleyenler' : 'Tüm konular'} • ${sort == 'newest' ? 'En yeni' : sort == 'popular' ? 'En beğenilen' : 'Son hareket'}',maxLines:2,overflow:TextOverflow.ellipsis),
+                ])),
+                TextButton(onPressed:_showFilters,child:const Text('Değiştir')),
+              ]),
             ),
             const SizedBox(height: 14),
             if (loading)
@@ -323,6 +306,20 @@ class _CommunityHomeState extends State<CommunityHomeScreen> {
       ),
     );
     if (changed == true) _load(reset: true);
+  }
+
+  String _categoryLabel(){if(selected==null)return 'Tüm kategoriler';for(final x in cats){if(x.id==selected)return x.name;}return 'Kategori';}
+
+  Future<void> _showFilters() async {
+    var nextCategory=selected;var nextSort=sort;var nextStatus=status;
+    final apply=await showModalBottomSheet<bool>(context:context,isScrollControlled:true,builder:(sheetContext)=>StatefulBuilder(builder:(context,setSheet)=>SafeArea(child:Padding(padding:EdgeInsets.fromLTRB(18,18,18,18+MediaQuery.viewInsetsOf(context).bottom),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Text('Konuları filtrele',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.w800)),const SizedBox(height:16),
+      DropdownButtonFormField<String?>(value:nextCategory,decoration:const InputDecoration(labelText:'Kategori',prefixIcon:Icon(Icons.category_outlined)),items:[const DropdownMenuItem<String?>(value:null,child:Text('Tüm kategoriler')),for(final x in cats)DropdownMenuItem<String?>(value:x.id,child:Text(x.name))],onChanged:(v)=>setSheet(()=>nextCategory=v)),const SizedBox(height:12),
+      DropdownButtonFormField<String>(value:nextSort,decoration:const InputDecoration(labelText:'Sıralama',prefixIcon:Icon(Icons.sort)),items:const[DropdownMenuItem(value:'active',child:Text('Son hareket')),DropdownMenuItem(value:'newest',child:Text('En yeni')),DropdownMenuItem(value:'popular',child:Text('En beğenilen'))],onChanged:(v){if(v!=null)setSheet(()=>nextSort=v);}),const SizedBox(height:12),
+      DropdownButtonFormField<String>(value:nextStatus,decoration:const InputDecoration(labelText:'Durum',prefixIcon:Icon(Icons.task_alt)),items:const[DropdownMenuItem(value:'all',child:Text('Tüm konular')),DropdownMenuItem(value:'open',child:Text('Cevap bekleyenler')),DropdownMenuItem(value:'resolved',child:Text('Çözüme kavuşmuş'))],onChanged:(v){if(v!=null)setSheet(()=>nextStatus=v);}),const SizedBox(height:18),
+      FilledButton.icon(onPressed:()=>Navigator.pop(sheetContext,true),icon:const Icon(Icons.check),label:const Text('Filtreleri uygula')),
+    ])))));
+    if(apply==true&&mounted){setState((){selected=nextCategory;sort=nextSort;status=nextStatus;});_load(reset:true);}
   }
 }
 
@@ -475,6 +472,8 @@ class CommunityTopicScreen extends StatefulWidget {
 class _TopicState extends State<CommunityTopicScreen> {
   TopicDetail? d;
   Object? error;
+  int? currentVote, currentLikes, currentDislikes;
+  bool voting = false;
   @override
   void initState() {
     super.initState();
@@ -484,7 +483,7 @@ class _TopicState extends State<CommunityTopicScreen> {
   Future<void> _load() async {
     try {
       final x = await CommunityService.instance.detail(widget.id);
-      if (mounted) setState(() => d = x);
+      if (mounted) setState(() {d = x;currentVote=x.topic.viewerVote;currentLikes=x.topic.likeCount;currentDislikes=x.topic.dislikeCount;});
     } catch (e) {
       if (mounted) setState(() => error = e);
     }
@@ -538,7 +537,7 @@ class _TopicState extends State<CommunityTopicScreen> {
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 6, children: [
                   _ForumBadge(text: 'Seviye ${d!.topic.authorMemberLevel}', icon: Icons.workspace_premium_outlined),
-                  _ForumBadge(text: d!.topic.authorMemberMonths == 0 ? 'Yeni üye' : '${d!.topic.authorMemberMonths} aydır burada', icon: Icons.calendar_month_outlined),
+                  _ForumBadge(text: d!.topic.authorJoinedAt == null ? 'Kayıt tarihi bilinmiyor' : '${DateFormat('dd.MM.yyyy').format(d!.topic.authorJoinedAt!)} tarihinde katıldı', icon: Icons.calendar_month_outlined),
                   _ForumBadge(text: '${d!.topic.viewCount} görüntülenme', icon: Icons.visibility_outlined),
                   _ForumBadge(text: '${d!.topic.replyCount} yorum', icon: Icons.chat_bubble_outline),
                 ]),
@@ -546,9 +545,9 @@ class _TopicState extends State<CommunityTopicScreen> {
                 Text(d!.topic.body, style: const TextStyle(height: 1.5)),
                 const SizedBox(height: 12),
                 Row(children: [
-                  OutlinedButton.icon(onPressed:()=>_vote(d!.topic.viewerVote==1?0:1),icon:Icon(d!.topic.viewerVote==1?Icons.thumb_up:Icons.thumb_up_outlined),label:Text('${d!.topic.likeCount}')),
+                  OutlinedButton.icon(onPressed:()=>_vote(currentVote==1?0:1),icon:Icon(currentVote==1?Icons.thumb_up:Icons.thumb_up_outlined),label:Text('${currentLikes ?? d!.topic.likeCount}')),
                   const Spacer(),
-                  OutlinedButton.icon(onPressed:()=>_vote(d!.topic.viewerVote==-1?0:-1),icon:Icon(d!.topic.viewerVote==-1?Icons.thumb_down:Icons.thumb_down_outlined),label:Text('${d!.topic.dislikeCount}')),
+                  OutlinedButton.icon(onPressed:()=>_vote(currentVote==-1?0:-1),icon:Icon(currentVote==-1?Icons.thumb_down:Icons.thumb_down_outlined),label:Text('${currentDislikes ?? d!.topic.dislikeCount}')),
                 ]),
                 const Divider(height: 34),
                 if (d!.repliesLocked)
@@ -600,7 +599,7 @@ class _TopicState extends State<CommunityTopicScreen> {
                             ),
                             Text(r.body),
                             const SizedBox(height: 7),
-                            Text('Seviye ${r.authorMemberLevel} • ${r.authorMemberMonths == 0 ? 'Yeni üye' : '${r.authorMemberMonths} aydır burada'}',style:Theme.of(context).textTheme.bodySmall),
+                            Text('Seviye ${r.authorMemberLevel} • ${r.authorJoinedAt == null ? 'Kayıt tarihi bilinmiyor' : '${DateFormat('dd.MM.yyyy').format(r.authorJoinedAt!)} tarihinde katıldı'}',style:Theme.of(context).textTheme.bodySmall),
                           ],
                         ),
                       ),
@@ -636,15 +635,18 @@ class _TopicState extends State<CommunityTopicScreen> {
   }
 
   Future<void> _vote(int value) async {
+    if(voting)return;final oldVote=currentVote??0;final oldLikes=currentLikes??d!.topic.likeCount;final oldDislikes=currentDislikes??d!.topic.dislikeCount;
+    setState((){voting=true;currentVote=value;currentLikes=oldLikes+(value==1?1:0)-(oldVote==1?1:0);currentDislikes=oldDislikes+(value==-1?1:0)-(oldVote==-1?1:0);});
     try {
-      await CommunityService.instance.vote(widget.id, value);
-      await _load();
+      final result=await CommunityService.instance.vote(widget.id, value);
+      if(mounted)setState((){currentVote=(result['viewerVote']as num?)?.toInt()??value;currentLikes=(result['likeCount']as num?)?.toInt()??currentLikes;currentDislikes=(result['dislikeCount']as num?)?.toInt()??currentDislikes;});
     } catch (e) {
+      if(mounted)setState((){currentVote=oldVote;currentLikes=oldLikes;currentDislikes=oldDislikes;});
       if (mounted)
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$e')));
-    }
+    } finally {if(mounted)setState(()=>voting=false);}
   }
 
   Future<void> _report(String reason) async {

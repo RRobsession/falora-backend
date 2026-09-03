@@ -11,13 +11,14 @@ class CommunityTopic {
   const CommunityTopic({required this.id, required this.title, required this.body,
     required this.categoryName, required this.authorDisplayName, required this.createdAt,
     this.replyCount = 0, this.viewCount = 0, this.likeCount = 0, this.dislikeCount = 0,
-    this.viewerVote = 0, this.authorMemberMonths = 0, this.authorMemberLevel = 1,
+    this.viewerVote = 0, this.authorJoinedAt, this.authorMemberLevel = 1,
     this.resolved = false, this.acceptedAnswerId,
     this.imageUrls = const []});
   final String id, title, body, categoryName, authorDisplayName;
   final DateTime createdAt;
   final int replyCount, viewCount, likeCount, dislikeCount, viewerVote;
-  final int authorMemberMonths, authorMemberLevel;
+  final DateTime? authorJoinedAt;
+  final int authorMemberLevel;
   final bool resolved;
   final String? acceptedAnswerId;
   final List<String> imageUrls;
@@ -31,7 +32,7 @@ class CommunityTopic {
     likeCount: (json['likeCount'] as num?)?.toInt() ?? 0,
     dislikeCount: (json['dislikeCount'] as num?)?.toInt() ?? 0,
     viewerVote: (json['viewerVote'] as num?)?.toInt() ?? 0,
-    authorMemberMonths: (json['authorMemberMonths'] as num?)?.toInt() ?? 0,
+    authorJoinedAt: (json['authorJoinedAt'] as num?) == null ? null : DateTime.fromMillisecondsSinceEpoch((json['authorJoinedAt'] as num).toInt()),
     authorMemberLevel: (json['authorMemberLevel'] as num?)?.toInt() ?? 1,
     resolved: json['resolved'] == true, acceptedAnswerId: json['acceptedAnswerId']?.toString(),
     imageUrls: ((json['imageUrls'] as List?) ?? []).map((x) => x.toString()).toList(),
@@ -40,18 +41,19 @@ class CommunityTopic {
 
 class CommunityReply {
   const CommunityReply({required this.id, required this.authorDisplayName, required this.body,
-    required this.createdAt, this.authorRole = 'member', this.authorMemberMonths = 0,
+    required this.createdAt, this.authorRole = 'member', this.authorJoinedAt,
     this.authorMemberLevel = 1, this.isAcceptedSolution = false});
   final String id, authorDisplayName, body, authorRole;
   final DateTime createdAt;
-  final int authorMemberMonths, authorMemberLevel;
+  final DateTime? authorJoinedAt;
+  final int authorMemberLevel;
   final bool isAcceptedSolution;
   factory CommunityReply.fromJson(Map<String, dynamic> json) => CommunityReply(
     id: '${json['id']}', authorDisplayName: '${json['authorDisplayName'] ?? 'Meclis Üyesi'}',
     body: '${json['body'] ?? ''}',
     createdAt: DateTime.fromMillisecondsSinceEpoch((json['createdAt'] as num?)?.toInt() ?? 0),
     authorRole: '${json['authorRole'] ?? 'member'}',
-    authorMemberMonths: (json['authorMemberMonths'] as num?)?.toInt() ?? 0,
+    authorJoinedAt: (json['authorJoinedAt'] as num?) == null ? null : DateTime.fromMillisecondsSinceEpoch((json['authorJoinedAt'] as num).toInt()),
     authorMemberLevel: (json['authorMemberLevel'] as num?)?.toInt() ?? 1,
     isAcceptedSolution: json['isAcceptedSolution'] == true,
   );
