@@ -76,6 +76,8 @@ class BulletinService {
   );
   Future<void> block(String userId) =>
       call('POST', '/bulletin/blocks', body: {'userId': userId});
+  Future<void> submitContentRequest(String text) =>
+      call('POST', '/bulletin/content-requests', body: {'text': text});
   Future<BulletinPoll?> poll() async {
     final d = await call('GET', '/bulletin/polls/active');
     return d['poll'] == null

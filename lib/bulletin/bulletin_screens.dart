@@ -7,6 +7,61 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
+Future<void> _showBulletinRequestDialog(BuildContext context) async {
+  final controller = TextEditingController();
+  final send = await showDialog<bool>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: const Text('Bülten için konu öner'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Öğrenmek istediğin, ayrıntılı incelenmesini beklediğin veya yorumcularımıza iletmek istediğin konuyu yaz. Benzer talepler yoğunlaşırsa konu Bülten anketine eklenebilir.',
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 1200,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: 'Konu veya önerin',
+              alignLabelWithHint: true,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialog, false),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialog, true),
+          child: const Text('Gönder'),
+        ),
+      ],
+    ),
+  );
+  final text = controller.text.trim();
+  controller.dispose();
+  if (send != true || text.length < 10 || !context.mounted) return;
+  try {
+    await BulletinService.instance.submitContentRequest(text);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Talebin Bülten ekibine ulaştı.')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+}
+
 class IosProductGatewayScreen extends StatelessWidget {
   const IosProductGatewayScreen({super.key, required this.onOpenFortune});
   final VoidCallback onOpenFortune;
@@ -169,6 +224,13 @@ class _BulletinHomeState extends State<BulletinHomeScreen> {
           ),
         ],
       ),
+      actions: [
+        TextButton.icon(
+          onPressed: () => _showBulletinRequestDialog(c),
+          icon: const Icon(Icons.lightbulb_outline),
+          label: const Text('Talep gönder'),
+        ),
+      ],
     ),
     body: FaloraBackground(
       child: RefreshIndicator(
@@ -796,7 +858,16 @@ class _BulletinDetailState extends State<BulletinDetailScreen> {
 
   @override
   Widget build(BuildContext c) => Scaffold(
-    appBar: AppBar(title: const Text('Bülten')),
+    appBar: AppBar(
+      title: const Text('Bülten'),
+      actions: [
+        TextButton.icon(
+          onPressed: () => _showBulletinRequestDialog(c),
+          icon: const Icon(Icons.lightbulb_outline),
+          label: const Text('Talep gönder'),
+        ),
+      ],
+    ),
     body: FaloraBackground(
       child: loading
           ? const Center(child: CircularProgressIndicator())

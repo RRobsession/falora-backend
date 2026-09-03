@@ -11,6 +11,7 @@ class ReadingRecordCard extends StatefulWidget {
     required this.title,
     required this.subtitle,
     this.onTap,
+    this.onDelete,
   });
 
   final FortuneReading reading;
@@ -18,6 +19,7 @@ class ReadingRecordCard extends StatefulWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 
   @override
   State<ReadingRecordCard> createState() => _ReadingRecordCardState();
@@ -37,13 +39,29 @@ class _ReadingRecordCardState extends State<ReadingRecordCard> {
 
   @override
   Widget build(BuildContext context) {
-    return FaloraRecordCard(
-      leading: widget.leading,
-      title: widget.title,
-      subtitle: widget.subtitle,
-      status: _status,
-      statusLabel: _statusLabel,
-      onTap: widget.onTap,
+    return Stack(
+      children: [
+        FaloraRecordCard(
+          leading: widget.leading,
+          title: widget.title,
+          subtitle: widget.subtitle,
+          status: _status,
+          statusLabel: _statusLabel,
+          onTap: widget.onTap,
+        ),
+        if (widget.onDelete != null)
+          Positioned(
+            top: 2,
+            right: 2,
+            child: PopupMenuButton<String>(
+              tooltip: 'Kayıt işlemleri',
+              onSelected: (_) => widget.onDelete!(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'delete', child: Text('Kaydı sil')),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

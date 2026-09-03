@@ -9,6 +9,8 @@ import 'package:falora/models/fortune_models.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/ads/ad_consent_service.dart';
 import 'package:falora/services/user_profile_service.dart';
+import 'package:falora/services/marital_status_preference.dart';
+import 'package:falora/config/category_fortune_config.dart';
 import 'package:falora/services/privacy_policy_service.dart';
 import 'package:falora/services/terms_of_service_service.dart';
 import 'package:falora/services/rewarded_ad_service.dart';
@@ -350,6 +352,118 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await UserProfileService.instance.saveZodiac(liveUser.userId, selected);
   }
 
+  Future<void> _editMaritalStatus(AppUser liveUser) async {
+    var selected =
+        liveUser.maritalStatus ?? MaritalStatusPreference.instance.current;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Medeni durum'),
+          content: DropdownButtonFormField<String>(
+            initialValue: selected,
+            items: maritalStatusOptions
+                .map((x) => DropdownMenuItem(value: x, child: Text(x)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) setLocal(() => selected = value);
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) {
+      await UserProfileService.instance.saveMaritalStatus(
+        liveUser.userId,
+        selected,
+      );
+      await MaritalStatusPreference.instance.save(selected);
+    }
+  }
+
+  Future<void> _openProfileEditor(AppUser liveUser) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text(
+                'Profili Düzenle',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.alternate_email_rounded),
+              title: const Text('E-posta'),
+              subtitle: SelectableText(liveUser.email),
+            ),
+            ListTile(
+              leading: const Icon(Icons.badge_outlined),
+              title: const Text('İsim'),
+              subtitle: Text(liveUser.effectiveDisplayName),
+              onTap: () {
+                Navigator.pop(sheet);
+                _editName(liveUser);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cake_outlined),
+              title: const Text('Doğum tarihi ve yaş'),
+              subtitle: Text(
+                liveUser.computedAge == null
+                    ? 'Belirtilmedi'
+                    : '${liveUser.computedAge} yaş',
+              ),
+              onTap: () {
+                Navigator.pop(sheet);
+                _editBirthDate(liveUser);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.auto_awesome_outlined),
+              title: const Text('Burç'),
+              subtitle: Text(liveUser.zodiac ?? 'Belirtilmedi'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _editZodiac(liveUser);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.favorite_border),
+              title: const Text('Medeni durum'),
+              subtitle: Text(liveUser.maritalStatus ?? 'Belirtilmedi'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _editMaritalStatus(liveUser);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Profil fotoğrafı'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _showAvatarOptions(liveUser);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showAvatarOptions(AppUser liveUser) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -457,7 +571,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _ProfileUserCard(
                             initial: _initial,
                             name: liveUser.effectiveDisplayName,
-                            email: liveUser.email,
                             age: liveUser.computedAge,
                             zodiac: liveUser.zodiac,
                             fallbackTokens: liveUser.tokens,
@@ -480,103 +593,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  _ProfileMenuSection(
+                  const Text(
+                    'Hızlı İşlemler',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: faloraInk,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: MediaQuery.sizeOf(context).width >= 700
+                        ? 4
+                        : 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.65,
                     children: [
-                      _ProfileMenuTile(
-                        icon: Icons.badge_outlined,
-                        iconColor: faloraBronze,
-                        title: 'İsim',
-                        subtitle: 'Görünen adını düzenle',
-                        onTap: () => _editName(
+                      _ProfileActionCard(
+                        icon: Icons.manage_accounts_outlined,
+                        title: 'Profili Düzenle',
+                        detail: 'Kişisel bilgilerin',
+                        onTap: () => _openProfileEditor(
                           TokenService.instance.liveUser.value ?? widget.user,
                         ),
                       ),
-                      _ProfileMenuTile(
-                        icon: Icons.cake_outlined,
-                        iconColor: faloraGoldDark,
-                        title: 'Doğum Tarihi',
-                        subtitle: 'Yaş otomatik hesaplanır',
-                        onTap: () => _editBirthDate(
-                          TokenService.instance.liveUser.value ?? widget.user,
-                        ),
-                      ),
-                      _ProfileMenuTile(
-                        icon: Icons.auto_awesome_outlined,
-                        iconColor: faloraBronzeDark,
-                        title: 'Burç',
-                        subtitle: 'Burcunu güncelle',
-                        onTap: () => _editZodiac(
-                          TokenService.instance.liveUser.value ?? widget.user,
-                        ),
-                      ),
-                      _ProfileMenuTile(
+                      _ProfileActionCard(
                         icon: Icons.storefront_rounded,
-                        iconColor: faloraBronzeDark,
                         title: 'Jeton Mağazası',
-                        subtitle: 'Premium jeton paketleri',
+                        detail: 'Paketler ve haklar',
                         onTap: () => _openShop(context),
                       ),
-                      _ProfileMenuTile(
+                      _ProfileActionCard(
                         icon: Icons.person_add_alt_1_rounded,
-                        iconColor: faloraBronze,
                         title: 'Arkadaşını Davet Et',
-                        subtitle: 'Kod paylaş veya kod gir, jeton kazan',
+                        detail: 'Kod paylaş, jeton kazan',
                         onTap: () => _openInvite(context),
                       ),
-                      _ProfileMenuTile(
-                        icon: Icons.notifications_outlined,
-                        iconColor: faloraGoldDark,
-                        title: 'Bildirimler',
-                        subtitle: 'Fal hazır bildirimleri',
-                        onTap: _openNotificationSettings,
-                      ),
-                      _ProfileMenuTile(
-                        icon: Icons.help_outline_rounded,
-                        iconColor: faloraBronze,
-                        title: 'Sıkça Sorulan Sorular',
-                        subtitle: 'SSS ve yardım',
-                        onTap: _openFaq,
-                      ),
-                      _ProfileMenuTile(
-                        icon: Icons.privacy_tip_outlined,
-                        iconColor: faloraInkSoft,
-                        title: 'Gizlilik Politikası',
-                        subtitle: 'Veri kullanımı ve gizlilik',
-                        onTap: _openPrivacyPolicy,
-                      ),
-                      _ProfileMenuTile(
-                        icon: Icons.tune_rounded,
-                        iconColor: faloraInkSoft,
-                        title: 'Gizlilik Tercihleri',
-                        subtitle: 'Veri ve hesap taleplerini yönet',
-                        onTap: _openPrivacyChoices,
-                      ),
-                      _ProfileMenuTile(
-                        icon: Icons.description_outlined,
-                        iconColor: faloraInkSoft,
-                        title: 'Kullanıcı Sözleşmesi',
-                        subtitle: 'Hizmet şartları ve feragatler',
-                        onTap: _openTermsOfService,
-                      ),
-                      if (AdConsentService.privacyOptionsRequired)
-                        _ProfileMenuTile(
-                          icon: Icons.ads_click_outlined,
-                          iconColor: faloraInkSoft,
-                          title: 'Reklam Gizlilik Tercihleri',
-                          subtitle: 'Reklam onaylarını görüntüle ve değiştir',
-                          onTap: _openAdPrivacyOptions,
-                        ),
-                      _ProfileMenuTile(
-                        icon: Icons.report_problem_outlined,
-                        iconColor: faloraGoldDark,
-                        title: 'Sorun Bildir',
-                        subtitle: 'Yaşadığın sorunu bize ilet',
+                      _ProfileActionCard(
+                        icon: Icons.support_agent_rounded,
+                        title: 'Destek',
+                        detail: 'Sorun bildir ve yanıtları gör',
                         onTap: () => _openReportProblem(context),
                       ),
-                      _ProfileLogoutTile(
-                        onPressed: _deletingAccount ? null : _confirmLogout,
-                      ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Ayarlar',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: faloraInk,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _ProfileSettingsPanel(
+                    onNotifications: _openNotificationSettings,
+                    onFaq: _openFaq,
+                    onPrivacy: _openPrivacyPolicy,
+                    onPrivacyChoices: _openPrivacyChoices,
+                    onTerms: _openTermsOfService,
+                    onAdPrivacy: AdConsentService.privacyOptionsRequired
+                        ? _openAdPrivacyOptions
+                        : null,
+                    onLogout: _deletingAccount ? null : _confirmLogout,
                   ),
                   const SizedBox(height: 12),
                   _ProfileDeleteSection(
@@ -616,7 +699,6 @@ class _ProfileUserCard extends StatelessWidget {
   const _ProfileUserCard({
     required this.initial,
     required this.name,
-    required this.email,
     required this.age,
     required this.zodiac,
     required this.fallbackTokens,
@@ -629,7 +711,6 @@ class _ProfileUserCard extends StatelessWidget {
 
   final String initial;
   final String name;
-  final String email;
   final int? age;
   final String? zodiac;
   final int fallbackTokens;
@@ -797,17 +878,6 @@ class _ProfileUserCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 1),
-                      Text(
-                        email,
-                        style: FaloraTypography.bodyMedium.copyWith(
-                          color: faloraInkSoft,
-                          fontSize: 11,
-                          height: 1.15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                       if ((age != null && age! > 0) ||
                           (zodiac != null && zodiac!.isNotEmpty)) ...[
                         const SizedBox(height: 5),
@@ -928,238 +998,153 @@ class _ProfileMiniBadge extends StatelessWidget {
   }
 }
 
-class _ProfileInfoBadges extends StatelessWidget {
-  const _ProfileInfoBadges({required this.age, required this.zodiac});
-
-  final int? age;
-  final String? zodiac;
-
-  @override
-  Widget build(BuildContext context) {
-    final chips = <Widget>[];
-    if (age != null && age! > 0) {
-      chips.add(_ProfileInfoChip(label: 'Yaş', value: '$age'));
-    }
-    if (zodiac != null && zodiac!.isNotEmpty) {
-      if (chips.isNotEmpty) chips.add(const SizedBox(width: 8));
-      chips.add(_ProfileInfoChip(label: 'Burç', value: zodiac!));
-    }
-    if (chips.isEmpty) return const SizedBox.shrink();
-
-    return Row(children: chips);
-  }
-}
-
-class _ProfileInfoChip extends StatelessWidget {
-  const _ProfileInfoChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: faloraParchmentRaised,
-          borderRadius: BorderRadius.circular(FaloraRadius.md),
-          border: Border.all(
-            color: faloraGoldDark.withValues(alpha: 0.55),
-            width: 1,
-          ),
-        ),
-        child: RichText(
-          text: TextSpan(
-            style: FaloraTypography.labelSmall.copyWith(
-              color: faloraInkSoft,
-              fontSize: 11,
-              height: 1.2,
-            ),
-            children: [
-              TextSpan(
-                text: '$label: ',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              TextSpan(
-                text: value,
-                style: const TextStyle(
-                  color: faloraInk,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileMenuSection extends StatelessWidget {
-  const _ProfileMenuSection({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: faloraParchmentDecoration(
-        radius: FaloraRadius.lg,
-        raised: true,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
-    );
-  }
-}
-
-class _ProfileMenuTile extends StatelessWidget {
-  const _ProfileMenuTile({
+class _ProfileActionCard extends StatelessWidget {
+  const _ProfileActionCard({
     required this.icon,
-    required this.iconColor,
     required this.title,
-    required this.subtitle,
+    required this.detail,
     required this.onTap,
-    this.showDivider = true,
   });
-
   final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-  final bool showDivider;
+  final String title, detail;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
+  Widget build(BuildContext context) => Material(
+    color: faloraParchmentCard,
+    borderRadius: BorderRadius.circular(18),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: faloraBronze.withValues(alpha: .32)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: faloraBronze.withValues(alpha: .12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: faloraBronzeDark),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: iconColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: iconColor.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Icon(icon, color: iconColor, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: FaloraTypography.titleMedium.copyWith(
-                            fontSize: 14,
-                            color: faloraInk,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          subtitle,
-                          style: FaloraTypography.labelSmall.copyWith(
-                            color: faloraInkSoft,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: faloraInk,
                     ),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: faloraInkMuted.withValues(alpha: 0.75),
-                    size: 20,
+                  const SizedBox(height: 3),
+                  Text(
+                    detail,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: faloraTextSecondary,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
-        if (showDivider)
-          Divider(
-            height: 1,
-            indent: 62,
-            endIndent: 14,
-            color: faloraBronze.withValues(alpha: 0.12),
-          ),
-      ],
-    );
-  }
+      ),
+    ),
+  );
 }
 
-class _ProfileLogoutTile extends StatelessWidget {
-  const _ProfileLogoutTile({required this.onPressed});
-
-  final VoidCallback? onPressed;
+class _ProfileSettingsPanel extends StatelessWidget {
+  const _ProfileSettingsPanel({
+    required this.onNotifications,
+    required this.onFaq,
+    required this.onPrivacy,
+    required this.onPrivacyChoices,
+    required this.onTerms,
+    required this.onLogout,
+    this.onAdPrivacy,
+  });
+  final VoidCallback onNotifications,
+      onFaq,
+      onPrivacy,
+      onPrivacyChoices,
+      onTerms;
+  final VoidCallback? onAdPrivacy, onLogout;
 
   @override
-  Widget build(BuildContext context) {
-    final enabled = onPressed != null;
-    final color = enabled ? faloraBronzeDark : faloraInkMuted;
-
-    return Column(
+  Widget build(BuildContext context) => Container(
+    decoration: faloraParchmentDecoration(
+      radius: FaloraRadius.lg,
+      raised: true,
+    ),
+    child: Column(
       children: [
-        Divider(
-          height: 1,
-          indent: 14,
-          endIndent: 14,
-          color: faloraBronze.withValues(alpha: 0.12),
+        ListTile(
+          leading: const Icon(Icons.notifications_outlined),
+          title: const Text('Bildirimler'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onNotifications,
         ),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPressed,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              child: Container(
-                height: 38,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(FaloraRadius.md),
-                  border: Border.all(
-                    color: enabled
-                        ? faloraGoldDark.withValues(alpha: 0.7)
-                        : faloraInkMuted.withValues(alpha: 0.35),
-                    width: 1.1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.logout_rounded, size: 17, color: color),
-                    const SizedBox(width: 7),
-                    Text(
-                      'Çıkış Yap',
-                      style: FaloraTypography.labelLarge.copyWith(
-                        color: color,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+        const Divider(height: 1, indent: 56),
+        ListTile(
+          leading: const Icon(Icons.help_outline_rounded),
+          title: const Text('Sıkça Sorulan Sorular'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onFaq,
+        ),
+        const Divider(height: 1, indent: 56),
+        ExpansionTile(
+          leading: const Icon(Icons.gavel_outlined),
+          title: const Text('Gizlilik ve Yasal'),
+          subtitle: const Text('Politikalar ve tercihler'),
+          children: [
+            ListTile(
+              contentPadding: const EdgeInsets.only(left: 72, right: 18),
+              title: const Text('Gizlilik Politikası'),
+              onTap: onPrivacy,
             ),
-          ),
+            ListTile(
+              contentPadding: const EdgeInsets.only(left: 72, right: 18),
+              title: const Text('Gizlilik Tercihleri'),
+              onTap: onPrivacyChoices,
+            ),
+            ListTile(
+              contentPadding: const EdgeInsets.only(left: 72, right: 18),
+              title: const Text('Kullanıcı Sözleşmesi'),
+              onTap: onTerms,
+            ),
+            if (onAdPrivacy != null)
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 72, right: 18),
+                title: const Text('Reklam Gizlilik Tercihleri'),
+                onTap: onAdPrivacy,
+              ),
+          ],
+        ),
+        const Divider(height: 1),
+        ListTile(
+          leading: const Icon(Icons.logout_rounded),
+          title: const Text('Çıkış Yap'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onLogout,
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 class _ProfileDeleteSection extends StatelessWidget {

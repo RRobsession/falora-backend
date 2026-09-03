@@ -893,6 +893,82 @@ app.post(
 );
 
 app.post(
+  '/admin/editorial-ai',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const type = String(req.body?.type || '').trim();
+      const count = Math.min(50, Math.max(2, Number(req.body?.count) || 7));
+      const date = String(req.body?.date || new Date().toISOString().slice(0, 10));
+      const nonce = newRequestId();
+      let system;
+      let user;
+      if (type === 'horoscope') {
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Tam olarak 12 burç için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. Her yorum 45-80 kelime olsun; kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Yalnızca JSON döndür: {"signs":{"Koç":"...","Boğa":"...","İkizler":"...","Yengeç":"...","Aslan":"...","Başak":"...","Terazi":"...","Akrep":"...","Yay":"...","Oğlak":"...","Kova":"...","Balık":"..."}}`;
+        user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Bugüne özgü farklı temalar ve somut, kişisel hissettiren öneriler kullan.`;
+      } else if (type === 'angel_cards') {
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. Her biri 25-55 kelime olsun; kesin gelecek, sağlık veya finans vaadi verme. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
+        user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Tam olarak ${count} farklı kart üret; her kartın teması ve açılış cümlesi farklı olsun.`;
+      } else {
+        return res.status(400).json({ error: 'Geçersiz içerik türü' });
+      }
+      const completion = await openai.chat.completions.create({
+        model: MODEL,
+        temperature: 1,
+        frequency_penalty: 0.65,
+        presence_penalty: 0.45,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+      });
+      const parsed = JSON.parse(completion.choices?.[0]?.message?.content || '{}');
+      return res.json(parsed);
+    } catch (err) {
+      console.error('ADMIN EDITORIAL AI ERROR:', err.message);
+      return res.status(500).json({ error: 'AI içeriği oluşturulamadı' });
+    }
+  },
+);
+
+app.post(
+  '/admin/manual-reader-avatar-ai',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const name = String(req.body?.name || '').trim().slice(0, 50);
+      const title = String(req.body?.title || '').trim().slice(0, 80);
+      const gender = String(req.body?.gender || 'unspecified').trim();
+      if (!name) return res.status(400).json({ error: 'Falcı ismi zorunludur.' });
+      if (!['female', 'male', 'unspecified'].includes(gender)) {
+        return res.status(400).json({ error: 'Geçersiz cinsiyet seçimi.' });
+      }
+      const presentation = gender === 'female'
+        ? 'adult Turkish woman'
+        : gender === 'male'
+          ? 'adult Turkish man'
+          : 'adult Turkish person with a gender-neutral presentation';
+      const result = await openai.images.generate({
+        model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2',
+        size: '1024x1024',
+        quality: 'low',
+        output_format: 'jpeg',
+        prompt: `Create an original square profile portrait for a fictional fortune reader named ${name}. The character is an ${presentation}. Professional head-and-shoulders composition, looking toward the camera, warm trustworthy expression. Tombik Teyze visual world: refined Anatolian warmth, subtle mystical atmosphere, antique gold, parchment beige and deep brown palette, soft cinematic studio light, elegant handcrafted details. ${title ? `Their role is: ${title}.` : ''} No text, no lettering, no logo, no watermark, no cards covering the face, no resemblance to a real celebrity. High quality app avatar, centered face, uncluttered background.`,
+      });
+      const imageBase64 = result.data?.[0]?.b64_json;
+      if (!imageBase64) throw new Error('Image API returned no image data');
+      return res.json({ imageBase64, mimeType: 'image/jpeg' });
+    } catch (err) {
+      console.error('ADMIN READER AVATAR AI ERROR:', err.message);
+      return res.status(500).json({ error: 'AI profil görseli oluşturulamadı.' });
+    }
+  },
+);
+
+app.post(
   '/admin/angel-cards',
   requireAuth,
   requireAdmin,
@@ -1124,6 +1200,7 @@ app.post('/bulletin/posts/:id/like',requireAuth,requireVerifiedEmail,async(req,r
 app.post('/bulletin/posts/:id/comments',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.status(201).json(await bulletin.addComment(req.auth.uid,req.params.id,req.body||{}));}catch(e){return bulletinError(res,e);}});
 app.post('/bulletin/comments/report',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.status(201).json(await bulletin.reportComment(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
 app.post('/bulletin/blocks',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.status(201).json(await bulletin.block(req.auth.uid,req.body?.userId));}catch(e){return bulletinError(res,e);}});
+app.post('/bulletin/content-requests',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.status(201).json(await bulletin.submitContentRequest(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
 app.get('/bulletin/polls/active',requireAuth,async(req,res)=>{try{return res.json(await bulletin.activePoll(req.auth.uid));}catch(e){return bulletinError(res,e);}});
 app.post('/bulletin/polls/:id/vote',requireAuth,requireVerifiedEmail,async(req,res)=>{try{return res.json(await bulletin.votePoll(req.auth.uid,req.params.id,req.body?.optionId));}catch(e){return bulletinError(res,e);}});
 app.get('/admin/bulletin/overview',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json(await bulletin.adminOverview());}catch(e){return bulletinError(res,e);}});
@@ -1139,6 +1216,8 @@ app.get('/admin/bulletin/reports',requireAuth,requireAdmin,async(_req,res)=>{try
 app.get('/admin/bulletin/comments',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json({items:await bulletin.adminComments()});}catch(e){return bulletinError(res,e);}});
 app.post('/admin/bulletin/comments/action',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminCommentAction(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
 app.post('/admin/bulletin/reports/action',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminReportAction(req.auth.uid,req.body||{}));}catch(e){return bulletinError(res,e);}});
+app.get('/admin/bulletin/content-requests',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json({items:await bulletin.adminContentRequests()});}catch(e){return bulletinError(res,e);}});
+app.post('/admin/bulletin/content-requests/:id/action',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminContentRequestAction(req.auth.uid,req.params.id,req.body?.action));}catch(e){return bulletinError(res,e);}});
 app.get('/admin/bulletin/bans',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json({items:await bulletin.adminBans()});}catch(e){return bulletinError(res,e);}});
 app.post('/admin/bulletin/bans/:uid/unban',requireAuth,requireAdmin,async(req,res)=>{try{return res.json(await bulletin.adminUnban(req.params.uid));}catch(e){return bulletinError(res,e);}});
 app.post('/admin/bulletin/cleanup',requireAuth,requireAdmin,async(_req,res)=>{try{return res.json(await bulletin.cleanupExpired());}catch(e){return bulletinError(res,e);}});

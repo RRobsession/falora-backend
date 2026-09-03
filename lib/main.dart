@@ -82,6 +82,8 @@ import 'package:falora/widgets/playing_card_widgets.dart';
 import 'package:falora/widgets/tarot_card_picker_sheet.dart';
 import 'package:falora/widgets/tarot_card_widgets.dart';
 
+const fortuneShellRouteName = '/fortune-shell';
+
 double _mobileBottomInset(BuildContext context) {
   if (kIsWeb) return 0;
   return MediaQuery.viewPaddingOf(context).bottom;
@@ -243,17 +245,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         return _coupleCompatibilityRequests;
       default:
         return _fortuneRequests;
-    }
-  }
-
-  int _tabIndexForCategory(FortuneCategory category) {
-    switch (category) {
-      case FortuneCategory.iliskiTavsiyesi:
-        return 2;
-      case FortuneCategory.ciftUyumu:
-        return 3;
-      default:
-        return 1;
     }
   }
 
@@ -915,6 +906,43 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('COUPLE ROLLBACK ERROR: $e');
     }
+  }
+
+  Future<void> _deleteReading(
+    FortuneReading reading, {
+    required bool couple,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Kaydı sil?'),
+        content: const Text('Bu fal kaydı kalıcı olarak silinecek.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (couple) {
+      await FortuneStorageService.instance.deleteCoupleFortune(reading.id);
+    } else {
+      await FortuneStorageService.instance.deleteFortune(reading.id);
+    }
+    if (!mounted) return;
+    setState(() {
+      (couple ? _coupleCompatibilityRequests : _fortuneRequests).removeWhere(
+        (x) => x.id == reading.id,
+      );
+      _relationshipAdviceRequests.removeWhere((x) => x.id == reading.id);
+      _readingNotifiers.remove(reading.id)?.dispose();
+    });
   }
 
   Future<void> _onFortuneSubmitted() async {
@@ -1713,7 +1741,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
 
   void _navigateAfterFortuneSubmit({
     required String logPrefix,
-    required int tabIndex,
     required String successMessage,
     FortuneReading? openReading,
     bool popToRoot = false,
@@ -1724,7 +1751,10 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       return;
     }
     if (popToRoot) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).popUntil(
+        (route) =>
+            route.settings.name == fortuneShellRouteName || route.isFirst,
+      );
     } else {
       Navigator.of(context).pop();
     }
@@ -1732,7 +1762,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       debugPrint('$logPrefix NAVIGATION SKIPPED (not mounted after pop)');
       return;
     }
-    setState(() => _tabIndex = tabIndex);
+    setState(() => _tabIndex = 0);
     debugPrint('$logPrefix NAVIGATION OK');
     if (openReading != null) {
       final notifier = _readingNotifiers[openReading.id];
@@ -1762,6 +1792,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
     List<PlayingCardSelection>? selectedPlayingCards,
     BaklaScatterReading? baklaScatter,
     WaterScatterReading? waterScatter,
+    bool simulatedCoffee = false,
   }) async {
     if (cat == FortuneCategory.tarot) {
       final cards = selectedTarotCards ?? const [];
@@ -1789,7 +1820,8 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       _showSubmitError('Su falı ritüeli tamamlanamadı. Lütfen tekrar deneyin.');
       return;
     }
-    if (cat == FortuneCategory.elFali || cat == FortuneCategory.kahve) {
+    if (cat == FortuneCategory.elFali ||
+        (cat == FortuneCategory.kahve && !simulatedCoffee)) {
       try {
         await FortuneImageValidationService.instance.validate(
           kind: cat == FortuneCategory.elFali ? 'palm' : 'coffee',
@@ -1945,7 +1977,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'FORTUNE',
-        tabIndex: 1,
         successMessage: 'Falınız hazırlanıyor...',
         popToRoot: true,
       );
@@ -2047,7 +2078,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
 
       _navigateAfterFortuneSubmit(
         logPrefix: logPrefix,
-        tabIndex: _tabIndexForCategory(category),
         successMessage: '${category.label} hazırlanıyor...',
         popToRoot: true,
       );
@@ -2249,7 +2279,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'MANUAL',
-        tabIndex: 1,
         successMessage:
             'Özel fal talebin alındı. 1 Özel Fal Hakkın kullanıldı.',
         popToRoot: true,
@@ -2382,7 +2411,6 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
 
       _navigateAfterFortuneSubmit(
         logPrefix: 'COUPLE',
-        tabIndex: 3,
         successMessage: 'Uyum raporunuz hazırlanıyor...',
         popToRoot: true,
       );
@@ -2466,18 +2494,21 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
             readings: _fortuneRequests,
             readingNotifiers: _readingNotifiers,
             onTap: (r) => _openSonuc(r),
+            onDelete: (r) => _deleteReading(r, couple: false),
           ),
           IliskiTavsiyesiTab(
             readings: _relationshipAdviceRequests,
             onStart: () => _openCategory(FortuneCategory.iliskiTavsiyesi),
             readingNotifiers: _readingNotifiers,
             onTap: (r) => _openSonuc(r),
+            onDelete: (r) => _deleteReading(r, couple: false),
           ),
           CiftUyumuTab(
             readings: _coupleCompatibilityRequests,
             onStart: () => _openCategory(FortuneCategory.ciftUyumu),
             readingNotifiers: _readingNotifiers,
             onTap: (r) => _openSonuc(r),
+            onDelete: (r) => _deleteReading(r, couple: true),
           ),
           ProfileScreen(user: user, onLogout: _handleLogout),
         ],
@@ -2796,7 +2827,8 @@ class _IosJourneyChooser extends StatelessWidget {
     final journeys = [
       (
         title: 'Falımı Hazırla',
-        detail: 'Kartlarını seç, baklalarını serp veya su işaretlerini oluştur.',
+        detail:
+            'Kartlarını seç, baklalarını serp veya su işaretlerini oluştur.',
         icon: Icons.gesture_rounded,
         categories: const [
           FortuneCategory.kahve,
@@ -2811,7 +2843,8 @@ class _IosJourneyChooser extends StatelessWidget {
       ),
       (
         title: 'Yorumcuya Gönder',
-        detail: 'Falını hazırla; Serdar veya Hatice’ye kişisel yorum için gönder.',
+        detail:
+            'Falını hazırla; Serdar veya Hatice’ye kişisel yorum için gönder.',
         icon: Icons.forum_outlined,
         categories: const [
           FortuneCategory.kahve,
@@ -2823,7 +2856,8 @@ class _IosJourneyChooser extends StatelessWidget {
       ),
       (
         title: 'Fal Günlüğüm',
-        detail: 'Hazırlanan, bekleyen ve tamamlanan bütün fallarına yeniden bak.',
+        detail:
+            'Hazırlanan, bekleyen ve tamamlanan bütün fallarına yeniden bak.',
         icon: Icons.auto_stories_rounded,
         categories: const <FortuneCategory>[],
         manualMode: null,
@@ -3075,11 +3109,13 @@ class _FallarimPage extends StatelessWidget {
     required this.readings,
     required this.readingNotifiers,
     required this.onTap,
+    required this.onDelete,
   });
 
   final List<FortuneReading> readings;
   final Map<String, ValueNotifier<FortuneReading>> readingNotifiers;
   final void Function(FortuneReading) onTap;
+  final void Function(FortuneReading) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -3135,6 +3171,9 @@ class _FallarimPage extends StatelessWidget {
                   : _formatDate(reading.createdAt),
               reading: reading,
               onTap: () => onTap(reading),
+              onDelete: reading.isReadyDisplay || reading.isFailedDisplay
+                  ? () => onDelete(reading)
+                  : null,
             );
           },
         );
@@ -3162,12 +3201,14 @@ class IliskiTavsiyesiTab extends StatelessWidget {
     required this.onStart,
     required this.readingNotifiers,
     required this.onTap,
+    required this.onDelete,
   });
 
   final List<FortuneReading> readings;
   final VoidCallback onStart;
   final Map<String, ValueNotifier<FortuneReading>> readingNotifiers;
   final void Function(FortuneReading) onTap;
+  final void Function(FortuneReading) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -3253,6 +3294,10 @@ class IliskiTavsiyesiTab extends StatelessWidget {
                       subtitle: _FallarimPage.formatDate(reading.createdAt),
                       reading: reading,
                       onTap: () => onTap(reading),
+                      onDelete:
+                          reading.isReadyDisplay || reading.isFailedDisplay
+                          ? () => onDelete(reading)
+                          : null,
                     );
                   },
                 );
@@ -3273,12 +3318,14 @@ class CiftUyumuTab extends StatelessWidget {
     required this.onStart,
     required this.readingNotifiers,
     required this.onTap,
+    required this.onDelete,
   });
 
   final List<FortuneReading> readings;
   final VoidCallback onStart;
   final Map<String, ValueNotifier<FortuneReading>> readingNotifiers;
   final void Function(FortuneReading) onTap;
+  final void Function(FortuneReading) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -3363,6 +3410,10 @@ class CiftUyumuTab extends StatelessWidget {
                       subtitle: _FallarimPage.formatDate(reading.createdAt),
                       reading: reading,
                       onTap: () => onTap(reading),
+                      onDelete:
+                          reading.isReadyDisplay || reading.isFailedDisplay
+                          ? () => onDelete(reading)
+                          : null,
                     );
                   },
                 );
@@ -3399,6 +3450,7 @@ typedef NormalSubmit =
       List<PlayingCardSelection>? selectedPlayingCards,
       BaklaScatterReading? baklaScatter,
       WaterScatterReading? waterScatter,
+      bool simulatedCoffee,
     });
 
 class NormalFalFormPage extends StatefulWidget {
@@ -3709,9 +3761,10 @@ class _KahveFormPageState extends State<KahveFormPage> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit({bool simulatedCoffee = false}) async {
     if (_submitting || !_formKey.currentState!.validate()) return;
-    if (_fincan1 == null || _fincan2 == null || _tabak == null) {
+    if (!simulatedCoffee &&
+        (_fincan1 == null || _fincan2 == null || _tabak == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -3732,8 +3785,13 @@ class _KahveFormPageState extends State<KahveFormPage> {
         _burc,
         _medeniDurum,
         _niyetCtrl.text.trim(),
-        photoNames: [_fincan1!.name, _fincan2!.name, _tabak!.name],
-        fortuneImages: [_fincan1!, _fincan2!, _tabak!],
+        photoNames: simulatedCoffee
+            ? const ['Tombik Teyze kullanıcının yerine kahve içti']
+            : [_fincan1!.name, _fincan2!.name, _tabak!.name],
+        fortuneImages: simulatedCoffee
+            ? const []
+            : [_fincan1!, _fincan2!, _tabak!],
+        simulatedCoffee: simulatedCoffee,
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -3864,6 +3922,20 @@ class _KahveFormPageState extends State<KahveFormPage> {
                         ),
                       )
                     : const Text('Falı Gönder'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _submitting
+                    ? null
+                    : () => _submit(simulatedCoffee: true),
+                icon: const Icon(Icons.coffee_rounded),
+                label: const Text('Benim yerime iç'),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Fotoğraf yüklemeden, niyetin ve burcuna göre her seferinde farklı bir kahve yorumu hazırlanır.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: _textSecondary),
               ),
             ],
           ),

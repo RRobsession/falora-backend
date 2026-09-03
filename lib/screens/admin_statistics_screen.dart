@@ -29,6 +29,7 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
   final Map<_StatsSection, _StatsRange> _ranges = {};
   final Set<_StatsSection> _sectionLoading = {};
   String? _userPlatform;
+  String? _fortuneTypeFilter;
   bool _loading = true;
   String? _error;
   late Future<int> _liveUsersFuture;
@@ -376,7 +377,65 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
       dateLabel: '${_date(range.start)} – ${_date(range.end)}',
       onDateTap: loading ? null : () => _pickRange(section),
       loading: loading,
+      middle: section == _StatsSection.users
+          ? DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: _userPlatform ?? 'all',
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('Tüm cihazlar')),
+                  DropdownMenuItem(value: 'android', child: Text('Android')),
+                  DropdownMenuItem(value: 'ios', child: Text('iPhone')),
+                ],
+                onChanged: loading
+                    ? null
+                    : (value) =>
+                          _setUserPlatform(value == 'all' ? null : value),
+              ),
+            )
+          : section == _StatsSection.fortunes
+          ? DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: _fortuneFilterValue,
+                items: [
+                  const DropdownMenuItem(
+                    value: 'all',
+                    child: Text('Tüm fal türleri'),
+                  ),
+                  ..._fortuneFilterKeys.map(
+                    (key) => DropdownMenuItem(
+                      value: key,
+                      child: Text(
+                        _pretty(key),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: loading
+                    ? null
+                    : (value) => setState(
+                        () =>
+                            _fortuneTypeFilter = value == 'all' ? null : value,
+                      ),
+              ),
+            )
+          : null,
     );
+  }
+
+  List<String> get _fortuneFilterKeys {
+    final keys = (_fortuneData?.fortunes.keys ?? const <String>[]).toList();
+    keys.sort((a, b) => _pretty(a).compareTo(_pretty(b)));
+    return keys;
+  }
+
+  String get _fortuneFilterValue {
+    final selected = _fortuneTypeFilter;
+    return selected != null && _fortuneFilterKeys.contains(selected)
+        ? selected
+        : 'all';
   }
 
   List<Widget> _content(StatisticsSnapshot data) {
@@ -384,8 +443,14 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
     final fortunes = _fortuneData ?? data;
     final ads = _adData ?? data;
     final activity = _activityData ?? data;
-    final sorted = fortunes.fortunes.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final sorted =
+        fortunes.fortunes.entries
+            .where(
+              (entry) =>
+                  _fortuneTypeFilter == null || entry.key == _fortuneTypeFilter,
+            )
+            .toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     return [
       Row(
         children: [
@@ -414,11 +479,6 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _sectionFilters(_StatsSection.users),
-            const SizedBox(height: 8),
-            _PlatformFilterBar(
-              selected: _userPlatform,
-              onSelected: _setUserPlatform,
-            ),
             const SizedBox(height: 14),
             if (users.totalRegisteredUsers < 0)
               const _InlineNotice(
@@ -605,6 +665,7 @@ class _ModernFilterBar extends StatelessWidget {
     required this.dateLabel,
     required this.onDateTap,
     required this.loading,
+    this.middle,
   });
 
   final int selectedIndex;
@@ -613,6 +674,7 @@ class _ModernFilterBar extends StatelessWidget {
   final String dateLabel;
   final VoidCallback? onDateTap;
   final bool loading;
+  final Widget? middle;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -622,158 +684,79 @@ class _ModernFilterBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(15),
       border: Border.all(color: faloraBronze.withValues(alpha: 0.16)),
     ),
-    child: Column(
+    child: Row(
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: List.generate(
-              labels.length,
-              (index) => Padding(
-                padding: EdgeInsets.only(
-                  right: index == labels.length - 1 ? 0 : 5,
-                ),
-                child: _FilterSegment(
-                  label: labels[index],
-                  selected: selectedIndex == index,
-                  onTap: () => onSelected(index),
-                ),
-              ),
+        Expanded(
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              isExpanded: true,
+              value: selectedIndex,
+              items: [
+                for (var i = 0; i < labels.length; i++)
+                  DropdownMenuItem(value: i, child: Text(labels[i])),
+                if (selectedIndex == 4)
+                  const DropdownMenuItem(value: 4, child: Text('Özel aralık')),
+              ],
+              onChanged: loading
+                  ? null
+                  : (value) {
+                      if (value != null && value < labels.length) {
+                        onSelected(value);
+                      }
+                    },
             ),
           ),
         ),
-        const SizedBox(height: 7),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onDateTap,
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              child: Row(
-                children: [
-                  if (loading)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    const Icon(
-                      Icons.calendar_today_rounded,
-                      size: 16,
-                      color: faloraBronzeDark,
-                    ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      dateLabel,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: faloraInkSoft,
+        const SizedBox(width: 8),
+        Expanded(child: middle ?? const SizedBox.shrink()),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onDateTap,
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                child: Row(
+                  children: [
+                    if (loading)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      const Icon(
+                        Icons.calendar_today_rounded,
+                        size: 16,
+                        color: faloraBronzeDark,
+                      ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        dateLabel,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: faloraInkSoft,
+                        ),
                       ),
                     ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: faloraBronze,
-                  ),
-                ],
+                    const Icon(
+                      Icons.calendar_month_rounded,
+                      size: 18,
+                      color: faloraBronze,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ],
     ),
-  );
-}
-
-class _FilterSegment extends StatelessWidget {
-  const _FilterSegment({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(9),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? faloraBronzeDark : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: faloraBronzeDark.withValues(alpha: 0.2),
-                    blurRadius: 7,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? faloraParchmentRaised : faloraInkSoft,
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-class _PlatformFilterBar extends StatelessWidget {
-  const _PlatformFilterBar({required this.selected, required this.onSelected});
-  final String? selected;
-  final ValueChanged<String?> onSelected;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      const Padding(
-        padding: EdgeInsets.only(right: 10),
-        child: Icon(Icons.devices_rounded, size: 18, color: faloraBronzeDark),
-      ),
-      Expanded(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _FilterSegment(
-                label: 'Tümü',
-                selected: selected == null,
-                onTap: () => onSelected(null),
-              ),
-              const SizedBox(width: 5),
-              _FilterSegment(
-                label: 'Android',
-                selected: selected == 'android',
-                onTap: () => onSelected('android'),
-              ),
-              const SizedBox(width: 5),
-              _FilterSegment(
-                label: 'iPhone',
-                selected: selected == 'ios',
-                onTap: () => onSelected('ios'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ],
   );
 }
 

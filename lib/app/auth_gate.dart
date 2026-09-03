@@ -163,6 +163,12 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       _user = null;
       _loading = false;
     });
+    // iOS'ta Fal alanı Bülten/Fal geçidinin üzerinde ayrı bir rota olarak
+    // açılır. Oturum kapandıktan sonra bu rota kaldırılmazsa eski Fal ekranı
+    // görünmeye devam eder ve çıkış yapılmamış izlenimi oluşturur.
+    Navigator.of(
+      context,
+    ).popUntil((route) => route.settings.name != fortuneShellRouteName);
   }
 
   @override
@@ -228,6 +234,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       return IosProductGatewayScreen(
         onOpenFortune: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
+            settings: const RouteSettings(name: fortuneShellRouteName),
             builder: (_) =>
                 FaloraShell(user: verifiedUser, onLogout: _onLogout),
           ),

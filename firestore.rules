@@ -29,14 +29,20 @@ service cloud.firestore {
     }
 
     match /app_presence/{userId} {
-      // Emergency quota guard: older app versions wrote every 30 seconds.
-      allow create, update: if false;
+      allow create, update: if isOwner(userId)
+        && request.resource.data.userId == userId
+        && request.resource.data.isForeground is bool
+        && request.resource.data.lastSeenAt == request.time;
       allow read: if isAdmin();
     }
 
     match /app_activity_hours/{activityId} {
-      // Disabled until presence tracking is moved off the Spark write quota.
-      allow create, update: if false;
+      allow create, update: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.hour is int
+        && request.resource.data.hour >= 0
+        && request.resource.data.hour < 24
+        && request.resource.data.bucketAt is timestamp;
       allow read: if isAdmin();
     }
 
@@ -410,7 +416,8 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('specialFortuneRights', 0)
           == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('specialFortuneRights', 0) - 1
 
-        && request.resource.data.readerId in ['serdar', 'hatice'];
+        && (request.resource.data.readerId in ['serdar', 'hatice']
+          || exists(/databases/$(database)/documents/manual_readers/$(request.resource.data.readerId)));
 
 
 
@@ -446,6 +453,19 @@ service cloud.firestore {
 
       allow delete: if false;
 
+      match /readers/{readerId} {
+        allow read: if isSignedIn();
+        allow create: if isEmailVerified()
+          && exists(/databases/$(database)/documents/manual_readers/$(readerId))
+          && request.resource.data.readerId == readerId
+          && request.resource.data.count == 1;
+        allow update: if isEmailVerified()
+          && request.resource.data.readerId == readerId
+          && request.resource.data.count == resource.data.count + 1
+          && request.resource.data.count <= 20;
+        allow delete: if false;
+      }
+
     }
 
     match /manual_reader_status/{docId} {
@@ -455,6 +475,7 @@ service cloud.firestore {
           [
             'serdar', 'hatice',
             'serdarVisible', 'haticeVisible',
+            'statuses', 'visibility',
             'updatedAt', 'updatedBy'
           ]
         )
@@ -473,6 +494,11 @@ service cloud.firestore {
         && (!('haticeVisible' in request.resource.data)
           || request.resource.data.haticeVisible is bool);
       allow delete: if isAdmin();
+    }
+
+    match /manual_readers/{readerId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
     }
 
     match /play_purchases/{purchaseToken} {
@@ -524,6 +550,23 @@ service cloud.firestore {
 
       allow update: if isAdmin();
       allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isAdmin()
+          || (isSignedIn()
+            && get(/databases/$(database)/documents/problem_reports/$(reportId)).data.userId == request.auth.uid);
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/problem_reports/$(reportId)).data.status == 'open'
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1500
+          && request.resource.data.senderId == request.auth.uid
+          && ((isAdmin() && request.resource.data.senderRole == 'admin')
+            || (!isAdmin()
+              && request.resource.data.senderRole == 'user'
+              && get(/databases/$(database)/documents/problem_reports/$(reportId)).data.userId == request.auth.uid));
+        allow update, delete: if false;
+      }
     }
 
     // Bülten istemcisi API üzerinden çalışır. İçerik yayını, sayaçlar,
@@ -543,6 +586,7 @@ service cloud.firestore {
       match /votes/{userId} { allow read, write: if false; }
     }
     match /bulletin_reports/{id} { allow read, write: if false; }
+    match /bulletin_content_requests/{id} { allow read, write: if false; }
     match /bulletin_bans/{id} { allow read, write: if false; }
     match /bulletin_blocks/{id} { allow read, write: if false; }
     match /bulletin_config/{id} { allow read, write: if false; }

@@ -47,14 +47,25 @@ class ManualFortuneReaderAvatar extends StatelessWidget {
         ],
       ),
       child: ClipOval(
-        child: Image.asset(
-          reader.avatarAsset,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          alignment: Alignment.topCenter,
-          filterQuality: FilterQuality.high,
-        ),
+        child: reader.avatarBytes != null
+            ? Image.memory(
+                reader.avatarBytes!,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                filterQuality: FilterQuality.high,
+              )
+            : reader.avatarAsset.isNotEmpty
+            ? Image.asset(
+                reader.avatarAsset,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                filterQuality: FilterQuality.high,
+              )
+            : Icon(Icons.person, size: size * .55, color: reader.accentColor),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:falora/models/fortune_models.dart';
 import 'package:falora/services/daily_horoscope_service.dart';
+import 'package:falora/services/admin_editorial_ai_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +21,7 @@ class _AdminDailyHoroscopeScreenState extends State<AdminDailyHoroscopeScreen>
   };
   bool _loading = true;
   bool _publishing = false;
+  bool _generating = false;
   late String _dateKey;
 
   String get _dateDisplay =>
@@ -99,11 +101,44 @@ class _AdminDailyHoroscopeScreenState extends State<AdminDailyHoroscopeScreen>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _publishing = false);
+    }
+  }
+
+  Future<void> _generateWithAi() async {
+    setState(() => _generating = true);
+    try {
+      final result = await AdminEditorialAiService.instance.generate(
+        type: 'horoscope',
+        date: _dateKey,
+      );
+      final signs = Map<String, dynamic>.from(result['signs'] ?? const {});
+      for (final sign in burclar) {
+        final text = signs[sign]?.toString().trim() ?? '';
+        if (text.isNotEmpty) _controllers[sign]!.text = text;
+      }
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Burç kutuları AI tarafından dolduruldu. Yayınlamadan önce kontrol et.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _generating = false);
     }
   }
 
@@ -112,6 +147,19 @@ class _AdminDailyHoroscopeScreenState extends State<AdminDailyHoroscopeScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text('Günlük Burç ($_dateDisplay)'),
+        actions: [
+          TextButton.icon(
+            onPressed: _publishing || _generating ? null : _generateWithAi,
+            icon: _generating
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome),
+            label: const Text('AI oluştur'),
+          ),
+        ],
       ),
       body: FaloraBackground(
         child: _loading

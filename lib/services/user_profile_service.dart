@@ -72,11 +72,19 @@ class UserProfileService {
       throw ArgumentError('Burç seçilmelidir');
     }
     debugPrint('ONBOARDING_ZODIAC_STEP_START');
+    await _userRef(
+      uid,
+    ).update({'zodiac': trimmed, 'updatedAt': FieldValue.serverTimestamp()});
+    debugPrint('ONBOARDING_ZODIAC_SAVED');
+  }
+
+  Future<void> saveMaritalStatus(String uid, String value) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) throw ArgumentError('Medeni durum seçilmelidir');
     await _userRef(uid).update({
-      'zodiac': trimmed,
+      'maritalStatus': trimmed,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('ONBOARDING_ZODIAC_SAVED');
   }
 
   Future<void> saveAvatarAsset(String uid, String avatarAsset) async {
@@ -89,7 +97,9 @@ class UserProfileService {
       'avatarAsset': stored,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('ONBOARDING_AVATAR_SELECTED asset=${stored.length > 80 ? '${stored.substring(0, 40)}…' : stored}');
+    debugPrint(
+      'ONBOARDING_AVATAR_SELECTED asset=${stored.length > 80 ? '${stored.substring(0, 40)}…' : stored}',
+    );
   }
 
   Future<void> saveGalleryAvatar(String uid, Uint8List imageBytes) async {

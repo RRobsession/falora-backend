@@ -17,7 +17,12 @@ class AdminBulletinScreen extends StatefulWidget {
 
 class _AdminBulletinState extends State<AdminBulletinScreen> {
   Map<String, dynamic> overview = {};
-  List<dynamic> posts = [], polls = [], comments = [], reports = [], bans = [];
+  List<dynamic> posts = [],
+      polls = [],
+      comments = [],
+      reports = [],
+      bans = [],
+      contentRequests = [];
   bool loading = true;
   Future<Map<String, dynamic>> _call(
     String method,
@@ -52,6 +57,7 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
         _call('GET', '/admin/bulletin/comments'),
         _call('GET', '/admin/bulletin/reports'),
         _call('GET', '/admin/bulletin/bans'),
+        _call('GET', '/admin/bulletin/content-requests'),
       ]);
       if (mounted) {
         setState(() {
@@ -61,6 +67,7 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
           comments = r[3]['items'] ?? [];
           reports = r[4]['items'] ?? [];
           bans = r[5]['items'] ?? [];
+          contentRequests = r[6]['items'] ?? [];
         });
       }
     } catch (e) {
@@ -76,7 +83,7 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
 
   @override
   Widget build(BuildContext c) => DefaultTabController(
-    length: 5,
+    length: 6,
     child: Scaffold(
       appBar: AppBar(
         title: const Text('Tombik Teyze Bülteni'),
@@ -91,6 +98,7 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
             Tab(text: 'Yorumlar'),
             Tab(text: 'Şikâyetler'),
             Tab(text: 'Banlar'),
+            Tab(text: 'Talepler'),
           ],
         ),
       ),
@@ -109,6 +117,7 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
                   _commentsTab(c),
                   _reportsTab(c),
                   _bansTab(c),
+                  _contentRequestsTab(c),
                 ],
               ),
       ),
@@ -429,6 +438,40 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
                 _load();
               },
               child: const Text('Banı kaldır'),
+            ),
+          ),
+        ),
+    ],
+  );
+  Widget _contentRequestsTab(BuildContext c) => ListView(
+    padding: const EdgeInsets.all(14),
+    children: [
+      if (contentRequests.isEmpty)
+        const ListTile(title: Text('Henüz içerik talebi yok')),
+      for (final item in contentRequests)
+        Card(
+          child: ListTile(
+            title: Text('${item['displayName'] ?? 'Bülten Okuru'}'),
+            subtitle: Text(
+              '${item['text'] ?? ''}\nDurum: ${item['status'] ?? 'open'}',
+            ),
+            isThreeLine: true,
+            trailing: PopupMenuButton<String>(
+              onSelected: (action) async {
+                await _call(
+                  'POST',
+                  '/admin/bulletin/content-requests/${item['id']}/action',
+                  {'action': action},
+                );
+                _load();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'poll_candidate',
+                  child: Text('Anket adayı yap'),
+                ),
+                PopupMenuItem(value: 'dismiss', child: Text('Kapat')),
+              ],
             ),
           ),
         ),

@@ -10,6 +10,8 @@ class ManualReaderStatusSnapshot {
     this.hatice = ManualReaderStatus.auto,
     this.serdarVisible = true,
     this.haticeVisible = true,
+    this.statuses = const {},
+    this.visibility = const {},
   });
 
   static const empty = ManualReaderStatusSnapshot();
@@ -18,12 +20,15 @@ class ManualReaderStatusSnapshot {
   final ManualReaderStatus hatice;
   final bool serdarVisible;
   final bool haticeVisible;
+  final Map<String, ManualReaderStatus> statuses;
+  final Map<String, bool> visibility;
 
   ManualReaderStatus forReader(String readerId) =>
-      readerId == 'hatice' ? hatice : serdar;
+      statuses[readerId] ?? (readerId == 'hatice' ? hatice : serdar);
 
   bool isVisible(String readerId) =>
-      readerId == 'hatice' ? haticeVisible : serdarVisible;
+      visibility[readerId] ??
+      (readerId == 'hatice' ? haticeVisible : serdarVisible);
 }
 
 /// Firestore: `manual_reader_status/current`
@@ -58,6 +63,13 @@ class ManualReaderStatusService {
       hatice: ManualReaderStatusX.fromCode(data['hatice']?.toString()),
       serdarVisible: _boolOrTrue(data['serdarVisible']),
       haticeVisible: _boolOrTrue(data['haticeVisible']),
+      statuses: Map<String, dynamic>.from(data['statuses'] ?? const {}).map(
+        (key, value) =>
+            MapEntry(key, ManualReaderStatusX.fromCode(value?.toString())),
+      ),
+      visibility: Map<String, dynamic>.from(
+        data['visibility'] ?? const {},
+      ).map((key, value) => MapEntry(key, _boolOrTrue(value))),
     );
   }
 
@@ -79,18 +91,19 @@ class ManualReaderStatusService {
     required String readerId,
     required ManualReaderStatus status,
   }) async {
-    if (readerId != 'serdar' && readerId != 'hatice') {
-      throw ArgumentError('Geçersiz yorumcu: $readerId');
-    }
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    await _ref.set(
-      {
-        readerId: status.code,
+    await _db.runTransaction((tx) async {
+      final current = (await tx.get(_ref)).data() ?? <String, dynamic>{};
+      final statuses = Map<String, dynamic>.from(
+        current['statuses'] ?? const {},
+      );
+      statuses[readerId] = status.code;
+      tx.set(_ref, {
+        'statuses': statuses,
         'updatedAt': FieldValue.serverTimestamp(),
         if (uid != null) 'updatedBy': uid,
-      },
-      SetOptions(merge: true),
-    );
+      }, SetOptions(merge: true));
+    });
     debugPrint(
       'MANUAL READER STATUS SET reader=$readerId status=${status.code}',
     );
@@ -101,34 +114,31 @@ class ManualReaderStatusService {
     required ManualReaderStatus hatice,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    await _ref.set(
-      {
-        'serdar': serdar.code,
-        'hatice': hatice.code,
-        'updatedAt': FieldValue.serverTimestamp(),
-        if (uid != null) 'updatedBy': uid,
-      },
-      SetOptions(merge: true),
-    );
+    await _ref.set({
+      'serdar': serdar.code,
+      'hatice': hatice.code,
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (uid != null) 'updatedBy': uid,
+    }, SetOptions(merge: true));
   }
 
   Future<void> setVisibility({
     required String readerId,
     required bool visible,
   }) async {
-    if (readerId != 'serdar' && readerId != 'hatice') {
-      throw ArgumentError('Geçersiz yorumcu: $readerId');
-    }
-    final field = readerId == 'hatice' ? 'haticeVisible' : 'serdarVisible';
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    await _ref.set(
-      {
-        field: visible,
+    await _db.runTransaction((tx) async {
+      final current = (await tx.get(_ref)).data() ?? <String, dynamic>{};
+      final visibility = Map<String, dynamic>.from(
+        current['visibility'] ?? const {},
+      );
+      visibility[readerId] = visible;
+      tx.set(_ref, {
+        'visibility': visibility,
         'updatedAt': FieldValue.serverTimestamp(),
         if (uid != null) 'updatedBy': uid,
-      },
-      SetOptions(merge: true),
-    );
+      }, SetOptions(merge: true));
+    });
     debugPrint(
       'MANUAL READER VISIBILITY SET reader=$readerId visible=$visible',
     );

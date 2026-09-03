@@ -13,6 +13,7 @@ import 'package:falora/widgets/fortune_teller_avatar.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
 import 'package:falora/services/manual_reader_quota_service.dart';
 import 'package:falora/services/manual_reader_status_service.dart';
+import 'package:falora/services/manual_reader_profile_service.dart';
 import 'package:falora/services/token_service.dart';
 import 'package:falora/models/manual_reader_status.dart';
 import 'package:flutter/material.dart';
@@ -50,6 +51,8 @@ class _FortuneTellerSelectionPageState
   Timer? _manualReaderHoursTimer;
   StreamSubscription<ManualReaderDailyQuota>? _quotaSub;
   StreamSubscription<ManualReaderStatusSnapshot>? _statusSub;
+  StreamSubscription<List<ManualFortuneReader>>? _readerSub;
+  List<ManualFortuneReader> _manualReaders = manualFortuneReaders;
   ManualReaderDailyQuota _quota = ManualReaderDailyQuota.empty;
   ManualReaderStatusSnapshot _statuses = ManualReaderStatusSnapshot.empty;
   String? _quotaDayKey;
@@ -79,6 +82,11 @@ class _FortuneTellerSelectionPageState
       ) {
         if (mounted) setState(() => _statuses = statuses);
       });
+      _readerSub = ManualReaderProfileService.instance.watch().listen((
+        readers,
+      ) {
+        if (mounted) setState(() => _manualReaders = readers);
+      });
       _manualReaderHoursTimer = Timer.periodic(const Duration(minutes: 1), (_) {
         if (!mounted) return;
         _bindQuotaStream();
@@ -91,6 +99,7 @@ class _FortuneTellerSelectionPageState
   void dispose() {
     _quotaSub?.cancel();
     _statusSub?.cancel();
+    _readerSub?.cancel();
     _manualReaderHoursTimer?.cancel();
     super.dispose();
   }
@@ -139,7 +148,7 @@ class _FortuneTellerSelectionPageState
                         Text(
                           !widget.showAiTellers && _manualOffer != null
                               ? () {
-                                  final visibleNames = manualFortuneReaders
+                                  final visibleNames = _manualReaders
                                       .where((r) => _statuses.isVisible(r.id))
                                       .map((r) => r.name)
                                       .toList();
@@ -196,7 +205,7 @@ class _FortuneTellerSelectionPageState
                 if (widget.showManualReaders && _manualOffer != null) ...[
                   Builder(
                     builder: (context) {
-                      final visibleReaders = manualFortuneReaders
+                      final visibleReaders = _manualReaders
                           .where((r) => _statuses.isVisible(r.id))
                           .toList();
                       if (visibleReaders.isEmpty) {

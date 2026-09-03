@@ -189,10 +189,11 @@ class ManualFortuneStorageService {
           _db.collection('manual_reader_status').doc('current'),
         );
         final statusData = statusSnap.data();
-        final visibleField = readerId == 'hatice'
-            ? 'haticeVisible'
-            : 'serdarVisible';
-        final visibleRaw = statusData?[visibleField];
+        final visibleRaw =
+            (statusData?['visibility'] as Map?)?[readerId] ??
+            statusData?[readerId == 'hatice'
+                ? 'haticeVisible'
+                : 'serdarVisible'];
         final isVisible = visibleRaw is bool
             ? visibleRaw
             : (visibleRaw == null
@@ -204,7 +205,9 @@ class ManualFortuneStorageService {
           );
         }
         final manualStatus = ManualReaderStatusX.fromCode(
-          statusData?[readerId]?.toString(),
+          ((statusData?['statuses'] as Map?)?[readerId] ??
+                  statusData?[readerId])
+              ?.toString(),
         );
         if (!manualStatus.acceptsNewRequests) {
           throw ManualFortuneException(manualStatus.blockedMessage(readerName));

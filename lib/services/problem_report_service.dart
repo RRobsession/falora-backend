@@ -6,6 +6,7 @@ import 'package:falora/services/notification_backend_service.dart';
 import 'package:falora/picked_image.dart';
 import 'package:falora/utils/upload_image_prepare.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ProblemReportException implements Exception {
   ProblemReportException(this.message);
@@ -126,18 +127,50 @@ class ProblemReportService {
         .where('status', isEqualTo: 'resolved')
         .snapshots()
         .map((snap) {
-          final cutoff = DateTime.now().subtract(resolvedRetention);
           final items =
               snap.docs
                   .map((d) => ProblemReport.fromFirestore(d.id, d.data()))
-                  .where((r) {
-                    final when = r.resolvedAt ?? r.updatedAt ?? r.createdAt;
-                    return !when.isBefore(cutoff);
-                  })
                   .toList()
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           return items;
         });
+  }
+
+  Stream<List<ProblemReport>> watchOpenForUser(String userId) => _db
+      .collection(_collection)
+      .where('userId', isEqualTo: userId)
+      .snapshots()
+      .map(
+        (snap) =>
+            snap.docs
+                .map((d) => ProblemReport.fromFirestore(d.id, d.data()))
+                .where((r) => r.isOpen)
+                .toList()
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+      );
+
+  Stream<List<Map<String, dynamic>>> watchMessages(String reportId) => _db
+      .collection(_collection)
+      .doc(reportId)
+      .collection('messages')
+      .orderBy('createdAt')
+      .snapshots()
+      .map((snap) => snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+
+  Future<void> sendMessage({
+    required String reportId,
+    required String text,
+    required bool admin,
+  }) async {
+    final clean = text.trim();
+    if (clean.isEmpty || clean.length > 1500)
+      throw ProblemReportException('Mesaj 1-1500 karakter olmalı.');
+    await _db.collection(_collection).doc(reportId).collection('messages').add({
+      'text': clean,
+      'senderRole': admin ? 'admin' : 'user',
+      'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> markResolved({

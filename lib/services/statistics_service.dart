@@ -106,10 +106,10 @@ class StatisticsService {
   StatisticsService._();
   static final instance = StatisticsService._();
 
-  // Spark planindaki gunluk yazma kotasini koru. 30 saniyelik eski aralik,
-  // 137 aktif kullanicida tek basina gunde yaklasik 394 bin yazma uretiyordu.
-  static const _heartbeatInterval = Duration(minutes: 30);
-  static const _liveUserWindow = Duration(minutes: 35);
+  // Uygulama kapanışında çevrimdışı işareti hemen yazılır. Beklenmeyen kapanış
+  // durumunda eski oturumların canlı sayılmaması için kısa bir güvenlik penceresi.
+  static const _heartbeatInterval = Duration(minutes: 10);
+  static const _liveUserWindow = Duration(minutes: 12);
 
   final _db = FirebaseFirestore.instance;
   Timer? _heartbeat;

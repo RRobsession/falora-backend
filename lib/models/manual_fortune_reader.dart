@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 /// Admin tarafından cevaplanan premium manuel yorumcu.
@@ -9,6 +11,7 @@ class ManualFortuneReader {
     required this.bio,
     required this.accentColor,
     required this.avatarAsset,
+    this.avatarBase64,
   });
 
   final String id;
@@ -17,6 +20,30 @@ class ManualFortuneReader {
   final String bio;
   final Color accentColor;
   final String avatarAsset;
+  final String? avatarBase64;
+
+  Uint8List? get avatarBytes {
+    final value = avatarBase64;
+    if (value == null || value.isEmpty) return null;
+    try {
+      return base64Decode(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  factory ManualFortuneReader.fromMap(String id, Map<String, dynamic> data) =>
+      ManualFortuneReader(
+        id: id,
+        name: '${data['name'] ?? ''}',
+        title: '${data['title'] ?? ''}',
+        bio: '${data['bio'] ?? ''}',
+        accentColor: Color(
+          (data['accentColor'] as num?)?.toInt() ?? 0xFF7A5C3E,
+        ),
+        avatarAsset: '${data['avatarAsset'] ?? ''}',
+        avatarBase64: data['avatarBase64']?.toString(),
+      );
 }
 
 const manualFortuneReaders = <ManualFortuneReader>[

@@ -6,17 +6,20 @@ class ManualReaderDailyQuota {
   const ManualReaderDailyQuota({
     this.serdar = 0,
     this.hatice = 0,
+    this.counts = const {},
   });
 
   static const empty = ManualReaderDailyQuota();
 
   final int serdar;
   final int hatice;
+  final Map<String, int> counts;
 
   int countFor(String readerId) =>
-      readerId == 'hatice' ? hatice : serdar;
+      counts[readerId] ?? (readerId == 'hatice' ? hatice : serdar);
 
-  int get total => serdar + hatice;
+  int get total =>
+      counts.isEmpty ? serdar + hatice : counts.values.fold(0, (a, b) => a + b);
 }
 
 class ManualReaderQuotaService {
@@ -33,7 +36,11 @@ class ManualReaderQuotaService {
     final now = moment ?? DateTime.now();
     final minuteOfDay = now.hour * 60 + now.minute;
     final date = minuteOfDay < manualReaderActiveStartMinute
-        ? DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1))
+        ? DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 1))
         : DateTime(now.year, now.month, now.day);
     final y = date.year.toString().padLeft(4, '0');
     final m = date.month.toString().padLeft(2, '0');
@@ -46,13 +53,15 @@ class ManualReaderQuotaService {
     return ManualReaderDailyQuota(
       serdar: (data['serdar'] as num?)?.toInt() ?? 0,
       hatice: (data['hatice'] as num?)?.toInt() ?? 0,
+      counts: Map<String, dynamic>.from(
+        data['counts'] ?? const {},
+      ).map((key, value) => MapEntry(key, (value as num?)?.toInt() ?? 0)),
     );
   }
 
   Future<ManualReaderDailyQuota> fetchToday() async {
     try {
-      final snap =
-          await _db.collection(_collection).doc(quotaDayKey()).get();
+      final snap = await _db.collection(_collection).doc(quotaDayKey()).get();
       return _fromData(snap.data());
     } catch (e) {
       debugPrint('MANUAL READER QUOTA FETCH ERROR: $e');
@@ -76,8 +85,22 @@ class ManualReaderQuotaService {
     required String readerId,
     required String dayKey,
   }) async {
-    if (readerId != 'serdar' && readerId != 'hatice') return false;
-
+    if (readerId != 'serdar' && readerId != 'hatice') {
+      final ref = _db
+          .collection(_collection)
+          .doc(dayKey)
+          .collection('readers')
+          .doc(readerId);
+      final snap = await tx.get(ref);
+      final current = (snap.data()?['count'] as num?)?.toInt() ?? 0;
+      if (current >= manualReaderDailyQuotaCloseAt) return false;
+      tx.set(ref, {
+        'readerId': readerId,
+        'count': current + 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    }
     final ref = _db.collection(_collection).doc(dayKey);
     final snap = await tx.get(ref);
     final data = snap.data();
@@ -86,15 +109,11 @@ class ManualReaderQuotaService {
     final current = readerId == 'hatice' ? hatice : serdar;
     if (current >= manualReaderDailyQuotaCloseAt) return false;
 
-    tx.set(
-      ref,
-      {
-        'serdar': readerId == 'serdar' ? serdar + 1 : serdar,
-        'hatice': readerId == 'hatice' ? hatice + 1 : hatice,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    tx.set(ref, {
+      'serdar': readerId == 'serdar' ? serdar + 1 : serdar,
+      'hatice': readerId == 'hatice' ? hatice + 1 : hatice,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     return true;
   }
 }

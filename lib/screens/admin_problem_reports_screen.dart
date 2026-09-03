@@ -34,8 +34,6 @@ class _AdminProblemReportsScreenState extends State<AdminProblemReportsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    // Çözülenler 1 günden eskiyse arka planda silinsin.
-    ProblemReportService.instance.purgeExpiredResolvedReports();
   }
 
   @override
@@ -146,6 +144,45 @@ class _AdminReportCardState extends State<_AdminReportCard> {
   bool _resolving = false;
   bool _expanded = false;
 
+  Future<void> _reply() async {
+    final controller = TextEditingController();
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Kullanıcıya mesaj gönder'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 1500,
+          maxLines: 6,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Gönder'),
+          ),
+        ],
+      ),
+    );
+    final text = controller.text.trim();
+    controller.dispose();
+    if (send == true && text.isNotEmpty) {
+      await ProblemReportService.instance.sendMessage(
+        reportId: widget.report.id,
+        text: text,
+        admin: true,
+      );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mesaj kullanıcıya gönderildi.')),
+        );
+    }
+  }
+
   Future<void> _resolve() async {
     final adminUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     if (adminUid.isEmpty) return;
@@ -183,9 +220,9 @@ class _AdminReportCardState extends State<_AdminReportCard> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Güncellenemedi: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Güncellenemedi: $e')));
     } finally {
       if (mounted) setState(() => _resolving = false);
     }
@@ -193,9 +230,9 @@ class _AdminReportCardState extends State<_AdminReportCard> {
 
   void _copy(String label, String value) {
     Clipboard.setData(ClipboardData(text: value));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label kopyalandı')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label kopyalandı')));
   }
 
   @override
@@ -289,20 +326,52 @@ class _AdminReportCardState extends State<_AdminReportCard> {
             ],
             if (widget.showResolve) ...[
               const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.tonal(
-                  onPressed: _resolving ? null : _resolve,
-                  child: _resolving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Çözüldü'),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _reply,
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: const Text('Mesaj gönder'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonal(
+                    onPressed: _resolving ? null : _resolve,
+                    child: _resolving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Çözüldü'),
+                  ),
+                ],
               ),
             ],
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: ProblemReportService.instance.watchMessages(report.id),
+              builder: (context, snapshot) {
+                final messages = snapshot.data ?? const [];
+                if (messages.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Divider(height: 24),
+                    const Text(
+                      'Mesajlaşma',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    for (final message in messages)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          '${message['senderRole'] == 'admin' ? 'Yönetici' : 'Kullanıcı'}: ${message['text'] ?? ''}',
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -311,11 +380,7 @@ class _AdminReportCardState extends State<_AdminReportCard> {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-    this.onCopy,
-  });
+  const _InfoRow({required this.label, required this.value, this.onCopy});
 
   final String label;
   final String value;
@@ -331,10 +396,7 @@ class _InfoRow extends StatelessWidget {
             width: 64,
             child: Text(
               label,
-              style: const TextStyle(
-                color: faloraTextSecondary,
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: faloraTextSecondary, fontSize: 12),
             ),
           ),
           Expanded(

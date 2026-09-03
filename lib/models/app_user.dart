@@ -16,6 +16,7 @@ class AppUser {
     this.emailVerified = false,
     this.age,
     this.zodiac,
+    this.maritalStatus,
     this.displayName = '',
     this.birthDate,
     this.profileCompleted = false,
@@ -34,6 +35,7 @@ class AppUser {
   final bool emailVerified;
   final int? age;
   final String? zodiac;
+  final String? maritalStatus;
   final String displayName;
   final DateTime? birthDate;
   final bool profileCompleted;
@@ -73,6 +75,7 @@ class AppUser {
     bool? emailVerified,
     int? age,
     String? zodiac,
+    String? maritalStatus,
     String? displayName,
     DateTime? birthDate,
     bool? profileCompleted,
@@ -91,6 +94,7 @@ class AppUser {
       emailVerified: emailVerified ?? this.emailVerified,
       age: age ?? this.age,
       zodiac: zodiac ?? this.zodiac,
+      maritalStatus: maritalStatus ?? this.maritalStatus,
       displayName: displayName ?? this.displayName,
       birthDate: birthDate ?? this.birthDate,
       profileCompleted: profileCompleted ?? this.profileCompleted,
@@ -141,6 +145,7 @@ class AppUser {
       lastRewardAt: lastReward,
       age: displayAgeFromUserData(json),
       zodiac: _parseZodiac(json['zodiac']),
+      maritalStatus: _parseOptionalString(json['maritalStatus']),
       birthDate: birthDate,
       profileCompleted: json['profileCompleted'] == true,
       avatarAsset: _parseOptionalString(

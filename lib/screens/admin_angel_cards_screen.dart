@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:falora/ai_config.dart';
 import 'package:falora/services/backend_auth_client.dart';
+import 'package:falora/services/admin_editorial_ai_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
   late final List<TextEditingController> _cardCtrls;
   int _groupSize = 10;
   bool _sending = false;
+  bool _generating = false;
 
   @override
   void initState() {
@@ -45,10 +47,8 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
 
   int get _slotCount => _cardCtrls.length;
 
-  List<String> get _filledCards => _cardCtrls
-      .map((c) => c.text.trim())
-      .where((t) => t.isNotEmpty)
-      .toList();
+  List<String> get _filledCards =>
+      _cardCtrls.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
 
   void _setSlotCount(int count) {
     final next = count.clamp(_minCards, _maxCards);
@@ -71,9 +71,9 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
     final title = _titleCtrl.text.trim();
     final cards = _filledCards;
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Başlık gerekli')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Başlık gerekli')));
       return;
     }
     if (cards.length < _minCards) {
@@ -137,8 +137,7 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
       if (!mounted) return;
       if (response.statusCode != 200) {
         throw Exception(
-          json['error']?.toString() ??
-              'Gönderilemedi (${response.statusCode})',
+          json['error']?.toString() ?? 'Gönderilemedi (${response.statusCode})',
         );
       }
 
@@ -156,11 +155,48 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _generateWithAi() async {
+    setState(() => _generating = true);
+    try {
+      final data = await AdminEditorialAiService.instance.generate(
+        type: 'angel_cards',
+        date: DateTime.now().toIso8601String().split('T').first,
+        count: _slotCount,
+      );
+      final generated = (data['cards'] as List? ?? [])
+          .map((x) => '$x')
+          .toList();
+      for (var i = 0; i < _cardCtrls.length; i++) {
+        _cardCtrls[i].text = i < generated.length ? generated[i] : '';
+      }
+      final title = data['title']?.toString().trim() ?? '';
+      if (title.isNotEmpty) _titleCtrl.text = title;
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Kartlar AI tarafından dolduruldu. Göndermeden önce kontrol et.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _generating = false);
     }
   }
 
@@ -169,7 +205,22 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
     final filled = _filledCards.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Melek Kartı')),
+      appBar: AppBar(
+        title: const Text('Melek Kartı'),
+        actions: [
+          TextButton.icon(
+            onPressed: _sending || _generating ? null : _generateWithAi,
+            icon: _generating
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome),
+            label: const Text('AI oluştur'),
+          ),
+        ],
+      ),
       body: FaloraBackground(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -269,9 +320,7 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
               max: _maxCards.toDouble(),
               divisions: _maxCards - _minCards,
               label: '$_slotCount',
-              onChanged: _sending
-                  ? null
-                  : (v) => _setSlotCount(v.round()),
+              onChanged: _sending ? null : (v) => _setSlotCount(v.round()),
             ),
             const SizedBox(height: 8),
             Text(
