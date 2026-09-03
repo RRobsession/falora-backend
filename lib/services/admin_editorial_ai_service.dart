@@ -23,7 +23,7 @@ class AdminEditorialAiService {
             if (count != null) 'count': count,
           }),
         )
-        .timeout(const Duration(seconds: 90));
+        .timeout(const Duration(minutes: 3));
     Map<String, dynamic> data = {};
     try {
       final decoded = jsonDecode(response.body);
