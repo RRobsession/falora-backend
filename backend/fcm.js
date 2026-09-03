@@ -16,12 +16,16 @@ const FCM_ANDROID_CHANNEL_ID =
   process.env.FCM_ANDROID_CHANNEL_ID || 'falora_ready';
 const NOTIFICATION_SCHEDULES = 'notification_schedules';
 const NOTIFICATION_WORKER_INTERVAL_MS = 20 * 1000;
+const PROBLEM_REPORTS = 'problem_reports';
+const PROBLEM_REPORT_WORKER_INTERVAL_MS = 20 * 1000;
 
 let messaging = null;
 let firestore = null;
 let initAttempted = false;
 let notificationWorkerTimer = null;
 let notificationWorkerInFlight = false;
+let problemReportWorkerTimer = null;
+let problemReportWorkerInFlight = false;
 
 const READY_MESSAGES = {
   fortune: {
@@ -89,6 +93,7 @@ function initFirebaseAdmin() {
       serviceAccount.project_id,
     );
     startNotificationScheduleWorker();
+    startProblemReportNotificationWorker();
     void restorePendingNotificationSchedules().catch((err) => {
       console.error('FCM SCHEDULE RESTORE ERROR:', err.message);
     });
@@ -261,12 +266,172 @@ async function getAdminFcmTokens() {
   return tokens;
 }
 
+async function notifyAdmins({ title, body, type, data = {} }) {
+  if (!isFcmReady()) {
+    return { success: false, reason: 'fcm_not_configured' };
+  }
+
+  const admins = await getAdminFcmTokens();
+  if (admins.length === 0) {
+    return { success: false, reason: 'no_admin_tokens' };
+  }
+
+  let sent = 0;
+  for (const { uid, token } of admins) {
+    const messageId = await sendNotification({
+      token,
+      title,
+      body,
+      data: { type, ...data },
+      userId: uid,
+    });
+    if (messageId) sent += 1;
+  }
+
+  return { success: sent > 0, sent, total: admins.length };
+}
+
+async function notifyAdminsNewTokenPurchase({
+  productId,
+  tokensGranted,
+  userEmail,
+  orderId,
+}) {
+  const amount = Number(tokensGranted) || 0;
+  const buyer = userEmail?.trim() || 'Bir kullanıcı';
+  const packageLabel = amount > 0 ? `${amount} jeton` : productId;
+  return notifyAdmins({
+    title: 'Yeni jeton satın alımı',
+    body: `${buyer} • ${packageLabel}${orderId ? ` • ${orderId}` : ''}`,
+    type: 'admin_token_purchase',
+    data: { productId: productId || '', orderId: orderId || '' },
+  });
+}
+
+async function notifyAdminsNewProblemReport({ reportId, displayName }) {
+  const reporter = displayName?.trim() || 'Bir kullanıcı';
+  return notifyAdmins({
+    title: 'Yeni sorun bildirimi',
+    body: `${reporter} yeni bir sorun bildirdi.`,
+    type: 'admin_problem_report',
+    data: { requestId: String(reportId) },
+  });
+}
+
+async function notifyAdminsCommunityEvent({ title, body, topicId }) {
+  return notifyAdmins({
+    title,
+    body,
+    type: 'admin_community',
+    data: { topicId: String(topicId || '') },
+  });
+}
+
+async function notifyAdminsForProblemReport(reportId) {
+  const ref = firestore.collection(PROBLEM_REPORTS).doc(reportId);
+  const claimed = await firestore.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const data = snap.data() || {};
+    if (data.status !== 'open' || data.adminNotified === true) return null;
+    if (data.adminNotificationClaimed === true) return null;
+    tx.set(
+      ref,
+      {
+        adminNotificationClaimed: true,
+        adminNotificationClaimedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return { displayName: data.displayName };
+  });
+
+  if (!claimed) return { success: false, reason: 'already_handled' };
+
+  try {
+    const result = await notifyAdminsNewProblemReport({
+      reportId,
+      displayName: claimed.displayName,
+    });
+    if (result.success) {
+      await ref.set(
+        {
+          adminNotified: true,
+          adminNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          adminNotificationSent: result.sent || 0,
+        },
+        { merge: true },
+      );
+      return result;
+    }
+
+    await ref.set(
+      {
+        adminNotificationClaimed: admin.firestore.FieldValue.delete(),
+        adminNotificationLastError: result.reason || 'send_failed',
+      },
+      { merge: true },
+    );
+    return result;
+  } catch (error) {
+    await ref.set(
+      {
+        adminNotificationClaimed: admin.firestore.FieldValue.delete(),
+        adminNotificationLastError: error.message || 'send_failed',
+      },
+      { merge: true },
+    );
+    throw error;
+  }
+}
+
+async function processPendingProblemReportNotifications() {
+  if (!isFcmReady() || problemReportWorkerInFlight) return;
+  problemReportWorkerInFlight = true;
+  try {
+    const snap = await firestore
+      .collection(PROBLEM_REPORTS)
+      .where('status', '==', 'open')
+      .limit(50)
+      .get();
+    for (const doc of snap.docs) {
+      const data = doc.data() || {};
+      if (data.adminNotified === true || data.adminNotificationClaimed === true) {
+        continue;
+      }
+      await notifyAdminsForProblemReport(doc.id);
+    }
+  } finally {
+    problemReportWorkerInFlight = false;
+  }
+}
+
+function startProblemReportNotificationWorker() {
+  if (problemReportWorkerTimer) return problemReportWorkerTimer;
+  void processPendingProblemReportNotifications().catch((error) => {
+    console.error('FCM PROBLEM REPORT WORKER ERROR:', error.message);
+  });
+  problemReportWorkerTimer = setInterval(() => {
+    void processPendingProblemReportNotifications().catch((error) => {
+      console.error('FCM PROBLEM REPORT WORKER ERROR:', error.message);
+    });
+  }, PROBLEM_REPORT_WORKER_INTERVAL_MS);
+  if (typeof problemReportWorkerTimer.unref === 'function') {
+    problemReportWorkerTimer.unref();
+  }
+  return problemReportWorkerTimer;
+}
+
 async function notifyAdminsNewManualRequest({
   requestId,
+  readerId,
   readerName,
   categoryLabel,
   clientName,
 }) {
+  if (readerId !== 'serdar' && readerId !== 'hatice') {
+    return { success: false, reason: 'reader_not_notifiable' };
+  }
   if (!isFcmReady()) {
     console.log(
       'FCM ADMIN NOTIFY | reason=not_configured | requestId=',
@@ -512,6 +677,10 @@ module.exports = {
   sendNotification,
   notifyFortuneReady,
   notifyAdminsNewManualRequest,
+  notifyAdminsNewTokenPurchase,
+  notifyAdminsNewProblemReport,
+  notifyAdminsForProblemReport,
+  notifyAdminsCommunityEvent,
   scheduleFortuneNotify,
   restorePendingNotificationSchedules,
   READY_MESSAGES,

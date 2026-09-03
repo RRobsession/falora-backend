@@ -58,6 +58,8 @@ class NotificationOpenRequest {
       type == 'couple' ||
       type == 'manual' ||
       type == 'admin_manual_request' ||
+      type == 'admin_token_purchase' ||
+      type == 'admin_problem_report' ||
       type == 'daily_horoscope' ||
       type == 'angel_card' ||
       type == 'admin_broadcast';

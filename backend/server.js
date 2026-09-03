@@ -605,12 +605,16 @@ const {
   sendNotification,
   notifyFortuneReady,
   notifyAdminsNewManualRequest,
+  notifyAdminsNewTokenPurchase,
+  notifyAdminsForProblemReport,
   scheduleFortuneNotify,
 } = require('./fcm');
 const {
   completeTokenPurchase,
   restorePurchasesForUser,
 } = require('./play_billing');
+const { completeCommunitySubscription, processCommunityAppStoreNotification } = require('./apple_billing');
+const community = require('./community');
 const { parseServiceAccountJson } = require('./service_account_config');
 
 function resolveDeployGitCommit() {
@@ -1015,6 +1019,7 @@ app.post('/notify-admin-manual-request', requireAuth, async (req, res) => {
 
     const result = await notifyAdminsNewManualRequest({
       requestId: requestId.trim(),
+      readerId: data.readerId,
       readerName: readerName || data.readerName,
       categoryLabel: categoryLabel || data.fortuneType,
       clientName: clientName || data.name,
@@ -1022,6 +1027,33 @@ app.post('/notify-admin-manual-request', requireAuth, async (req, res) => {
     return res.json(result);
   } catch (err) {
     console.error('FCM ADMIN MANUAL REQUEST ERROR:', err.message);
+    return res.status(500).json({ error: 'Admin bildirimi gönderilemedi' });
+  }
+});
+
+app.post('/notify-admin-problem-report', requireAuth, async (req, res) => {
+  const reportId = req.body?.reportId?.toString().trim();
+  if (!reportId) return res.status(400).json({ error: 'reportId gerekli' });
+
+  const db = getFirestore();
+  if (!db) {
+    return res.status(503).json({ error: 'Firebase Admin yapılandırılmadı' });
+  }
+
+  try {
+    const doc = await db.collection('problem_reports').doc(reportId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Bildirim bulunamadı' });
+    const data = doc.data() || {};
+    if (data.userId !== req.auth.uid) {
+      return res.status(403).json({ error: 'Yetkisiz' });
+    }
+    if (data.status !== 'open') {
+      return res.json({ success: false, reason: 'not_open' });
+    }
+    const result = await notifyAdminsForProblemReport(reportId);
+    return res.json(result);
+  } catch (err) {
+    console.error('FCM ADMIN PROBLEM REPORT ERROR:', err.message);
     return res.status(500).json({ error: 'Admin bildirimi gönderilemedi' });
   }
 });
@@ -1057,6 +1089,19 @@ app.post(
   async (req, res) => {
     try {
       const result = await completeTokenPurchase(req.auth, req.body ?? {});
+      if (!result.alreadyProcessed) {
+        try {
+          await notifyAdminsNewTokenPurchase({
+            productId: req.body?.productId,
+            tokensGranted: result.tokensGranted,
+            userEmail: req.auth.email,
+            orderId: result.orderId,
+          });
+        } catch (notifyError) {
+          // Admin push sorunu başarılı satın alma yanıtını bozmamalı.
+          console.error('FCM ADMIN TOKEN PURCHASE ERROR:', notifyError.message);
+        }
+      }
       return res.json(result);
     } catch (err) {
       console.error('token billing error:', err.message);
@@ -1066,6 +1111,122 @@ app.post(
     }
   },
 );
+
+function communityError(res, err) {
+  console.error('COMMUNITY ERROR:', err.message);
+  return res.status(err.statusCode || 500).json({
+    error: err.message || 'Fal Meclisi işlemi tamamlanamadı.',
+    code: err.code || 'community_error',
+  });
+}
+
+app.get('/community/categories', requireAuth, async (_req, res) => {
+  try { return res.json({ items: await community.categories() }); }
+  catch (err) { return communityError(res, err); }
+});
+app.get('/community/topics', requireAuth, async (req, res) => {
+  try { return res.json(await community.listTopics({ ...(req.query || {}), uid: req.auth.uid })); }
+  catch (err) { return communityError(res, err); }
+});
+app.get('/community/topics/:id', requireAuth, async (req, res) => {
+  try { return res.json(await community.topicDetail(req.auth.uid, req.params.id, req.query.replyCursor)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/community/topics', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try {
+    const result = await community.createTopic(req.auth.uid, req.body || {});
+    try {
+      const { notifyAdminsCommunityEvent } = require('./fcm');
+      await notifyAdminsCommunityEvent({ title: 'Fal Meclisi: yeni konu', body: String(req.body?.title || '').slice(0, 100), topicId: result.id });
+    } catch (e) { console.error('COMMUNITY ADMIN PUSH ERROR:', e.message); }
+    return res.status(201).json(result);
+  } catch (err) { return communityError(res, err); }
+});
+app.post('/community/topics/:id/replies', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try {
+    const result=await community.createReply(req.auth.uid, req.params.id, req.body || {});
+    if(result.topicOwnerId&&result.topicOwnerId!==req.auth.uid){const token=await require('./fcm').getUserFcmToken(result.topicOwnerId);if(token)await sendNotification({token,userId:result.topicOwnerId,title:result.verifiedReader?'Bir yorumcu cevapladı':'Fal Meclisi’nde yeni cevap',body:'Açtığın konuya yeni bir cevap geldi.',data:{type:'community_reply',topicId:req.params.id}});}
+    return res.status(201).json({id:result.id});
+  }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/community/topics/:id/images', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try { return res.status(201).json(await community.attachImages(req.auth.uid, req.params.id, req.body?.images)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/community/topics/:id/solution', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try { const result=await community.acceptSolution(req.auth.uid, req.params.id, req.body?.replyId);if(result.answerAuthorId&&result.answerAuthorId!==req.auth.uid){const token=await require('./fcm').getUserFcmToken(result.answerAuthorId);if(token)await sendNotification({token,userId:result.answerAuthorId,title:'Cevabın çözüm seçildi',body:'Fal Meclisi’ndeki cevabın konu sahibi tarafından çözüm seçildi.',data:{type:'community_solution',topicId:req.params.id}});}return res.json({success:true}); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/community/reports', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try { return res.status(201).json(await community.report(req.auth.uid, req.body || {})); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/community/blocks', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try { return res.status(201).json(await community.block(req.auth.uid, req.body?.userId, req.body?.topicId)); }
+  catch (err) { return communityError(res, err); }
+});
+app.get('/community/entitlement', requireAuth, async (req, res) => {
+  try { return res.json(await community.entitlement(req.auth.uid, true)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/community/subscription/complete', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try { return res.json(await completeCommunitySubscription(req.auth, req.body || {})); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/billing/apple/notifications', async (req, res) => {
+  try { return res.json(await processCommunityAppStoreNotification(req.body?.signedPayload)); }
+  catch (err) { return communityError(res, err); }
+});
+app.get('/admin/community/overview', requireAuth, requireAdmin, async (_req, res) => {
+  try { return res.json(await community.adminOverview()); }
+  catch (err) { return communityError(res, err); }
+});
+app.get('/admin/community/topics', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json({ items: await community.adminList(community.C.topics, req.query.status, req.query.limit) }); }
+  catch (err) { return communityError(res, err); }
+});
+app.get('/admin/community/topics/:id', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json(await community.adminTopicDetail(req.params.id)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/topics/:id/replies', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.status(201).json(await community.adminReply(req.auth.uid, req.params.id, req.body || {})); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/topics/:id/replies/:replyId/action', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json(await community.adminReplyAction(req.auth.uid, req.params.id, req.params.replyId, req.body?.action)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/test-entitlement', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json(await community.adminGrantTestEntitlement(req.body?.email, req.body?.days, req.auth.uid)); }
+  catch (err) { return communityError(res, err); }
+});
+app.get('/admin/community/reports', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json({ items: await community.adminList(community.C.reports, req.query.status || 'open', req.query.limit) }); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/moderate', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json(await community.adminModerate(req.body || {}, req.auth.uid)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/users/action', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json(await community.adminUserAction(req.body || {}, req.auth.uid)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/categories/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim(); if (!id) throw Object.assign(new Error('Kategori kimliği gerekli.'), { statusCode: 400 });
+    const allowed = ['name','description','icon','enabled','order','retentionMode','retentionDays']; const data = {};
+    for (const key of allowed) if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) data[key] = req.body[key];
+    data.updatedAt = require('firebase-admin').firestore.FieldValue.serverTimestamp();
+    await getFirestore().collection(community.C.categories).doc(id).set(data, { merge: true }); return res.json({ success: true });
+  } catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/cleanup', requireAuth, requireAdmin, async (_req, res) => {
+  try { return res.json(await community.cleanupExpired()); }
+  catch (err) { return communityError(res, err); }
+});
 
 app.post(
   '/referrals/claim',
@@ -1445,6 +1606,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('Firebase Admin aktif (auth + FCM + Firestore).');
     startFortuneRetentionCleanupLoop();
     console.log(`Fal kayit saklama suresi: ${RETENTION_DAYS} gun.`);
+    community.startCleanupLoop();
   } else {
     console.error(
       'Firebase Admin kapalı — Railway Variables içine FIREBASE_SERVICE_ACCOUNT_JSON ekleyin.',

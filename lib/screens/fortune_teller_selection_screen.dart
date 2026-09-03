@@ -26,6 +26,8 @@ class FortuneTellerSelectionPage extends StatefulWidget {
     required this.onTellerChosen,
     required this.onManualReaderChosen,
     required this.onOpenShop,
+    this.showAiTellers = true,
+    this.showManualReaders = true,
   });
 
   final FortuneCategory category;
@@ -34,6 +36,8 @@ class FortuneTellerSelectionPage extends StatefulWidget {
   final void Function(BuildContext context, ManualFortuneReader reader)
   onManualReaderChosen;
   final VoidCallback onOpenShop;
+  final bool showAiTellers;
+  final bool showManualReaders;
 
   @override
   State<FortuneTellerSelectionPage> createState() =>
@@ -65,7 +69,8 @@ class _FortuneTellerSelectionPageState
   @override
   void initState() {
     super.initState();
-    if (supportsManualFortuneReaders(widget.category)) {
+    if (widget.showManualReaders &&
+        supportsManualFortuneReaders(widget.category)) {
       _manualOffer = manualOfferFor(widget.category);
       logManualReaderConfig(widget.category);
       _bindQuotaStream();
@@ -121,7 +126,9 @@ class _FortuneTellerSelectionPageState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Yorumcunu Seç',
+                          widget.showAiTellers
+                              ? 'Yapay Zekâ Falcını Seç'
+                              : 'Özel Yorumcunu Seç',
                           style: FaloraTypography.labelLarge.copyWith(
                             color: faloraBronzeDark,
                             fontSize: 13,
@@ -130,7 +137,7 @@ class _FortuneTellerSelectionPageState
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _manualOffer != null
+                          !widget.showAiTellers && _manualOffer != null
                               ? () {
                                   final visibleNames = manualFortuneReaders
                                       .where((r) => _statuses.isVisible(r.id))
@@ -146,7 +153,7 @@ class _FortuneTellerSelectionPageState
                                       '$names birebir özel yorum sunar; '
                                       '${_manualOffer!.questionLimit} soru için 1 hak gerekir.';
                                 }()
-                              : 'Yorumcular Özel Fal Hakkı ile kişisel yorum hazırlar.',
+                              : 'Seçtiğin yapay zekâ falcısı, hazırladığın falı ve verdiğin bilgileri yorumlar.',
                           style: FaloraTypography.bodyMedium,
                         ),
                         const SizedBox(height: 12),
@@ -155,34 +162,38 @@ class _FortuneTellerSelectionPageState
                           onTap: widget.onOpenShop,
                           showLabel: true,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Özel Fal Hakkı: $specialRights',
-                          style: FaloraTypography.labelLarge.copyWith(
-                            color: faloraBronzeDark,
+                        if (widget.showManualReaders) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Özel Fal Hakkı: $specialRights',
+                            style: FaloraTypography.labelLarge.copyWith(
+                              color: faloraBronzeDark,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 22),
-                const FaloraSectionHeading('Yorumcular'),
-                const SizedBox(height: 12),
-                ...fortuneTellersForCategory(category).map(
-                  (teller) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: _FortuneTellerCard(
-                      teller: teller,
-                      userTokens: tokens,
-                      onTap: () {
-                        logFortuneSelectedCost(category, teller.id);
-                        widget.onTellerChosen(context, teller);
-                      },
+                if (widget.showAiTellers) ...[
+                  const FaloraSectionHeading('Yapay Zekâ Yorumcuları'),
+                  const SizedBox(height: 12),
+                  ...fortuneTellersForCategory(category).map(
+                    (teller) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _FortuneTellerCard(
+                        teller: teller,
+                        userTokens: tokens,
+                        onTap: () {
+                          logFortuneSelectedCost(category, teller.id);
+                          widget.onTellerChosen(context, teller);
+                        },
+                      ),
                     ),
                   ),
-                ),
-                if (_manualOffer != null) ...[
+                ],
+                if (widget.showManualReaders && _manualOffer != null) ...[
                   Builder(
                     builder: (context) {
                       final visibleReaders = manualFortuneReaders

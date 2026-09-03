@@ -187,9 +187,16 @@ class _PremiumTokenBalanceCardState extends State<PremiumTokenBalanceCard>
 }
 
 class PremiumWelcomeHeader extends StatelessWidget {
-  const PremiumWelcomeHeader({super.key, required this.userName});
+  const PremiumWelcomeHeader({
+    super.key,
+    required this.userName,
+    this.subtitle = 'Kadim yorumcunun sayfaları açıldı',
+    this.prompt = 'Bugün hangi falı keşfetmek istiyorsun?',
+  });
 
   final String userName;
+  final String subtitle;
+  final String prompt;
 
   @override
   Widget build(BuildContext context) {
@@ -230,13 +237,10 @@ class PremiumWelcomeHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              'Kadim yorumcunun sayfaları açıldı',
-              style: FaloraTypography.bodyLarge,
-            ),
+            Text(subtitle, style: FaloraTypography.bodyLarge),
             const SizedBox(height: 14),
             Text(
-              'Bugün hangi falı keşfetmek istiyorsun?',
+              prompt,
               style: FaloraTypography.titleMedium.copyWith(
                 fontWeight: FontWeight.w500,
               ),

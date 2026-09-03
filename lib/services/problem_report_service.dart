@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:falora/models/problem_report.dart';
+import 'package:falora/services/notification_backend_service.dart';
 import 'package:falora/picked_image.dart';
 import 'package:falora/utils/upload_image_prepare.dart';
 import 'package:flutter/foundation.dart';
@@ -78,7 +81,7 @@ class ProblemReportService {
     await Future<void>.delayed(Duration.zero);
 
     try {
-      await _db.collection(_collection).add({
+      final report = await _db.collection(_collection).add({
         'userId': userId,
         'userEmail': userEmail.trim(),
         'displayName': displayName.trim(),
@@ -89,6 +92,11 @@ class ProblemReportService {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      unawaited(
+        NotificationBackendService.instance.notifyAdminsProblemReport(
+          reportId: report.id,
+        ),
+      );
     } catch (e) {
       debugPrint('PROBLEM_REPORT CREATE ERROR: $e');
       throw ProblemReportException(
@@ -103,12 +111,13 @@ class ProblemReportService {
         .where('status', isEqualTo: 'open')
         .snapshots()
         .map((snap) {
-      final items = snap.docs
-          .map((d) => ProblemReport.fromFirestore(d.id, d.data()))
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return items;
-    });
+          final items =
+              snap.docs
+                  .map((d) => ProblemReport.fromFirestore(d.id, d.data()))
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return items;
+        });
   }
 
   Stream<List<ProblemReport>> watchResolvedForAdmin() {
@@ -117,17 +126,18 @@ class ProblemReportService {
         .where('status', isEqualTo: 'resolved')
         .snapshots()
         .map((snap) {
-      final cutoff = DateTime.now().subtract(resolvedRetention);
-      final items = snap.docs
-          .map((d) => ProblemReport.fromFirestore(d.id, d.data()))
-          .where((r) {
-            final when = r.resolvedAt ?? r.updatedAt ?? r.createdAt;
-            return !when.isBefore(cutoff);
-          })
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return items;
-    });
+          final cutoff = DateTime.now().subtract(resolvedRetention);
+          final items =
+              snap.docs
+                  .map((d) => ProblemReport.fromFirestore(d.id, d.data()))
+                  .where((r) {
+                    final when = r.resolvedAt ?? r.updatedAt ?? r.createdAt;
+                    return !when.isBefore(cutoff);
+                  })
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return items;
+        });
   }
 
   Future<void> markResolved({

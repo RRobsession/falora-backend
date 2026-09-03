@@ -26,10 +26,7 @@ class NotificationBackendService {
           .post(
             uri,
             headers: await _headers(),
-            body: jsonEncode({
-              'userId': userId,
-              'type': type,
-            }),
+            body: jsonEncode({'userId': userId, 'type': type}),
           )
           .timeout(_timeout);
 
@@ -47,11 +44,7 @@ class NotificationBackendService {
   Future<void> notifyFortuneReady({
     required String userId,
     required bool isCouple,
-  }) =>
-      _notifyReady(
-        userId: userId,
-        type: isCouple ? 'couple' : 'fortune',
-      );
+  }) => _notifyReady(userId: userId, type: isCouple ? 'couple' : 'fortune');
 
   Future<void> notifyManualFortuneReady({required String userId}) =>
       _notifyReady(userId: userId, type: 'manual');
@@ -89,6 +82,25 @@ class NotificationBackendService {
     }
   }
 
+  Future<void> notifyAdminsProblemReport({required String reportId}) async {
+    try {
+      final uri = Uri.parse('$apiBaseUrl/notify-admin-problem-report');
+      final response = await http
+          .post(
+            uri,
+            headers: await _headers(),
+            body: jsonEncode({'reportId': reportId}),
+          )
+          .timeout(_timeout);
+      BackendAuthClient.logRequest(
+        '/notify-admin-problem-report',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('NOTIFY ADMIN PROBLEM REPORT error: $e');
+    }
+  }
+
   Future<void> scheduleNotify({
     required String userId,
     required DateTime notifyAt,
@@ -99,8 +111,8 @@ class NotificationBackendService {
     final type = isManual
         ? 'manual'
         : isCouple
-            ? 'couple'
-            : 'fortune';
+        ? 'couple'
+        : 'fortune';
     try {
       final uri = Uri.parse('$apiBaseUrl/schedule-notify');
       final response = await http
@@ -138,11 +150,7 @@ class NotificationBackendService {
           .post(
             uri,
             headers: await _headers(),
-            body: jsonEncode({
-              'token': token,
-              'title': title,
-              'body': body,
-            }),
+            body: jsonEncode({'token': token, 'title': title, 'body': body}),
           )
           .timeout(_timeout);
 

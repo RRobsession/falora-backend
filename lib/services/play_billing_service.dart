@@ -279,6 +279,27 @@ class PlayBillingService {
     }
   }
 
+  Future<PlayPurchaseResult> buySubscription(String productId) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
+      throw PlayBillingException('Tombik Teyze+ şu anda yalnızca iOS uygulamasında kullanılabilir.');
+    }
+    await init();
+    final products = await queryProducts({productId});
+    if (products.isEmpty) throw PlayBillingException('Abonelik App Store’da henüz kullanıma hazır değil.');
+    if (_purchaseCompleters.containsKey(productId)) throw PlayBillingException('Bekleyen bir satın alma var.');
+    final completer = Completer<PlayPurchaseResult>();
+    _purchaseCompleters[productId] = completer;
+    try {
+      final started = await _iap.buyNonConsumable(
+        purchaseParam: PurchaseParam(productDetails: products.first),
+      );
+      if (!started) throw PlayBillingException('Abonelik başlatılamadı.');
+      return await completer.future.timeout(_purchaseTimeout);
+    } finally {
+      if (!completer.isCompleted) _purchaseCompleters.remove(productId);
+    }
+  }
+
   Future<List<PlayPurchaseResult>> restorePurchases() async {
     if (kIsWeb) return const [];
     await init();
@@ -306,7 +327,7 @@ class PlayBillingService {
   Future<void> _handlePurchaseUpdate(PurchaseDetails purchase) async {
     final productId = purchase.productID;
     final isKnownProduct =
-        productId.isNotEmpty && allBillingProductIds.contains(productId);
+        productId.isNotEmpty && allRecognizedBillingProductIds.contains(productId);
     final isAnonymous =
         productId.isEmpty && _purchaseCompleters.isNotEmpty;
 

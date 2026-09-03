@@ -1,6 +1,7 @@
 /** Admin: melek kartı cümlelerini gruplara dağıtarak FCM gönderir. */
 const admin = require('firebase-admin');
 const { getFirestore, isFcmReady, sendNotification } = require('./fcm');
+const { isAdminUser } = require('./admin_config');
 
 const ALLOWED_GROUP_SIZES = [10, 20];
 const MIN_CARDS = 2;
@@ -105,7 +106,9 @@ async function collectTokenUsers() {
   const snap = await db.collection('users').get();
   const users = [];
   for (const doc of snap.docs) {
-    const token = doc.data()?.fcmToken;
+    const data = doc.data() || {};
+    if (isAdminUser(doc.id, data.email)) continue;
+    const token = data.fcmToken;
     if (typeof token === 'string' && token.trim()) {
       users.push({ uid: doc.id, token: token.trim() });
     }

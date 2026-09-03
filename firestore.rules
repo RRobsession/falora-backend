@@ -96,7 +96,16 @@ service cloud.firestore {
 
         && (!('referredBy' in resource.data)
 
-          || request.resource.data.referredBy == resource.data.referredBy);
+          || request.resource.data.referredBy == resource.data.referredBy)
+
+        && request.resource.data.get('communityRole', 'member')
+          == resource.data.get('communityRole', 'member')
+
+        && request.resource.data.get('communityBanned', false)
+          == resource.data.get('communityBanned', false)
+
+        && request.resource.data.get('communitySuspendedUntil', null)
+          == resource.data.get('communitySuspendedUntil', null);
 
     }
 
@@ -240,6 +249,8 @@ service cloud.firestore {
           && request.resource.data.email.size() >= 3
           && allowedCreateTokenBalance()
           && allowedCreateSpecialFortuneRights()
+          && request.resource.data.get('communityRole', 'member') == 'member'
+          && request.resource.data.get('communityBanned', false) == false
           && validReferredByOnCreate();
       }
 
@@ -519,6 +530,51 @@ service cloud.firestore {
 
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // Fal Meclisi yazmaları ve premium cevap okumaları yalnızca doğrulamalı
+    // backend tarafından yapılır. Client kendi rolünü/sayacını değiştiremez.
+    match /community_categories/{categoryId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /community_topics/{topicId} {
+      allow read: if isSignedIn()
+        && resource.data.visibility == 'public'
+        && resource.data.moderationStatus == 'published';
+      allow create, update, delete: if false;
+
+      match /replies/{replyId} {
+        // Cevap payload'u ücretsiz cihaza ulaşmamalı. Backend entitlement
+        // doğrulamasından sonra sayfalı olarak döndürür; admin SDK kuralları aşar.
+        allow read, create, update, delete: if false;
+      }
+    }
+
+    match /community_entitlements/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false;
+    }
+
+    match /community_subscription_transactions/{transactionId} {
+      allow read, write: if false;
+    }
+
+    match /community_reports/{reportId} {
+      allow read, write: if false;
+    }
+
+    match /community_blocks/{blockId} {
+      allow read, write: if false;
+    }
+
+    match /community_config/{docId} {
+      allow read, write: if false;
+    }
+
+    match /community_moderation_events/{eventId} {
+      allow read, write: if false;
     }
 
   }

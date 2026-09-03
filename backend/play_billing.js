@@ -10,11 +10,16 @@ const USERS_COLLECTION = 'users';
 const PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.rrlime.falora';
 
 const TOKEN_PRODUCTS = {
-  tokens_50: { tokens: 50 },
-  tokens_100: { tokens: 100 },
-  tokens_150: { tokens: 500 },
-  tokens_200: { tokens: 1000 },
-  tokens_1500: { tokens: 0, specialFortuneRights: 1, kind: 'special_fortune_right' },
+  tokens_50: { tokens: 50, displayName: '50 Jeton Paketi' },
+  tokens_100: { tokens: 100, displayName: '100 Jeton Paketi' },
+  tokens_150: { tokens: 500, displayName: '500 Jeton Paketi' },
+  tokens_200: { tokens: 1000, displayName: '1000 Jeton Paketi' },
+  tokens_1500: {
+    tokens: 0,
+    displayName: '1 Özel Fal Hakkı',
+    specialFortuneRights: 1,
+    kind: 'special_fortune_right',
+  },
 };
 
 let androidPublisher = null;
@@ -207,6 +212,40 @@ async function verifyProductPurchase(productId, purchaseToken) {
   }
 }
 
+async function resolveVerifiedProductPrice(productId, purchaseData) {
+  try {
+    const publisher = getAndroidPublisher();
+    const response = await publisher.inappproducts.get({
+      packageName: PACKAGE_NAME,
+      sku: productId,
+    });
+    const product = response.data || {};
+    const regionCode = purchaseData.regionCode || null;
+    const regionalPrice = regionCode ? product.prices?.[regionCode] : null;
+    const price = regionalPrice || product.defaultPrice || null;
+    if (!price?.priceMicros || !price?.currency) {
+      return { priceMicros: null, price: null, currencyCode: null, regionCode };
+    }
+    const priceMicros = Number(price.priceMicros);
+    return {
+      priceMicros: Number.isFinite(priceMicros) ? priceMicros : null,
+      price: Number.isFinite(priceMicros) ? priceMicros / 1_000_000 : null,
+      currencyCode: price.currency,
+      regionCode,
+    };
+  } catch (error) {
+    // Fiyat metadatası jeton teslimini engellememeli. Satın alma geçerliliği
+    // purchases.products.get ile ayrıca ve zorunlu olarak doğrulanmıştır.
+    console.error(`PLAY BILLING price lookup failed productId=${productId}: ${error.message}`);
+    return {
+      priceMicros: null,
+      price: null,
+      currencyCode: null,
+      regionCode: purchaseData.regionCode || null,
+    };
+  }
+}
+
 function validateTokenPayload(body) {
   const definition = TOKEN_PRODUCTS[body.productId];
   if (!definition) {
@@ -262,11 +301,18 @@ function buildPurchaseLedger({
   linkedRequestId,
   tokensGranted,
   specialFortuneRightsGranted,
+  displayName,
+  userEmail,
+  priceData,
 }) {
+  const purchaseTimeMillis = Number(purchaseData.purchaseTimeMillis || transactionDate);
   return {
     uid,
+    userId: uid,
+    userEmail: userEmail || null,
     kind,
     productId,
+    displayPackageName: displayName,
     purchaseToken,
     purchaseId: purchaseId || null,
     source: source || 'purchased',
@@ -275,7 +321,14 @@ function buildPurchaseLedger({
     purchaseState: purchaseData.purchaseState ?? null,
     acknowledgementState: purchaseData.acknowledgementState ?? null,
     consumptionState: purchaseData.consumptionState ?? null,
-    purchaseTimeMillis: purchaseData.purchaseTimeMillis || transactionDate || null,
+    purchaseTimeMillis: Number.isFinite(purchaseTimeMillis) ? purchaseTimeMillis : null,
+    purchaseTime: Number.isFinite(purchaseTimeMillis)
+      ? admin.firestore.Timestamp.fromMillis(purchaseTimeMillis)
+      : null,
+    priceMicros: priceData.priceMicros,
+    price: priceData.price,
+    currencyCode: priceData.currencyCode,
+    regionCode: priceData.regionCode,
     purchaseType: purchaseData.purchaseType ?? null,
     linkedRequestId: linkedRequestId || null,
     tokensGranted: tokensGranted || 0,
@@ -298,6 +351,7 @@ async function completeTokenPurchase(auth, body) {
   const definition = validateTokenPayload(body);
   const purchaseData = await verifyProductPurchase(body.productId, body.purchaseToken);
   assertVerifiedPurchase(body.productId, body.purchaseToken, purchaseData);
+  const priceData = await resolveVerifiedProductPrice(body.productId, purchaseData);
 
   const ledgerRef = firestore.collection(PLAY_PURCHASES_COLLECTION).doc(body.purchaseToken);
   const userRef = firestore.collection(USERS_COLLECTION).doc(auth.uid);
@@ -316,6 +370,7 @@ async function completeTokenPurchase(auth, body) {
         specialFortuneRightsGranted:
           Number(existingData.specialFortuneRightsGranted) || 0,
         alreadyProcessed: true,
+        orderId: existingData.orderId || null,
       };
     }
 
@@ -351,12 +406,16 @@ async function completeTokenPurchase(auth, body) {
       kind: definition.kind || 'token_pack',
       tokensGranted: definition.tokens,
       specialFortuneRightsGranted: definition.specialFortuneRights || 0,
+      displayName: definition.displayName,
+      userEmail: auth.email,
+      priceData,
     }));
 
     return {
       tokensGranted: definition.tokens,
       specialFortuneRightsGranted: definition.specialFortuneRights || 0,
       alreadyProcessed: false,
+      orderId: purchaseData.orderId || null,
     };
   });
 }
@@ -382,4 +441,9 @@ module.exports = {
   completeTokenPurchase,
   restorePurchasesForUser,
   PLAY_PURCHASES_COLLECTION,
+  _test: {
+    assertVerifiedPurchase,
+    buildPurchaseLedger,
+    validateTokenPayload,
+  },
 };

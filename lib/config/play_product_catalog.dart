@@ -94,6 +94,17 @@ Set<String> get tokenProductIds =>
 
 Set<String> get allBillingProductIds => tokenProductIds;
 
+/// App Store Connect'te auto-renewable subscription olarak oluşturulmalıdır.
+const String iosCommunitySubscriptionProductId =
+    String.fromEnvironment('IOS_COMMUNITY_SUBSCRIPTION_ID',
+        defaultValue: 'tombik_teyze_plus_monthly');
+
+Set<String> get allRecognizedBillingProductIds => {
+      ...allBillingProductIds,
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
+        iosCommunitySubscriptionProductId,
+    };
+
 /// Web / geliştirme önizlemesi için sabit fiyatlar (Play Billing yok).
 const tokenProductMockPrices = <String, String>{
   'tokens_50': '₺9,94',

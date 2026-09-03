@@ -957,11 +957,13 @@ class FaloraAncientBottomNav extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
     this.bottomPadding = 0,
+    this.useJournalLabel = false,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
   final double bottomPadding;
+  final bool useJournalLabel;
 
   static const _items = [
     (Icons.home_rounded, FontAwesomeIcons.house, 'Ana Sayfa'),
@@ -1028,7 +1030,9 @@ class FaloraAncientBottomNav extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          item.$3,
+                          i == 1 && useJournalLabel ? 'Fal Günlüğüm' : item.$3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight:

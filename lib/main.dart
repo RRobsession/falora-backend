@@ -87,6 +87,20 @@ double _mobileBottomInset(BuildContext context) {
   return MediaQuery.viewPaddingOf(context).bottom;
 }
 
+/// Windows/Linux geliştirme ortamında iOS atölye ana ekranını görsel olarak
+/// incelemek için: --dart-define=FORCE_IOS_WORKSHOP_PREVIEW=true
+/// Release derlemelerinde bu bayrak dikkate alınmaz.
+const bool _forceIosWorkshopPreview = bool.fromEnvironment(
+  'FORCE_IOS_WORKSHOP_PREVIEW',
+  defaultValue: false,
+);
+
+bool get _usesIosWorkshopHome =>
+    (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) ||
+    (kDebugMode && _forceIosWorkshopPreview);
+
+bool get usesIosExpandedExperience => _usesIosWorkshopHome;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -1051,10 +1065,36 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
       );
       return;
     }
+    _openCategoryTellerSelection(cat);
+  }
+
+  void _openAiCategory(FortuneCategory cat) {
+    _openCategoryTellerSelection(
+      cat,
+      showAiTellers: true,
+      showManualReaders: false,
+    );
+  }
+
+  void _openManualCategory(FortuneCategory cat) {
+    _openCategoryTellerSelection(
+      cat,
+      showAiTellers: false,
+      showManualReaders: true,
+    );
+  }
+
+  void _openCategoryTellerSelection(
+    FortuneCategory cat, {
+    bool showAiTellers = true,
+    bool showManualReaders = true,
+  }) {
     Navigator.of(context).push(
       faloraPageRoute<void>(
         FortuneTellerSelectionPage(
           category: cat,
+          showAiTellers: showAiTellers,
+          showManualReaders: showManualReaders,
           onTellerChosen: (ctx, teller) {
             if (isAutoOnlyCategory(cat)) {
               _openAutoCategoryForm(ctx, cat, teller);
@@ -2376,7 +2416,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
   Widget _buildShell(AppUser user) {
     final tabTitles = [
       '',
-      'Fallarım',
+      _usesIosWorkshopHome ? 'Fal Günlüğüm' : 'Fallarım',
       'İlişki Tavsiyesi',
       'Çift Uyumu',
       'Profil',
@@ -2415,9 +2455,12 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
             tokens: user.tokens,
             zodiac: user.zodiac,
             onCategoryTap: _openCategory,
+            onAiCategoryTap: _openAiCategory,
+            onManualCategoryTap: _openManualCategory,
             onOpenShop: _openShop,
             onOpenReward: _openRewardAd,
             onOpenYesNo: _openYesNoFortune,
+            onOpenJournal: () => setState(() => _tabIndex = 1),
           ),
           _FallarimPage(
             readings: _fortuneRequests,
@@ -2443,6 +2486,7 @@ class _FaloraShellState extends State<FaloraShell> with WidgetsBindingObserver {
         currentIndex: _tabIndex,
         onTap: (i) => setState(() => _tabIndex = i),
         bottomPadding: _mobileBottomInset(context),
+        useJournalLabel: _usesIosWorkshopHome,
       ),
     );
   }
@@ -2457,9 +2501,12 @@ class _AnaSayfa extends StatelessWidget {
     required this.tokens,
     this.zodiac,
     required this.onCategoryTap,
+    required this.onAiCategoryTap,
+    required this.onManualCategoryTap,
     required this.onOpenShop,
     required this.onOpenReward,
     required this.onOpenYesNo,
+    required this.onOpenJournal,
   });
 
   final String userId;
@@ -2467,13 +2514,31 @@ class _AnaSayfa extends StatelessWidget {
   final int tokens;
   final String? zodiac;
   final void Function(FortuneCategory) onCategoryTap;
+  final void Function(FortuneCategory) onAiCategoryTap;
+  final void Function(FortuneCategory) onManualCategoryTap;
   final VoidCallback onOpenShop;
   final VoidCallback onOpenReward;
   final VoidCallback onOpenYesNo;
+  final VoidCallback onOpenJournal;
 
   @override
   Widget build(BuildContext context) {
     final zodiacLabel = zodiac?.trim();
+    if (_usesIosWorkshopHome) {
+      return _IosFalWorkshopHome(
+        userId: userId,
+        userName: userName,
+        tokens: tokens,
+        zodiac: zodiacLabel,
+        onCategoryTap: onCategoryTap,
+        onAiCategoryTap: onAiCategoryTap,
+        onManualCategoryTap: onManualCategoryTap,
+        onOpenShop: onOpenShop,
+        onOpenReward: onOpenReward,
+        onOpenYesNo: onOpenYesNo,
+        onOpenJournal: onOpenJournal,
+      );
+    }
     return FaloraBackground(
       child: SafeArea(
         bottom: false,
@@ -2571,6 +2636,433 @@ class _AnaSayfa extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// iOS/App Store deneyimi: Falora'nın pasif bir rapor kataloğu değil,
+/// kullanıcının ritüele katıldığı kültürel bir fal atölyesi olduğunu öne çıkarır.
+/// Android ana ekranı yukarıdaki mevcut akışı kullanmaya devam eder.
+class _IosFalWorkshopHome extends StatelessWidget {
+  const _IosFalWorkshopHome({
+    required this.userId,
+    required this.userName,
+    required this.tokens,
+    required this.zodiac,
+    required this.onCategoryTap,
+    required this.onAiCategoryTap,
+    required this.onManualCategoryTap,
+    required this.onOpenShop,
+    required this.onOpenReward,
+    required this.onOpenYesNo,
+    required this.onOpenJournal,
+  });
+
+  final String userId;
+  final String userName;
+  final int tokens;
+  final String? zodiac;
+  final void Function(FortuneCategory) onCategoryTap;
+  final void Function(FortuneCategory) onAiCategoryTap;
+  final void Function(FortuneCategory) onManualCategoryTap;
+  final VoidCallback onOpenShop;
+  final VoidCallback onOpenReward;
+  final VoidCallback onOpenYesNo;
+  final VoidCallback onOpenJournal;
+
+  @override
+  Widget build(BuildContext context) {
+    return FaloraBackground(
+      child: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final maxContentWidth = constraints.maxWidth >= 900
+                    ? 980.0
+                    : 720.0;
+                final isWide = constraints.maxWidth >= 700;
+                return CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: maxContentWidth,
+                          ),
+                          child: PremiumWelcomeHeader(
+                            userName: userName,
+                            subtitle: 'Tombik Teyze ile fal sayfaların hazır',
+                            prompt: 'Bugün falını nasıl hazırlamak istersin?',
+                          ),
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: maxContentWidth,
+                          ),
+                          child: Column(
+                            children: [
+                              DailyAngelCard(userId: userId),
+                              if (zodiac != null && zodiac!.isNotEmpty)
+                                DailyHoroscopeCard(zodiac: zodiac!),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: _IosJourneyChooser(
+                        maxWidth: maxContentWidth,
+                        columns: isWide ? 3 : 1,
+                        onCategoryTap: onCategoryTap,
+                        onAiCategoryTap: onAiCategoryTap,
+                        onManualCategoryTap: onManualCategoryTap,
+                        onOpenJournal: onOpenJournal,
+                        onOpenYesNo: onOpenYesNo,
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: SizedBox(height: 32 + _mobileBottomInset(context)),
+                    ),
+                  ],
+                );
+              },
+            ),
+            Positioned(
+              top: 8,
+              right: 18,
+              child: HomeQuickActions(
+                tokens: tokens,
+                onOpenShop: onOpenShop,
+                onOpenReward: onOpenReward,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IosJourneyChooser extends StatelessWidget {
+  const _IosJourneyChooser({
+    required this.maxWidth,
+    required this.columns,
+    required this.onCategoryTap,
+    required this.onAiCategoryTap,
+    required this.onManualCategoryTap,
+    required this.onOpenJournal,
+    required this.onOpenYesNo,
+  });
+
+  final double maxWidth;
+  final int columns;
+  final void Function(FortuneCategory) onCategoryTap;
+  final void Function(FortuneCategory) onAiCategoryTap;
+  final void Function(FortuneCategory) onManualCategoryTap;
+  final VoidCallback onOpenJournal;
+  final VoidCallback onOpenYesNo;
+
+  Future<void> _openJourney(
+    BuildContext context,
+    String title,
+    String description,
+    List<FortuneCategory> categories,
+    void Function(FortuneCategory) onSelected,
+  ) async {
+    final selected = await showModalBottomSheet<FortuneCategory>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: faloraParchmentRaised,
+      builder: (context) => _IosJourneySheet(
+        title: title,
+        description: description,
+        categories: categories,
+      ),
+    );
+    if (selected != null) onSelected(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final journeys = [
+      (
+        title: 'Falımı Hazırla',
+        detail: 'Kartlarını seç, baklalarını serp veya su işaretlerini oluştur.',
+        icon: Icons.gesture_rounded,
+        categories: const [
+          FortuneCategory.kahve,
+          FortuneCategory.bakla,
+          FortuneCategory.tarot,
+          FortuneCategory.su,
+          FortuneCategory.iskambil,
+          FortuneCategory.elFali,
+        ],
+        manualMode: false,
+        directAction: null,
+      ),
+      (
+        title: 'Yorumcuya Gönder',
+        detail: 'Falını hazırla; Serdar veya Hatice’ye kişisel yorum için gönder.',
+        icon: Icons.forum_outlined,
+        categories: const [
+          FortuneCategory.kahve,
+          FortuneCategory.bakla,
+          FortuneCategory.tarot,
+        ],
+        manualMode: true,
+        directAction: null,
+      ),
+      (
+        title: 'Fal Günlüğüm',
+        detail: 'Hazırlanan, bekleyen ve tamamlanan bütün fallarına yeniden bak.',
+        icon: Icons.auto_stories_rounded,
+        categories: const <FortuneCategory>[],
+        manualMode: null,
+        directAction: 'journal',
+      ),
+      (
+        title: 'Kişisel Keşifler',
+        detail: 'Rüyalarını, sayılarını ve kişisel gökyüzü yorumunu keşfet.',
+        icon: Icons.explore_outlined,
+        categories: const [
+          FortuneCategory.ruyaTabiri,
+          FortuneCategory.numeroloji,
+          FortuneCategory.burcYorumu,
+        ],
+        manualMode: null,
+        directAction: null,
+      ),
+      (
+        title: 'İlişkiler',
+        detail: 'İlişki tavsiyesi al veya çift uyumunu birlikte incele.',
+        icon: Icons.favorite_border_rounded,
+        categories: const [
+          FortuneCategory.iliskiTavsiyesi,
+          FortuneCategory.ciftUyumu,
+        ],
+        manualMode: null,
+        directAction: null,
+      ),
+      (
+        title: 'Üç Kartlık Hızlı Soru',
+        detail: 'Sorunu yaz, üç kartını kendin seç ve sembolik yanıtını aç.',
+        icon: Icons.thumbs_up_down_outlined,
+        categories: const <FortuneCategory>[],
+        manualMode: null,
+        directAction: 'yes_no',
+      ),
+    ];
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Bugün ne yapmak istiyorsun?',
+                style: FaloraTypography.sectionHeading,
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                'Tombik Teyze ile falını hazırla, yorum yolunu seç veya geçmiş fallarına dön.',
+                style: TextStyle(color: _textSecondary, height: 1.35),
+              ),
+              const SizedBox(height: 14),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = 12.0;
+                  final width =
+                      (constraints.maxWidth - gap * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (final journey in journeys)
+                        SizedBox(
+                          width: width,
+                          height: 142,
+                          child: _IosJourneyCard(
+                            title: journey.title,
+                            detail: journey.detail,
+                            icon: journey.icon,
+                            onTap: journey.directAction == 'journal'
+                                ? onOpenJournal
+                                : journey.directAction == 'yes_no'
+                                ? onOpenYesNo
+                                : () => _openJourney(
+                                    context,
+                                    journey.title,
+                                    journey.detail,
+                                    journey.categories,
+                                    journey.manualMode == true
+                                        ? onManualCategoryTap
+                                        : journey.manualMode == false
+                                        ? onAiCategoryTap
+                                        : onCategoryTap,
+                                  ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IosJourneyCard extends StatelessWidget {
+  const _IosJourneyCard({
+    required this.title,
+    required this.detail,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String title;
+  final String detail;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(FaloraRadius.lg),
+        child: Ink(
+          padding: const EdgeInsets.all(18),
+          decoration: faloraParchmentDecoration(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: faloraBronze.withValues(alpha: 0.14),
+                ),
+                child: Icon(icon, color: faloraBronzeDark),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      detail,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textSecondary,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: faloraBronze),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IosJourneySheet extends StatelessWidget {
+  const _IosJourneySheet({
+    required this.title,
+    required this.description,
+    required this.categories,
+  });
+
+  final String title;
+  final String description;
+  final List<FortuneCategory> categories;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: FaloraTypography.sectionHeading.copyWith(fontSize: 23),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          for (final category in categories) ...[
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(category),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.all(15),
+                alignment: Alignment.centerLeft,
+              ),
+              child: Row(
+                children: [
+                  CategoryIconWidget(
+                    iconPath: category.iconPath,
+                    fallbackIcon: category.fallbackIcon,
+                    color: category.color,
+                    size: 42,
+                    iconSize: 20,
+                    hasGradient: category.hasGradientIcon,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      category.label,
+                      style: const TextStyle(
+                        color: _textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ],
       ),
     );
   }

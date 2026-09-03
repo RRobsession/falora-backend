@@ -8,6 +8,8 @@ import 'package:falora/screens/admin_manual_fortune_screen.dart';
 import 'package:falora/screens/admin_manual_reader_status_screen.dart';
 import 'package:falora/screens/admin_problem_reports_screen.dart';
 import 'package:falora/screens/admin_statistics_screen.dart';
+import 'package:falora/screens/admin_token_sales_screen.dart';
+import 'package:falora/community/admin_community_screen.dart';
 import 'package:falora/services/manual_fortune_storage_service.dart';
 import 'package:falora/services/notification_service.dart';
 import 'package:falora/services/problem_report_service.dart';
@@ -80,15 +82,34 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
 
   void _onPendingAdminNotification() {
     final pending = NotificationService.instance.pendingOpenRequest.value;
-    if (pending?.type != 'admin_manual_request' || pending?.isValid != true) {
+    if (pending?.isValid != true) return;
+
+    final type = pending!.type;
+    if (type != 'admin_manual_request' &&
+        type != 'admin_problem_report' &&
+        type != 'admin_token_purchase') {
       return;
     }
     NotificationService.instance.consumePendingOpenRequest();
     if (!mounted) return;
-    _openManualFortunes();
+
+    switch (type) {
+      case 'admin_manual_request':
+        _openManualFortunes();
+        _showAdminNotificationMessage('Serdar veya Hatice’ye yeni fal geldi.');
+      case 'admin_problem_report':
+        _push(const AdminProblemReportsScreen());
+        _showAdminNotificationMessage('Yeni sorun bildirimi geldi.');
+      case 'admin_token_purchase':
+        _push(const AdminTokenSalesScreen());
+        _showAdminNotificationMessage('Yeni jeton satın alımı geldi.');
+    }
+  }
+
+  void _showAdminNotificationMessage(String message) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Yeni özel fal talebi geldi')));
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _push(Widget page) {
@@ -151,6 +172,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         onOpen: () => _push(const AdminGrantTokensScreen()),
       ),
       _AdminCategory(
+        title: 'Jeton Satışları',
+        subtitle: 'Google Play siparişleri ve GPA kimlikleri',
+        icon: Icons.receipt_long_outlined,
+        accent: const Color(0xFF2E6F73),
+        onOpen: () => _push(const AdminTokenSalesScreen()),
+      ),
+      _AdminCategory(
         title: 'Bildirim',
         subtitle: 'Herkese toplu gönder',
         icon: Icons.campaign_outlined,
@@ -199,13 +227,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Kategoriler',
+                        Row(children:[Expanded(child:Text(
+                          'Uygulama Yönetimi',
                           style: FaloraTypography.titleLarge.copyWith(
                             fontSize: wide ? 22 : 20,
                             color: faloraInkHeading,
                           ),
-                        ),
+                        )),FilledButton.icon(onPressed:()=>_push(const AdminCommunityScreen()),icon:const Icon(Icons.forum_outlined),label:const Text('Fal Meclisi'))]),
                         const SizedBox(height: 2),
                         Text(
                           'Bir alana dokunarak devam et',
