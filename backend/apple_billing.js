@@ -341,6 +341,6 @@ module.exports = {
   _test: {
     assertAppleTransaction,
     assertCommunitySubscription,
-    decodeAppleSignedTransaction,
+      decodeAppleSignedTransaction,
   },
 };
