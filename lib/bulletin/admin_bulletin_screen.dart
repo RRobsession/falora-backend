@@ -131,32 +131,194 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
       if (posts.isEmpty)
         const ListTile(title: Text('Henüz Bülten içeriği yok'))
       else
-        for (final p in posts)
-          Card(
-            child: ListTile(
-              title: Text('${p['title'] ?? ''}'),
-              subtitle: Text(
-                '${p['status']} • ${(p['categoryIds'] as List?)?.join(', ') ?? ''}',
-              ),
-              onTap: () => _edit(p),
-              trailing: PopupMenuButton<String>(
-                onSelected: (a) => _postAction(p, a),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Düzenle')),
-                  PopupMenuItem(
-                    value: p['status'] == 'published' ? 'unpublish' : 'publish',
-                    child: Text(
-                      p['status'] == 'published'
-                          ? 'Yayından kaldır'
-                          : 'Yayınla',
-                    ),
+        ...posts
+            .where((p) => (p['categoryIds'] as List? ?? []).contains('daily'))
+            .map(_adminPostCard),
+      if (posts.any(
+        (p) => !(p['categoryIds'] as List? ?? []).contains('daily'),
+      )) ...[
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 18, 4, 8),
+          child: Text(
+            'Diğer içerikler',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+        ),
+        ...posts
+            .where((p) => !(p['categoryIds'] as List? ?? []).contains('daily'))
+            .map(_adminPostCard),
+      ],
+    ],
+  );
+
+  Widget _adminPostCard(dynamic p) {
+    final postComments = comments
+        .where(
+          (x) => x['postId'] == p['id'] && x['moderationStatus'] != 'removed',
+        )
+        .take(5)
+        .toList();
+    final publishedAt = p['publishedAt'] is num
+        ? DateFormat('dd.MM.yyyy HH:mm').format(
+            DateTime.fromMillisecondsSinceEpoch(
+              (p['publishedAt'] as num).toInt(),
+            ),
+          )
+        : '';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 14),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 6, 8),
+            child: Row(
+              children: [
+                const CircleAvatar(child: Icon(Icons.auto_awesome)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${p['authorDisplayName'] ?? 'Tombik Teyze'}',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        '${p['status']} • $publishedAt',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  const PopupMenuItem(value: 'remove', child: Text('Kaldır')),
-                ],
-              ),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'İçerik işlemleri',
+                  onSelected: (a) => _postAction(p, a),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Düzenle')),
+                    PopupMenuItem(
+                      value: p['status'] == 'published'
+                          ? 'unpublish'
+                          : 'publish',
+                      child: Text(
+                        p['status'] == 'published'
+                            ? 'Yayından kaldır'
+                            : 'Yayınla',
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'remove',
+                      child: Text('İçeriği kaldır'),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-    ],
+          if (p['mediaType'] == 'image' && p['imageUrl'] != null)
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: Image.network('${p['imageUrl']}', fit: BoxFit.cover),
+            ),
+          if (p['mediaType'] == 'youtube' && p['youtubeThumbnailUrl'] != null)
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    '${p['youtubeThumbnailUrl']}',
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const CircleAvatar(
+                  radius: 26,
+                  child: Icon(Icons.play_arrow, size: 34),
+                ),
+              ],
+            ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${p['title'] ?? ''}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                if ('${p['summary'] ?? ''}'.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    '${p['summary']}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+                if ('${p['body'] ?? ''}'.isNotEmpty) ...[
+                  const SizedBox(height: 9),
+                  Text('${p['body']}', style: const TextStyle(height: 1.45)),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.favorite_border, size: 19),
+                    const SizedBox(width: 5),
+                    Text('${p['likeCount'] ?? 0} beğeni'),
+                    const SizedBox(width: 18),
+                    const Icon(Icons.chat_bubble_outline, size: 18),
+                    const SizedBox(width: 5),
+                    Text('${p['commentCount'] ?? 0} yorum'),
+                  ],
+                ),
+                if (postComments.isNotEmpty) ...[
+                  const Divider(height: 26),
+                  for (final x in postComments) _adminInlineComment(x),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _adminInlineComment(dynamic x) => Padding(
+    padding: const EdgeInsets.only(bottom: 7),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const CircleAvatar(
+          radius: 14,
+          child: Icon(Icons.person_outline, size: 16),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '${x['displayName'] ?? 'Kullanıcı'}  ',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                TextSpan(text: '${x['body'] ?? ''}'),
+              ],
+            ),
+          ),
+        ),
+        PopupMenuButton<String>(
+          tooltip: 'Yorum işlemleri',
+          padding: EdgeInsets.zero,
+          iconSize: 20,
+          onSelected: (action) => _commentAction(x, action),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'remove', child: Text('Yorumu sil')),
+            PopupMenuItem(value: 'ban', child: Text('Kullanıcıyı engelle')),
+          ],
+        ),
+      ],
+    ),
   );
   Widget _pollsTab(BuildContext c) => ListView(
     padding: const EdgeInsets.all(14),

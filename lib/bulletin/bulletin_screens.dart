@@ -316,124 +316,293 @@ class _Empty extends StatelessWidget {
   );
 }
 
-class _PostCard extends StatelessWidget {
+class _PostCard extends StatefulWidget {
   const _PostCard({required this.post, required this.onOpen});
   final BulletinPost post;
   final VoidCallback onOpen;
   @override
-  Widget build(BuildContext c) => Card(
-    margin: const EdgeInsets.only(bottom: 14),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: onOpen,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: faloraBronze.withValues(alpha: .15),
-                  child: const Icon(
-                    Icons.auto_awesome,
-                    color: faloraBronzeDark,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              post.authorDisplayName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          if (post.authorVerified)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 4),
-                              child: Icon(
-                                Icons.verified,
-                                size: 17,
-                                color: Color(0xFF47755C),
-                              ),
-                            ),
-                        ],
-                      ),
-                      Text(
-                        '${_categoryNames(post.categoryIds)} • ${DateFormat('dd.MM • HH:mm').format(post.publishedAt)}',
-                        style: Theme.of(c).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+  State<_PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<_PostCard> {
+  late BulletinPost post = widget.post;
+  List<BulletinComment> comments = const [];
+  String? commentCursor;
+  bool loadingComments = true, liking = false;
+  YoutubePlayerController? player;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComments();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.id != widget.post.id) {
+      post = widget.post;
+      comments = const [];
+      _loadComments();
+    }
+  }
+
+  @override
+  void dispose() {
+    player?.close();
+    super.dispose();
+  }
+
+  Future<void> _loadComments() async {
+    try {
+      final detail = await BulletinService.instance.detail(post.id);
+      if (mounted) {
+        setState(() {
+          post = detail.post;
+          comments = detail.comments;
+          commentCursor = detail.cursor;
+          loadingComments = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => loadingComments = false);
+    }
+  }
+
+  Future<void> _like() async {
+    if (liking || !post.allowLikes) return;
+    final old = post;
+    setState(() {
+      liking = true;
+      post = BulletinPost.fromJson(
+        _postToJson(old)
+          ..['liked'] = !old.liked
+          ..['likeCount'] = old.likeCount + (old.liked ? -1 : 1),
+      );
+    });
+    try {
+      final result = await BulletinService.instance.like(post.id);
+      if (mounted) {
+        setState(
+          () => post = BulletinPost.fromJson(
+            _postToJson(post)
+              ..['liked'] = result['liked']
+              ..['likeCount'] = result['likeCount'],
           ),
-          if (post.mediaType == 'image' && post.imageUrl != null)
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Image.network(
-                post.imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) =>
-                    const Center(child: Icon(Icons.broken_image_outlined)),
-              ),
-            ),
-          if (post.mediaType == 'youtube' && post.youtubeVideoId != null)
-            _YoutubeThumb(post: post, onTap: onOpen),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  post.title,
-                  style: Theme.of(
-                    c,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                if (post.summary.isNotEmpty) ...[
-                  const SizedBox(height: 7),
-                  Text(
-                    post.summary,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      post.liked ? Icons.favorite : Icons.favorite_border,
-                      size: 19,
-                      color: post.liked ? Colors.redAccent : faloraBronzeDark,
-                    ),
-                    const SizedBox(width: 5),
-                    Text('${post.likeCount}'),
-                    const SizedBox(width: 18),
-                    const Icon(Icons.chat_bubble_outline, size: 18),
-                    const SizedBox(width: 5),
-                    Text('${post.commentCount}'),
-                    const Spacer(),
-                    const Icon(
-                      Icons.arrow_forward_ios,
-                      size: 15,
-                      color: faloraBronzeDark,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => post = old);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => liking = false);
+    }
+  }
+
+  Future<void> _comment() async {
+    final controller = TextEditingController();
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Yorum yaz'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 1500,
+          maxLines: 5,
+          decoration: const InputDecoration(hintText: 'Yorumunu paylaş…'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Yayınla'),
           ),
         ],
       ),
+    );
+    final text = controller.text.trim();
+    controller.dispose();
+    if (send != true || text.length < 2) return;
+    if (_quickReject(text)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Yorum uygunsuz ifade içeriyor.')),
+        );
+      }
+      return;
+    }
+    await BulletinService.instance.comment(post.id, text);
+    await _loadComments();
+  }
+
+  void _play() {
+    final id = post.youtubeVideoId;
+    if (id == null) return;
+    setState(
+      () => player = YoutubePlayerController.fromVideoId(
+        videoId: id,
+        autoPlay: true,
+        params: const YoutubePlayerParams(
+          showControls: true,
+          showFullscreenButton: true,
+          enableCaption: true,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _share() => SharePlus.instance.share(
+    ShareParams(subject: post.title, text: '${post.title}\n\n${post.body}'),
+  );
+
+  @override
+  Widget build(BuildContext c) => Card(
+    margin: const EdgeInsets.only(bottom: 14),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: faloraBronze.withValues(alpha: .15),
+                child: const Icon(Icons.auto_awesome, color: faloraBronzeDark),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            post.authorDisplayName,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        if (post.authorVerified)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.verified,
+                              size: 17,
+                              color: Color(0xFF47755C),
+                            ),
+                          ),
+                      ],
+                    ),
+                    Text(
+                      '${_categoryNames(post.categoryIds)} • ${DateFormat('dd.MM • HH:mm').format(post.publishedAt)}',
+                      style: Theme.of(c).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (post.mediaType == 'image' && post.imageUrl != null)
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Image.network(
+              post.imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) =>
+                  const Center(child: Icon(Icons.broken_image_outlined)),
+            ),
+          ),
+        if (post.mediaType == 'youtube' && post.youtubeVideoId != null)
+          player == null
+              ? _YoutubeThumb(post: post, onTap: _play)
+              : YoutubePlayer(controller: player!, aspectRatio: 16 / 9),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                post.title,
+                style: Theme.of(
+                  c,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              if (post.summary.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Text(
+                  post.summary,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+              if (post.body.isNotEmpty) ...[
+                const SizedBox(height: 9),
+                Text(post.body, style: const TextStyle(height: 1.45)),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Beğen',
+                    onPressed: post.allowLikes ? _like : null,
+                    icon: Icon(
+                      post.liked ? Icons.favorite : Icons.favorite_border,
+                      color: post.liked ? Colors.redAccent : faloraBronzeDark,
+                    ),
+                  ),
+                  Text('${post.likeCount} beğeni'),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: post.allowComments ? _comment : null,
+                    icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                    label: Text('${post.commentCount} yorum'),
+                  ),
+                  const Spacer(),
+                  if (post.allowShare)
+                    IconButton(
+                      tooltip: 'Paylaş',
+                      onPressed: _share,
+                      icon: const Icon(Icons.ios_share),
+                    ),
+                ],
+              ),
+              const Divider(),
+              if (loadingComments)
+                const LinearProgressIndicator(minHeight: 2)
+              else if (comments.isEmpty)
+                InkWell(
+                  onTap: post.allowComments ? _comment : null,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Text('Henüz yorum yok. İlk yorumu sen yaz.'),
+                  ),
+                )
+              else ...[
+                for (final comment in comments.take(3))
+                  _CommentCard(
+                    postId: post.id,
+                    comment: comment,
+                    onChanged: _loadComments,
+                  ),
+                if (comments.length > 3 || commentCursor != null)
+                  TextButton(
+                    onPressed: widget.onOpen,
+                    child: Text('Tüm ${post.commentCount} yorumu gör'),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
     ),
   );
 }
