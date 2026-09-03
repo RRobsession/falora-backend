@@ -26,7 +26,7 @@ class CommunityService {
   Future<String> createTopic({required String title,required String body,required String categoryId})async=>(await _call('POST','/community/topics',body:{'title':title,'body':body,'categoryId':categoryId}))['id'].toString();
   Future<void> attachImages(String topicId,List<PickedImage> source)async{if(source.isEmpty)return;final prepared=await prepareImagesForUpload(source);final encoded=<Map<String,String>>[];for(final image in prepared){encoded.add(await encodeImageForFirestorePayload(image));}await _call('POST','/community/topics/$topicId/images',body:{'images':encoded});}
   Future<void> reply(String topicId,String body)=>_call('POST','/community/topics/$topicId/replies',body:{'body':body});
-  Future<void> accept(String topicId,String replyId)=>_call('POST','/community/topics/$topicId/solution',body:{'replyId':replyId});
+  Future<Map<String,dynamic>> vote(String topicId,int value)=>_call('POST','/community/topics/$topicId/vote',body:{'value':value});
   Future<void> report({required String targetType,required String targetId,required String topicId,required String reason})=>_call('POST','/community/reports',body:{'targetType':targetType,'targetId':targetId,'topicId':topicId,'reason':reason});
   Future<void> blockTopicAuthor(String topicId)=>_call('POST','/community/blocks',body:{'topicId':topicId});
   Future<bool> entitlement()async=>(await _call('GET','/community/entitlement'))['active']==true;

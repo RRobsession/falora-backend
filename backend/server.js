@@ -1154,8 +1154,8 @@ app.post('/community/topics/:id/images', requireAuth, requireVerifiedEmail, asyn
   try { return res.status(201).json(await community.attachImages(req.auth.uid, req.params.id, req.body?.images)); }
   catch (err) { return communityError(res, err); }
 });
-app.post('/community/topics/:id/solution', requireAuth, requireVerifiedEmail, async (req, res) => {
-  try { const result=await community.acceptSolution(req.auth.uid, req.params.id, req.body?.replyId);if(result.answerAuthorId&&result.answerAuthorId!==req.auth.uid){const token=await require('./fcm').getUserFcmToken(result.answerAuthorId);if(token)await sendNotification({token,userId:result.answerAuthorId,title:'Cevabın çözüm seçildi',body:'Fal Meclisi’ndeki cevabın konu sahibi tarafından çözüm seçildi.',data:{type:'community_solution',topicId:req.params.id}});}return res.json({success:true}); }
+app.post('/community/topics/:id/vote', requireAuth, requireVerifiedEmail, async (req, res) => {
+  try { return res.json(await community.voteTopic(req.auth.uid, req.params.id, req.body?.value)); }
   catch (err) { return communityError(res, err); }
 });
 app.post('/community/reports', requireAuth, requireVerifiedEmail, async (req, res) => {
@@ -1196,6 +1196,10 @@ app.post('/admin/community/topics/:id/replies', requireAuth, requireAdmin, async
 });
 app.post('/admin/community/topics/:id/replies/:replyId/action', requireAuth, requireAdmin, async (req, res) => {
   try { return res.json(await community.adminReplyAction(req.auth.uid, req.params.id, req.params.replyId, req.body?.action)); }
+  catch (err) { return communityError(res, err); }
+});
+app.post('/admin/community/topics/:id/replies/:replyId/solution', requireAuth, requireAdmin, async (req, res) => {
+  try { return res.json(await community.adminAcceptSolution(req.auth.uid, req.params.id, req.params.replyId)); }
   catch (err) { return communityError(res, err); }
 });
 app.post('/admin/community/test-entitlement', requireAuth, requireAdmin, async (req, res) => {

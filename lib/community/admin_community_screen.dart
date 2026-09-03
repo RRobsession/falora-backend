@@ -133,11 +133,12 @@ class _AdminCommunityTopicState extends State<AdminCommunityTopicScreen> {
           const PopupMenuItem(value:'remove',child:Text('Yorumu sil')),
           PopupMenuItem(value:reply['pinned']==true?'unpin':'pin',child:Text(reply['pinned']==true?'Sabitlemeyi kaldır':'Yorumu sabitle')),
           PopupMenuItem(value:reply['moderatorApproved']==true?'unapprove':'approve',child:Text(reply['moderatorApproved']==true?'Onayı kaldır':'Moderatör onayı ver')),
+          if(reply['isAcceptedSolution']!=true)const PopupMenuItem(value:'solution',child:Text('Çözüm olarak işaretle')),
         ]),
       )),
     ])),
   );
   Future<void>_topicMenu(String action)async{if(action=='reply'){await _writeReply();return;}await _request('POST','/admin/community/moderate',{'targetType':'topic','topicId':widget.topicId,'targetId':widget.topicId,'action':'remove'});if(mounted)Navigator.pop(context);}
   Future<void>_writeReply()async{final controller=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(context)=>AlertDialog(title:const Text('Moderatör yorumu'),content:TextField(controller:controller,maxLength:2000,maxLines:6),actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('Vazgeç')),FilledButton(onPressed:()=>Navigator.pop(context,true),child:const Text('Yayınla'))]));if(ok==true&&controller.text.trim().isNotEmpty){await _request('POST','/admin/community/topics/${widget.topicId}/replies',{'body':controller.text.trim()});_load();}}
-  Future<void>_replyAction(dynamic reply,String action)async{await _request('POST','/admin/community/topics/${widget.topicId}/replies/${reply['id']}/action',{'action':action});_load();}
+  Future<void>_replyAction(dynamic reply,String action)async{final suffix=action=='solution'?'/solution':'/action';await _request('POST','/admin/community/topics/${widget.topicId}/replies/${reply['id']}$suffix',action=='solution'?{}:{'action':action});_load();}
 }

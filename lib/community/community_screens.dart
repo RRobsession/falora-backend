@@ -407,6 +407,10 @@ class _TopicCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(topic.replyCount.toString()),
                       const SizedBox(width: 10),
+                      const Icon(Icons.visibility_outlined, size: 15),
+                      const SizedBox(width: 4),
+                      Text(topic.viewCount.toString()),
+                      const SizedBox(width: 10),
                       Text(
                         DateFormat('dd MMM').format(topic.createdAt),
                         style: const TextStyle(color: faloraInkSoft),
@@ -531,8 +535,21 @@ class _TopicState extends State<CommunityTopicScreen> {
                 Text(
                   '${d!.topic.authorDisplayName} • ${DateFormat('dd.MM.yyyy HH:mm').format(d!.topic.createdAt)}',
                 ),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 6, children: [
+                  _ForumBadge(text: 'Seviye ${d!.topic.authorMemberLevel}', icon: Icons.workspace_premium_outlined),
+                  _ForumBadge(text: d!.topic.authorMemberMonths == 0 ? 'Yeni üye' : '${d!.topic.authorMemberMonths} aydır burada', icon: Icons.calendar_month_outlined),
+                  _ForumBadge(text: '${d!.topic.viewCount} görüntülenme', icon: Icons.visibility_outlined),
+                  _ForumBadge(text: '${d!.topic.replyCount} yorum', icon: Icons.chat_bubble_outline),
+                ]),
                 const Divider(height: 30),
                 Text(d!.topic.body, style: const TextStyle(height: 1.5)),
+                const SizedBox(height: 12),
+                Row(children: [
+                  OutlinedButton.icon(onPressed:()=>_vote(d!.topic.viewerVote==1?0:1),icon:Icon(d!.topic.viewerVote==1?Icons.thumb_up:Icons.thumb_up_outlined),label:Text('${d!.topic.likeCount}')),
+                  const Spacer(),
+                  OutlinedButton.icon(onPressed:()=>_vote(d!.topic.viewerVote==-1?0:-1),icon:Icon(d!.topic.viewerVote==-1?Icons.thumb_down:Icons.thumb_down_outlined),label:Text('${d!.topic.dislikeCount}')),
+                ]),
                 const Divider(height: 34),
                 if (d!.repliesLocked)
                   _Locked(
@@ -582,14 +599,8 @@ class _TopicState extends State<CommunityTopicScreen> {
                               ],
                             ),
                             Text(r.body),
-                            if (!r.isAcceptedSolution)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: () => _accept(r.id),
-                                  child: const Text('Çözüm olarak işaretle'),
-                                ),
-                              ),
+                            const SizedBox(height: 7),
+                            Text('Seviye ${r.authorMemberLevel} • ${r.authorMemberMonths == 0 ? 'Yeni üye' : '${r.authorMemberMonths} aydır burada'}',style:Theme.of(context).textTheme.bodySmall),
                           ],
                         ),
                       ),
@@ -624,10 +635,10 @@ class _TopicState extends State<CommunityTopicScreen> {
     }
   }
 
-  Future<void> _accept(String id) async {
+  Future<void> _vote(int value) async {
     try {
-      await CommunityService.instance.accept(widget.id, id);
-      _load();
+      await CommunityService.instance.vote(widget.id, value);
+      await _load();
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
