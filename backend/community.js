@@ -68,7 +68,20 @@ async function suspension(uid) { const d = (await db().collection(C.users).doc(u
 function cursorFrom(doc) { return doc ? Buffer.from(JSON.stringify({ id: doc.id, t: doc.get('lastActivityAt')?.toMillis?.() || 0 })).toString('base64url') : null; }
 function topicJson(doc) { const d = doc.data(); return { id: doc.id, title:d.title, body:d.body, categoryId:d.categoryId, categoryName:d.categoryName, authorDisplayName:d.authorDisplayName, authorRole:d.authorRole, createdAt:d.createdAt?.toMillis?.() || null, lastActivityAt:d.lastActivityAt?.toMillis?.() || null, expiresAt:d.expiresAt?.toMillis?.() || null, replyCount:d.replyCount || 0, verifiedReaderReplyCount:d.verifiedReaderReplyCount || 0, resolved:d.resolved === true, acceptedAnswerId:d.acceptedAnswerId || null, locked:d.locked === true, thumbnailUrl:d.thumbnailUrl || null, imageUrls:d.imageUrls || [] }; }
 
-async function categories() { await ensureSeedCategories(); const s = await db().collection(C.categories).where('enabled','==',true).orderBy('order').limit(50).get(); return s.docs.map(x => ({ id:x.id, ...x.data() })); }
+async function categories() {
+  await ensureSeedCategories();
+  // Kategori sayısı admin tarafından sınırlı tutulur. Sadece `order` ile
+  // sorgulayıp aktiflik filtresini sunucuda yapmak, yeni kurulumlarda composite
+  // index oluşturulmasını bekletmeden konu formunu kullanılabilir tutar.
+  const snapshot = await db()
+    .collection(C.categories)
+    .orderBy('order')
+    .limit(50)
+    .get();
+  return snapshot.docs
+    .filter((doc) => doc.get('enabled') === true)
+    .map((doc) => ({ id: doc.id, ...doc.data() }));
+}
 async function listTopics({ categoryId, search, cursor, limit = 15, uid }) {
   const n = Math.min(limits.pageMax, Math.max(1, Number(limit)||15)); let q = db().collection(C.topics).where('visibility','==','public').where('moderationStatus','==','published');
   if (categoryId) q=q.where('categoryId','==',clean(categoryId));
