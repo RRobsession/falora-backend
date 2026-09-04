@@ -12,6 +12,7 @@ import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/manual_fortune_reader_avatar.dart';
 import 'package:falora/widgets/premium_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Admin: Serdar / Hatice durumunu ve müşteri görünürlüğünü ayarlar.
@@ -111,7 +112,7 @@ class _AdminManualReaderStatusScreenState
                       return FilterChip(
                         selected: selected,
                         label: Text(category.label),
-                        avatar: Icon(category.fallbackIcon, size: 16),
+                        avatar: FaIcon(category.fallbackIcon, size: 16),
                         onSelected: (value) => setLocal(() {
                           if (value) {
                             selectedCategoryIds.add(category.name);
@@ -508,7 +509,7 @@ class _ReaderStatusCard extends StatelessWidget {
                 .where((category) => reader.supports(category))
                 .map(
                   (category) => Chip(
-                    avatar: Icon(category.fallbackIcon, size: 14),
+                    avatar: FaIcon(category.fallbackIcon, size: 14),
                     label: Text(category.label),
                     visualDensity: VisualDensity.compact,
                   ),
