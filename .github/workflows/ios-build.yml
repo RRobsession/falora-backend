@@ -13,7 +13,7 @@ jobs:
     env:
       APP_BUNDLE_ID: com.rrlime.falora
       APPLE_TEAM_ID: R8A8VT6R34
-      IOS_BUILD_NUMBER: 65
+      IOS_BUILD_NUMBER: 66
 
     steps:
       - name: Checkout
