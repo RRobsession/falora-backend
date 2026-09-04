@@ -8,6 +8,7 @@ import 'package:falora/config/reading_delay_config.dart';
 import 'package:falora/models/fortune_models.dart';
 
 import 'package:falora/models/manual_fortune_request.dart';
+import 'package:falora/models/manual_fortune_reader.dart';
 
 import 'package:falora/services/manual_reader_quota_service.dart';
 import 'package:falora/services/manual_reader_status_service.dart';
