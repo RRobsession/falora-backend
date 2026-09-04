@@ -913,14 +913,13 @@ app.post(
       } else {
         return res.status(400).json({ error: 'Geçersiz içerik türü' });
       }
-      const wordCount = (text) => text.trim().split(/\s+/u).filter(Boolean).length;
       const complete = (text) => /[.!?…]$/u.test(text.trim());
       const validate = (parsed) => {
         if (type === 'angel_cards') {
           if (!Array.isArray(parsed?.cards) || parsed.cards.length !== count) return false;
           return parsed.cards.every((card) =>
             typeof card === 'string' &&
-            wordCount(card) >= 120 &&
+            card.trim().length >= 300 &&
             complete(card) &&
             !/[{}]/u.test(card));
         }
@@ -928,7 +927,7 @@ app.post(
         const names = ['Koç','Boğa','İkizler','Yengeç','Aslan','Başak','Terazi','Akrep','Yay','Oğlak','Kova','Balık'];
         return signs && names.every((sign) =>
           typeof signs[sign] === 'string' &&
-          wordCount(signs[sign]) >= 220 &&
+          signs[sign].trim().length >= 500 &&
           complete(signs[sign]) &&
           !/[{}]/u.test(signs[sign]));
       };
