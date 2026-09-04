@@ -82,6 +82,15 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
       );
       return;
     }
+    final shortCard = cards.indexWhere((card) => card.length < 250);
+    if (shortCard != -1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${shortCard + 1}. kart en az 250 karakter olmalı.'),
+        ),
+      );
+      return;
+    }
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -338,14 +347,6 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
                 enabled: !_sending,
                 minLines: 3,
                 maxLines: 6,
-                maxLength: 500,
-                buildCounter:
-                    (
-                      context, {
-                      required currentLength,
-                      required isFocused,
-                      required maxLength,
-                    }) => Text('$currentLength karakter'),
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   labelText: 'Kart ${i + 1}',
@@ -354,6 +355,18 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
                       : 'İsteğe bağlı — boş bırakılabilir',
                   border: const OutlineInputBorder(),
                   alignLabelWithHint: true,
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${_cardCtrls[i].text.trim().length} karakter · minimum 250',
+                  style: TextStyle(
+                    color: _cardCtrls[i].text.trim().length >= 250
+                        ? faloraInkSoft
+                        : Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),

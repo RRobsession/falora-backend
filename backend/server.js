@@ -919,7 +919,7 @@ app.post(
           if (!Array.isArray(parsed?.cards) || parsed.cards.length !== count) return false;
           return parsed.cards.every((card) =>
             typeof card === 'string' &&
-            card.trim().length >= 80 &&
+            card.trim().length >= 250 &&
             complete(card) &&
             !/[{}]/u.test(card));
         }
@@ -1024,7 +1024,8 @@ app.post(
         err.code === 'invalid_cards' ||
         err.code === 'too_few_cards' ||
         err.code === 'too_many_cards' ||
-        err.code === 'card_too_long' ||
+        err.code === 'card_too_short' ||
+        err.code === 'card_incomplete' ||
         err.code === 'invalid_group_size'
       ) {
         return res.status(400).json({ error: err.message, code: err.code });

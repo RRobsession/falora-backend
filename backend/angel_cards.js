@@ -6,7 +6,7 @@ const { isAdminUser } = require('./admin_config');
 const ALLOWED_GROUP_SIZES = [10, 20];
 const MIN_CARDS = 2;
 const MAX_CARDS = 50;
-const MAX_CARD_LEN = 500;
+const MIN_CARD_LEN = 250;
 const MAX_TITLE_LEN = 80;
 const ISTANBUL_OFFSET_MS = 3 * 60 * 60 * 1000;
 
@@ -86,9 +86,14 @@ function normalizeCards(input) {
     throw err;
   }
   for (const c of cards) {
-    if (c.length > MAX_CARD_LEN) {
-      const err = new Error(`Kart metni çok uzun (max ${MAX_CARD_LEN})`);
-      err.code = 'card_too_long';
+    if (c.length < MIN_CARD_LEN) {
+      const err = new Error(`Kart metni en az ${MIN_CARD_LEN} karakter olmalı`);
+      err.code = 'card_too_short';
+      throw err;
+    }
+    if (!/[.!?…]$/u.test(c)) {
+      const err = new Error('Kart metni tamamlanmış bir cümleyle bitmeli');
+      err.code = 'card_incomplete';
       throw err;
     }
   }
