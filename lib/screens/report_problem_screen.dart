@@ -6,6 +6,7 @@ import 'package:falora/services/problem_report_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/utils/upload_image_prepare.dart';
 import 'package:falora/widgets/premium_ui.dart';
+import 'package:falora/widgets/support_message_bubble.dart';
 import 'package:flutter/material.dart';
 
 /// Profil → Sorun bildir.
@@ -408,7 +409,10 @@ class _SupportConversationCardState extends State<_SupportConversationCard> {
                     ),
                   ),
                 for (final message in messages)
-                  _SupportMessageBubble(message: message),
+                  SupportMessageBubble(
+                    message: message,
+                    viewerIsAdmin: false,
+                  ),
                 const SizedBox(height: 10),
                 FilledButton.tonalIcon(
                   onPressed: _sending ? null : _reply,
@@ -428,53 +432,4 @@ class _SupportConversationCardState extends State<_SupportConversationCard> {
       ],
     ),
   );
-}
-
-class _SupportMessageBubble extends StatelessWidget {
-  const _SupportMessageBubble({required this.message});
-
-  final Map<String, dynamic> message;
-
-  @override
-  Widget build(BuildContext context) {
-    final fromAdmin = message['senderRole'] == 'admin';
-    return Align(
-      alignment: fromAdmin ? Alignment.centerLeft : Alignment.centerRight,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 560),
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-        decoration: BoxDecoration(
-          color: fromAdmin ? faloraParchmentInset : faloraBronze,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(15),
-            topRight: const Radius.circular(15),
-            bottomLeft: Radius.circular(fromAdmin ? 4 : 15),
-            bottomRight: Radius.circular(fromAdmin ? 15 : 4),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              fromAdmin ? 'Destek ekibi' : 'Sen',
-              style: TextStyle(
-                color: fromAdmin ? faloraBronzeDark : faloraParchmentRaised,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              '${message['text'] ?? ''}',
-              style: TextStyle(
-                color: fromAdmin ? faloraInk : faloraParchmentRaised,
-                height: 1.3,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

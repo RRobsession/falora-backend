@@ -4,6 +4,7 @@ import 'package:falora/models/problem_report.dart';
 import 'package:falora/services/problem_report_service.dart';
 import 'package:falora/theme/falora_theme.dart';
 import 'package:falora/widgets/premium_ui.dart';
+import 'package:falora/widgets/support_message_bubble.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -357,16 +358,20 @@ class _AdminReportCardState extends State<_AdminReportCard> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Divider(height: 24),
-                    const Text(
-                      'Mesajlaşma',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                    const Row(
+                      children: [
+                        Icon(Icons.forum_outlined, size: 19),
+                        SizedBox(width: 7),
+                        Text(
+                          'Mesajlaşma',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ],
                     ),
                     for (final message in messages)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          '${message['senderRole'] == 'admin' ? 'Yönetici' : 'Kullanıcı'}: ${message['text'] ?? ''}',
-                        ),
+                      SupportMessageBubble(
+                        message: message,
+                        viewerIsAdmin: true,
                       ),
                   ],
                 );
