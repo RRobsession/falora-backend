@@ -2714,7 +2714,12 @@ class _IosFalWorkshopHome extends StatelessWidget {
                 final maxContentWidth = constraints.maxWidth >= 900
                     ? 980.0
                     : 720.0;
-                final isWide = constraints.maxWidth >= 700;
+                var journeyColumns = 1;
+                if (constraints.maxWidth >= 900) {
+                  journeyColumns = 3;
+                } else if (constraints.maxWidth >= 520) {
+                  journeyColumns = 2;
+                }
                 return CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(
@@ -2750,7 +2755,7 @@ class _IosFalWorkshopHome extends StatelessWidget {
                     SliverToBoxAdapter(
                       child: _IosJourneyChooser(
                         maxWidth: maxContentWidth,
-                        columns: isWide ? 3 : 1,
+                        columns: journeyColumns,
                         onCategoryTap: onCategoryTap,
                         onAiCategoryTap: onAiCategoryTap,
                         onManualCategoryTap: onManualCategoryTap,
@@ -2924,9 +2929,12 @@ class _IosJourneyChooser extends StatelessWidget {
                     runSpacing: gap,
                     children: [
                       for (final journey in journeys)
-                        SizedBox(
-                          width: width,
-                          height: 142,
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minWidth: width,
+                            maxWidth: width,
+                            minHeight: columns == 1 ? 112 : 132,
+                          ),
                           child: _IosJourneyCard(
                             title: journey.title,
                             detail: journey.detail,
