@@ -908,7 +908,7 @@ app.post(
         system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Tam olarak 12 burç için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. HER BURÇ YORUMU 350-380 KELİME OLMALIDIR; kısa özet yazma. Yorumu akıcı paragraflara böl; duygu, ilişki, gündelik yaşam, içsel farkındalık ve uygulanabilir önerileri burca özgü biçimde işle. Kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Her değer yalnızca tamamlanmış düz metin cümlelerinden oluşmalı ve son cümle nokta, ünlem veya soru işaretiyle bitmelidir. Nesne, tema etiketi, anahtar, markdown veya yer tutucu kullanma. Yalnızca JSON döndür: {"signs":{"Koç":"...","Boğa":"...","İkizler":"...","Yengeç":"...","Aslan":"...","Başak":"...","Terazi":"...","Akrep":"...","Yay":"...","Oğlak":"...","Kova":"...","Balık":"..."}}`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Bugüne özgü farklı temalar ve somut, kişisel hissettiren öneriler kullan.`;
       } else if (type === 'angel_cards') {
-        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART BOŞLUKLAR DAHİL 250-400 KARAKTER OLMALIDIR. Birkaç kısa ve tamamlanmış cümle kullan; gereksiz uzatma ve tekrar yapma. Her kartta ayrı bir ana tema, küçük bir farkındalık, uygulanabilir tek öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. cards dizisinin her elemanı SADECE DÜZ METİN STRING olmalıdır; nesne, theme/message anahtarı, etiket, markdown, süslü parantez veya yer tutucu asla kullanma. Her kartın son cümlesini mutlaka nokta, ünlem veya soru işaretiyle tamamla. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART BOŞLUKLAR DAHİL 320-420 KARAKTER OLMALIDIR; 300 karakterin altında bırakma. Birkaç kısa ve tamamlanmış cümle kullan; gereksiz uzatma ve tekrar yapma. Her kartta ayrı bir ana tema, küçük bir farkındalık, uygulanabilir tek öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. cards dizisinin her elemanı SADECE DÜZ METİN STRING olmalıdır; nesne, theme/message anahtarı, etiket, markdown, süslü parantez veya yer tutucu asla kullanma. Her kartın son cümlesini mutlaka nokta, ünlem veya soru işaretiyle tamamla. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Tam olarak ${count} farklı kart üret; her kartın teması ve açılış cümlesi farklı olsun.`;
       } else {
         return res.status(400).json({ error: 'Geçersiz içerik türü' });
@@ -919,7 +919,7 @@ app.post(
           if (!Array.isArray(parsed?.cards) || parsed.cards.length !== count) return false;
           return parsed.cards.every((card) =>
             typeof card === 'string' &&
-            card.trim().length >= 180 &&
+            card.trim().length >= 280 &&
             card.trim().length <= 500 &&
             complete(card) &&
             !/[{}]/u.test(card));
