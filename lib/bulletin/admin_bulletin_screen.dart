@@ -486,10 +486,20 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
       _edit(p);
       return;
     }
-    await _call('POST', '/admin/bulletin/posts/${p['id']}/action', {
-      'action': a,
-    });
-    _load();
+    try {
+      await _call('POST', '/admin/bulletin/posts/${p['id']}/action', {
+        'action': a,
+      });
+      if (a == 'remove' && mounted) {
+        setState(() => posts.removeWhere((item) => item['id'] == p['id']));
+      }
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('İşlem tamamlanamadı: $e')),
+      );
+    }
   }
 
   Future<void> _pollAction(dynamic p, String a) async {
