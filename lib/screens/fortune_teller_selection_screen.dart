@@ -206,7 +206,11 @@ class _FortuneTellerSelectionPageState
                   Builder(
                     builder: (context) {
                       final visibleReaders = _manualReaders
-                          .where((r) => _statuses.isVisible(r.id))
+                          .where(
+                            (r) =>
+                                _statuses.isVisible(r.id) &&
+                                r.supports(widget.category),
+                          )
                           .toList();
                       if (visibleReaders.isEmpty) {
                         return const SizedBox.shrink();

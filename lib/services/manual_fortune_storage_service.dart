@@ -185,6 +185,26 @@ class ManualFortuneStorageService {
             'Özel Fal Hakkınız bulunmuyor. Mağazadan satın alabilirsiniz.',
           );
         }
+        if (readerId == 'serdar' || readerId == 'hatice') {
+          if (!defaultManualReaderCategoryIds.contains(category.name)) {
+            throw ManualFortuneException(
+              '$readerName bu fal türünde hizmet vermiyor.',
+            );
+          }
+        } else {
+          final readerSnap = await tx.get(
+            _db.collection('manual_readers').doc(readerId),
+          );
+          final categoryIds = (readerSnap.data()?['categoryIds'] as List?)
+                  ?.map((value) => value.toString())
+                  .toList() ??
+              defaultManualReaderCategoryIds;
+          if (!readerSnap.exists || !categoryIds.contains(category.name)) {
+            throw ManualFortuneException(
+              '$readerName bu fal türünde hizmet vermiyor.',
+            );
+          }
+        }
         final statusSnap = await tx.get(
           _db.collection('manual_reader_status').doc('current'),
         );

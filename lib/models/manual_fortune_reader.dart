@@ -1,6 +1,13 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:falora/models/fortune_models.dart';
 import 'package:flutter/material.dart';
+
+const defaultManualReaderCategoryIds = <String>[
+  'kahve',
+  'bakla',
+  'tarot',
+];
 
 /// Admin tarafından cevaplanan premium manuel yorumcu.
 class ManualFortuneReader {
@@ -12,6 +19,7 @@ class ManualFortuneReader {
     required this.accentColor,
     required this.avatarAsset,
     this.avatarBase64,
+    this.categoryIds = defaultManualReaderCategoryIds,
   });
 
   final String id;
@@ -21,6 +29,9 @@ class ManualFortuneReader {
   final Color accentColor;
   final String avatarAsset;
   final String? avatarBase64;
+  final List<String> categoryIds;
+
+  bool supports(FortuneCategory category) => categoryIds.contains(category.name);
 
   Uint8List? get avatarBytes {
     final value = avatarBase64;
@@ -43,6 +54,11 @@ class ManualFortuneReader {
         ),
         avatarAsset: '${data['avatarAsset'] ?? ''}',
         avatarBase64: data['avatarBase64']?.toString(),
+        categoryIds: (data['categoryIds'] as List?)
+                ?.map((value) => value.toString())
+                .where((value) => value.isNotEmpty)
+                .toList() ??
+            defaultManualReaderCategoryIds,
       );
 }
 

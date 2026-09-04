@@ -25,6 +25,7 @@ class ManualReaderProfileService {
     required String bio,
     String? gender,
     String? avatarBase64,
+    required List<String> categoryIds,
   }) async {
     final id =
         '${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}_${DateTime.now().millisecondsSinceEpoch}';
@@ -34,6 +35,7 @@ class ManualReaderProfileService {
       'bio': bio.trim(),
       'gender': gender,
       'avatarBase64': avatarBase64,
+      'categoryIds': categoryIds,
       'accentColor': 0xFF7A5C3E,
       'active': true,
       'createdAt': FieldValue.serverTimestamp(),

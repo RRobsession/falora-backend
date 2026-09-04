@@ -416,8 +416,14 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('specialFortuneRights', 0)
           == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('specialFortuneRights', 0) - 1
 
-        && (request.resource.data.readerId in ['serdar', 'hatice']
-          || exists(/databases/$(database)/documents/manual_readers/$(request.resource.data.readerId)));
+        && (
+          (request.resource.data.readerId in ['serdar', 'hatice']
+            && request.resource.data.fortuneType in ['kahve', 'bakla', 'tarot'])
+          || (
+            exists(/databases/$(database)/documents/manual_readers/$(request.resource.data.readerId))
+            && request.resource.data.fortuneType in get(/databases/$(database)/documents/manual_readers/$(request.resource.data.readerId)).data.get('categoryIds', ['kahve', 'bakla', 'tarot'])
+          )
+        );
 
 
 

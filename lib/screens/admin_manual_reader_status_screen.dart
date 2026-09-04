@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:falora/picked_image.dart';
 import 'package:falora/models/manual_fortune_reader.dart';
+import 'package:falora/models/fortune_models.dart';
 import 'package:falora/models/manual_reader_status.dart';
 import 'package:falora/services/manual_reader_status_service.dart';
 import 'package:falora/services/manual_reader_profile_service.dart';
@@ -33,6 +34,9 @@ class _AdminManualReaderStatusScreenState
     final bio = TextEditingController();
     PickedImage? photo;
     var gender = 'female';
+    final selectedCategoryIds = <String>{
+      ...defaultManualReaderCategoryIds,
+    };
     var generatingAvatar = false;
     final ok = await showDialog<bool>(
       context: context,
@@ -80,6 +84,55 @@ class _AdminManualReaderStatusScreenState
                             if (value != null) setLocal(() => gender = value);
                           },
                   ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Baktığı fal türleri',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: const [
+                      FortuneCategory.kahve,
+                      FortuneCategory.bakla,
+                      FortuneCategory.tarot,
+                      FortuneCategory.su,
+                      FortuneCategory.iskambil,
+                    ].map((category) {
+                      final selected = selectedCategoryIds.contains(
+                        category.name,
+                      );
+                      return FilterChip(
+                        selected: selected,
+                        label: Text(category.label),
+                        avatar: Icon(category.fallbackIcon, size: 16),
+                        onSelected: (value) => setLocal(() {
+                          if (value) {
+                            selectedCategoryIds.add(category.name);
+                          } else {
+                            selectedCategoryIds.remove(category.name);
+                          }
+                        }),
+                      );
+                    }).toList(),
+                  ),
+                  if (selectedCategoryIds.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 7),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'En az bir fal türü seçmelisin.',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 14),
                   if (photo != null) ...[
                     ClipRRect(
@@ -210,7 +263,7 @@ class _AdminManualReaderStatusScreenState
               child: const Text('Vazgeç'),
             ),
             FilledButton(
-              onPressed: generatingAvatar
+              onPressed: generatingAvatar || selectedCategoryIds.isEmpty
                   ? null
                   : () => Navigator.pop(dialog, true),
               child: const Text('Ekle'),
@@ -229,6 +282,7 @@ class _AdminManualReaderStatusScreenState
         bio: bio.text,
         gender: gender,
         avatarBase64: photo == null ? null : base64Encode(photo!.bytes),
+        categoryIds: selectedCategoryIds.toList(),
       );
       if (mounted) {
         ScaffoldMessenger.of(
@@ -445,6 +499,21 @@ class _ReaderStatusCard extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
             ],
+          ),
+          const SizedBox(height: 11),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: FortuneCategory.values
+                .where((category) => reader.supports(category))
+                .map(
+                  (category) => Chip(
+                    avatar: Icon(category.fallbackIcon, size: 14),
+                    label: Text(category.label),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                )
+                .toList(),
           ),
           const SizedBox(height: 12),
           SwitchListTile(
