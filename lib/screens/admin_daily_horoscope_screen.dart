@@ -189,9 +189,16 @@ class _AdminDailyHoroscopeScreenState extends State<AdminDailyHoroscopeScreen>
                     const SizedBox(height: 6),
                     TextField(
                       controller: _controllers[z],
-                      minLines: 6,
-                      maxLines: 12,
-                      maxLength: 4500,
+                      minLines: 3,
+                      maxLines: 7,
+                      maxLength: 3200,
+                      buildCounter:
+                          (
+                            context, {
+                            required currentLength,
+                            required isFocused,
+                            required maxLength,
+                          }) => Text('$currentLength karakter'),
                       decoration: InputDecoration(
                         hintText: '$z için kısa yorum...',
                         filled: true,

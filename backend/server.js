@@ -920,8 +920,7 @@ app.post(
           if (!Array.isArray(parsed?.cards) || parsed.cards.length !== count) return false;
           return parsed.cards.every((card) =>
             typeof card === 'string' &&
-            wordCount(card) >= 200 &&
-            wordCount(card) <= 260 &&
+            wordCount(card) >= 120 &&
             complete(card) &&
             !/[{}]/u.test(card));
         }
@@ -929,8 +928,7 @@ app.post(
         const names = ['Koç','Boğa','İkizler','Yengeç','Aslan','Başak','Terazi','Akrep','Yay','Oğlak','Kova','Balık'];
         return signs && names.every((sign) =>
           typeof signs[sign] === 'string' &&
-          wordCount(signs[sign]) >= 350 &&
-          wordCount(signs[sign]) <= 410 &&
+          wordCount(signs[sign]) >= 220 &&
           complete(signs[sign]) &&
           !/[{}]/u.test(signs[sign]));
       };
