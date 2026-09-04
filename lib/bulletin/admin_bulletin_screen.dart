@@ -20,7 +20,6 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
   List<dynamic> posts = [],
       polls = [],
       comments = [],
-      reports = [],
       bans = [],
       contentRequests = [];
   bool loading = true;
@@ -55,7 +54,6 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
         _call('GET', '/admin/bulletin/posts'),
         _call('GET', '/admin/bulletin/polls'),
         _call('GET', '/admin/bulletin/comments'),
-        _call('GET', '/admin/bulletin/reports'),
         _call('GET', '/admin/bulletin/bans'),
         _call('GET', '/admin/bulletin/content-requests'),
       ]);
@@ -65,9 +63,8 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
           posts = r[1]['items'] ?? [];
           polls = r[2]['items'] ?? [];
           comments = r[3]['items'] ?? [];
-          reports = r[4]['items'] ?? [];
-          bans = r[5]['items'] ?? [];
-          contentRequests = r[6]['items'] ?? [];
+          bans = r[4]['items'] ?? [];
+          contentRequests = r[5]['items'] ?? [];
         });
       }
     } catch (e) {
@@ -83,7 +80,7 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
 
   @override
   Widget build(BuildContext c) => DefaultTabController(
-    length: 6,
+    length: 4,
     child: Scaffold(
       appBar: AppBar(
         title: const Text('Tombik Teyze Bülteni'),
@@ -95,8 +92,6 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
           tabs: [
             Tab(text: 'İçerikler'),
             Tab(text: 'Anketler'),
-            Tab(text: 'Yorumlar'),
-            Tab(text: 'Şikâyetler'),
             Tab(text: 'Banlar'),
             Tab(text: 'Talepler'),
           ],
@@ -114,8 +109,6 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
                 children: [
                   _postsTab(c),
                   _pollsTab(c),
-                  _commentsTab(c),
-                  _reportsTab(c),
                   _bansTab(c),
                   _contentRequestsTab(c),
                 ],
@@ -371,55 +364,6 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
         ),
     ],
   );
-  Widget _commentsTab(BuildContext c) => ListView(
-    padding: const EdgeInsets.all(14),
-    children: [
-      if (comments.isEmpty) const ListTile(title: Text('Henüz yorum yok')),
-      for (final x in comments)
-        Card(
-          child: ListTile(
-            title: Text('${x['displayName'] ?? 'Kullanıcı'}'),
-            subtitle: Text('${x['body'] ?? ''}'),
-            trailing: PopupMenuButton<String>(
-              onSelected: (a) => _commentAction(x, a),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'remove', child: Text('Yorumu kaldır')),
-                PopupMenuItem(
-                  value: 'ban',
-                  child: Text('Kullanıcıyı Bülten’den banla'),
-                ),
-              ],
-            ),
-          ),
-        ),
-    ],
-  );
-  Widget _reportsTab(BuildContext c) => ListView(
-    padding: const EdgeInsets.all(14),
-    children: [
-      if (reports.isEmpty) const ListTile(title: Text('Açık şikâyet yok')),
-      for (final r in reports)
-        Card(
-          child: ListTile(
-            title: Text(
-              '${r['commenterName'] ?? 'Kullanıcı'}: ${r['commentBody'] ?? ''}',
-            ),
-            subtitle: Text('${r['reason']}'),
-            trailing: PopupMenuButton<String>(
-              onSelected: (a) => _reportAction(r, a),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'dismiss', child: Text('Reddet')),
-                PopupMenuItem(value: 'remove', child: Text('Yorumu kaldır')),
-                PopupMenuItem(
-                  value: 'ban',
-                  child: Text('Kullanıcıyı Bülten’den banla'),
-                ),
-              ],
-            ),
-          ),
-        ),
-    ],
-  );
   Widget _bansTab(BuildContext c) => ListView(
     padding: const EdgeInsets.all(14),
     children: [
@@ -518,20 +462,49 @@ class _AdminBulletinState extends State<AdminBulletinScreen> {
   }
 
   Future<void> _commentAction(dynamic x, String action) async {
-    await _call('POST', '/admin/bulletin/comments/action', {
-      'postId': x['postId'],
-      'commentId': x['id'],
-      'action': action,
-    });
-    _load();
-  }
-
-  Future<void> _reportAction(dynamic r, String a) async {
-    await _call('POST', '/admin/bulletin/reports/action', {
-      'reportId': r['id'],
-      'action': a,
-    });
-    _load();
+    try {
+      await _call('POST', '/admin/bulletin/comments/action', {
+        'postId': x['postId'],
+        'commentId': x['id'],
+        'action': action,
+      });
+      if (action == 'remove' && mounted) {
+        setState(() {
+          comments.removeWhere(
+            (item) =>
+                item['id'] == x['id'] && item['postId'] == x['postId'],
+          );
+          dynamic post;
+          for (final item in posts) {
+            if (item is Map && item['id'] == x['postId']) {
+              post = item;
+              break;
+            }
+          }
+          if (post != null) {
+            final count = (post['commentCount'] as num?)?.toInt() ?? 0;
+            post['commentCount'] = count > 0 ? count - 1 : 0;
+          }
+        });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              action == 'remove'
+                  ? 'Yorum kaldırıldı.'
+                  : 'Kullanıcı Bülten’den engellendi.',
+            ),
+          ),
+        );
+      }
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('İşlem tamamlanamadı: $e')),
+      );
+    }
   }
 
   Future<void> _edit([dynamic source]) async {
