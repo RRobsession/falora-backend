@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:falora/ai_config.dart';
 import 'package:falora/models/problem_report.dart';
+import 'package:falora/services/backend_auth_client.dart';
 import 'package:falora/services/notification_backend_service.dart';
 import 'package:falora/picked_image.dart';
 import 'package:falora/utils/upload_image_prepare.dart';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 
 class ProblemReportException implements Exception {
   ProblemReportException(this.message);
@@ -163,14 +166,28 @@ class ProblemReportService {
     required bool admin,
   }) async {
     final clean = text.trim();
-    if (clean.isEmpty || clean.length > 1500)
+    if (clean.isEmpty || clean.length > 1500) {
       throw ProblemReportException('Mesaj 1-1500 karakter olmalı.');
-    await _db.collection(_collection).doc(reportId).collection('messages').add({
-      'text': clean,
-      'senderRole': admin ? 'admin' : 'user',
-      'senderId': FirebaseAuth.instance.currentUser?.uid ?? '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    }
+    final response = await http
+        .post(
+          Uri.parse('$apiBaseUrl/support/messages'),
+          headers: await BackendAuthClient.authHeaders(),
+          body: jsonEncode({
+            'reportId': reportId,
+            'text': clean,
+            'senderRole': admin ? 'admin' : 'user',
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode >= 300) {
+      var message = 'Destek mesajı gönderilemedi.';
+      try {
+        final data = jsonDecode(response.body);
+        if (data is Map && data['error'] is String) message = data['error'];
+      } catch (_) {}
+      throw ProblemReportException(message);
+    }
   }
 
   Future<void> markResolved({

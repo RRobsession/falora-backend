@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const admin = require('firebase-admin');
 
 const ENV_PATH = path.resolve(__dirname, '.env');
 const ENV_EXAMPLE_PATH = path.resolve(__dirname, '.env.example');
@@ -607,6 +608,8 @@ const {
   notifyAdminsNewManualRequest,
   notifyAdminsNewTokenPurchase,
   notifyAdminsForProblemReport,
+  notifyUserSupportReply,
+  notifyAdminsSupportReply,
   scheduleFortuneNotify,
 } = require('./fcm');
 const {
@@ -1160,6 +1163,50 @@ app.post('/notify-admin-problem-report', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('FCM ADMIN PROBLEM REPORT ERROR:', err.message);
     return res.status(500).json({ error: 'Admin bildirimi gönderilemedi' });
+  }
+});
+
+app.post('/support/messages', requireAuth, async (req, res) => {
+  const reportId = String(req.body?.reportId || '').trim();
+  const text = String(req.body?.text || '').trim();
+  if (!reportId || !text || text.length > 1500) {
+    return res.status(400).json({ error: 'Mesaj 1-1500 karakter olmalı.' });
+  }
+  const db = getFirestore();
+  if (!db) return res.status(503).json({ error: 'Destek servisi hazır değil.' });
+  try {
+    const reportRef = db.collection('problem_reports').doc(reportId);
+    const report = await reportRef.get();
+    if (!report.exists) return res.status(404).json({ error: 'Destek talebi bulunamadı.' });
+    const data = report.data() || {};
+    if (data.status !== 'open') {
+      return res.status(409).json({ error: 'Bu destek görüşmesi kapatılmış.' });
+    }
+    const { isAdminUser } = require('./admin_config');
+    const adminSender = isAdminUser(req.auth.uid, req.auth.email);
+    if (!adminSender && data.userId !== req.auth.uid) {
+      return res.status(403).json({ error: 'Bu görüşmeye erişim yetkiniz yok.' });
+    }
+    const messageRef = await reportRef.collection('messages').add({
+      text,
+      senderRole: adminSender ? 'admin' : 'user',
+      senderId: req.auth.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const notification = adminSender
+      ? await notifyUserSupportReply({ userId: data.userId, reportId })
+      : await notifyAdminsSupportReply({
+          reportId,
+          displayName: data.displayName,
+        });
+    return res.status(201).json({
+      success: true,
+      messageId: messageRef.id,
+      notification,
+    });
+  } catch (err) {
+    console.error('SUPPORT MESSAGE ERROR:', err.message);
+    return res.status(500).json({ error: 'Destek mesajı gönderilemedi.' });
   }
 });
 

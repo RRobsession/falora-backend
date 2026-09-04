@@ -318,6 +318,31 @@ async function notifyAdminsNewProblemReport({ reportId, displayName }) {
   });
 }
 
+async function notifyUserSupportReply({ userId, reportId }) {
+  const token = await getUserFcmToken(userId);
+  if (!token) return { success: false, reason: 'no_token' };
+  const messageId = await sendNotification({
+    token,
+    title: 'Destek ekibi yanıtladı',
+    body: 'Açık destek görüşmene yeni bir mesaj geldi.',
+    data: { type: 'support_admin_reply', reportId: String(reportId) },
+    userId,
+  });
+  return messageId
+    ? { success: true, sent: 1, messageId }
+    : { success: false, reason: 'send_failed' };
+}
+
+async function notifyAdminsSupportReply({ reportId, displayName }) {
+  const sender = displayName?.trim() || 'Bir kullanıcı';
+  return notifyAdmins({
+    title: 'Destek talebine yeni yanıt',
+    body: `${sender} açık destek görüşmesine yanıt yazdı.`,
+    type: 'admin_support_reply',
+    data: { reportId: String(reportId), requestId: String(reportId) },
+  });
+}
+
 async function notifyAdminsForProblemReport(reportId) {
   const ref = firestore.collection(PROBLEM_REPORTS).doc(reportId);
   const claimed = await firestore.runTransaction(async (tx) => {
@@ -670,6 +695,8 @@ module.exports = {
   notifyAdminsNewManualRequest,
   notifyAdminsNewTokenPurchase,
   notifyAdminsNewProblemReport,
+  notifyUserSupportReply,
+  notifyAdminsSupportReply,
   notifyAdminsForProblemReport,
   scheduleFortuneNotify,
   restorePendingNotificationSchedules,
