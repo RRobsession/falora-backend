@@ -338,7 +338,7 @@ class _AdminAngelCardsScreenState extends State<AdminAngelCardsScreen> {
                 enabled: !_sending,
                 minLines: 3,
                 maxLines: 6,
-                maxLength: 2200,
+                maxLength: 500,
                 buildCounter:
                     (
                       context, {
