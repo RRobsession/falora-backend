@@ -919,8 +919,7 @@ app.post(
           if (!Array.isArray(parsed?.cards) || parsed.cards.length !== count) return false;
           return parsed.cards.every((card) =>
             typeof card === 'string' &&
-            card.trim().length >= 280 &&
-            card.trim().length <= 500 &&
+            card.trim().length >= 80 &&
             complete(card) &&
             !/[{}]/u.test(card));
         }
