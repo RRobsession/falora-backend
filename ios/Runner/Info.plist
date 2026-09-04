@@ -127,6 +127,8 @@
 	<string>Fal fotoğraflarınızı seçebilmeniz amacıyla galeri erişimi gereklidir.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Fal fotoğraflarınızı çekebilmeniz amacıyla kamera erişimi gereklidir.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Konum izni, uygulamadaki konumla ilişkili özelliklerin gerektiğinde çalışabilmesi için kullanılır.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

@@ -13,6 +13,7 @@ jobs:
     env:
       APP_BUNDLE_ID: com.rrlime.falora
       APPLE_TEAM_ID: R8A8VT6R34
+      IOS_BUILD_NUMBER: 65
 
     steps:
       - name: Checkout
@@ -130,7 +131,7 @@ jobs:
           echo "EXPORT_OPTIONS_PATH=$EXPORT_OPTIONS_PATH" >> "$GITHUB_ENV"
 
       - name: Build signed App Store IPA
-        run: flutter build ipa --release --export-options-plist="$EXPORT_OPTIONS_PATH"
+        run: flutter build ipa --release --build-number="$IOS_BUILD_NUMBER" --export-options-plist="$EXPORT_OPTIONS_PATH"
 
       - name: Upload signed IPA
         uses: actions/upload-artifact@v4
