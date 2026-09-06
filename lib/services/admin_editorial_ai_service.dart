@@ -23,7 +23,9 @@ class AdminEditorialAiService {
             if (count != null) 'count': count,
           }),
         )
-        .timeout(const Duration(minutes: 3));
+        // On iki uzun burç yorumu tek istekte üretildiği için modelin
+        // biçim düzeltme denemesi de dahil yeterli süre tanı.
+        .timeout(const Duration(minutes: 6));
     Map<String, dynamic> data = {};
     try {
       final decoded = jsonDecode(response.body);

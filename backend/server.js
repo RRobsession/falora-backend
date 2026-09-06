@@ -908,7 +908,7 @@ app.post(
       let system;
       let user;
       if (type === 'horoscope') {
-        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Tam olarak 12 burç için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. HER BURÇ YORUMU 350-380 KELİME OLMALIDIR; kısa özet yazma. Yorumu akıcı paragraflara böl; duygu, ilişki, gündelik yaşam, içsel farkındalık ve uygulanabilir önerileri burca özgü biçimde işle. Kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Her değer yalnızca tamamlanmış düz metin cümlelerinden oluşmalı ve son cümle nokta, ünlem veya soru işaretiyle bitmelidir. Nesne, tema etiketi, anahtar, markdown veya yer tutucu kullanma. Yalnızca JSON döndür: {"signs":{"Koç":"...","Boğa":"...","İkizler":"...","Yengeç":"...","Aslan":"...","Başak":"...","Terazi":"...","Akrep":"...","Yay":"...","Oğlak":"...","Kova":"...","Balık":"..."}}`;
+        system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. İstenen burçlar için günlük, birbirinden belirgin biçimde farklı, klişesiz ve burcun karakterine özel yorumlar yaz. HER BURÇ YORUMU 350-380 KELİME OLMALIDIR; kısa özet yazma. Yorumu akıcı paragraflara böl; duygu, ilişki, gündelik yaşam, içsel farkındalık ve uygulanabilir önerileri burca özgü biçimde işle. Kesin gelecek, sağlık veya finans vaadi verme. Aynı cümle kalıbını iki burçta kullanma. Her değer yalnızca tamamlanmış düz metin cümlelerinden oluşmalı ve son cümle nokta, ünlem veya soru işaretiyle bitmelidir. Nesne, tema etiketi, markdown veya yer tutucu kullanma. Yalnızca {"signs":{"Burç adı":"yorum"}} biçiminde geçerli JSON döndür.`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Bugüne özgü farklı temalar ve somut, kişisel hissettiren öneriler kullan.`;
       } else if (type === 'angel_cards') {
         system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART BOŞLUKLAR DAHİL 320-420 KARAKTER OLMALIDIR; 300 karakterin altında bırakma. Birkaç kısa ve tamamlanmış cümle kullan; gereksiz uzatma ve tekrar yapma. Her kartta ayrı bir ana tema, küçük bir farkındalık, uygulanabilir tek öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. cards dizisinin her elemanı SADECE DÜZ METİN STRING olmalıdır; nesne, theme/message anahtarı, etiket, markdown, süslü parantez veya yer tutucu asla kullanma. Her kartın son cümlesini mutlaka nokta, ünlem veya soru işaretiyle tamamla. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
@@ -934,26 +934,100 @@ app.post(
           complete(signs[sign]) &&
           !/[{}]/u.test(signs[sign]));
       };
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const completion = await openai.chat.completions.create({
-          model: MODEL,
-          temperature: attempt === 0 ? 1 : 0.75,
-          frequency_penalty: 0.65,
-          presence_penalty: 0.45,
-          max_tokens: type === 'horoscope' ? 12000 : 16000,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: system },
-            {
-              role: 'user',
-              content: attempt === 0
-                ? user
-                : `${user} Önceki çıktı biçim veya uzunluk kontrolünü geçemedi. Bu kez kelimeleri say, yalnızca string değerler kullan ve bütün son cümleleri tamamla.`,
-            },
-          ],
+
+      if (type === 'horoscope') {
+        const names = ['Koç','Boğa','İkizler','Yengeç','Aslan','Başak','Terazi','Akrep','Yay','Oğlak','Kova','Balık'];
+        const batches = [
+          names.slice(0, 3),
+          names.slice(3, 6),
+          names.slice(6, 9),
+          names.slice(9, 12),
+        ];
+        const generateBatch = async (batch, batchIndex) => {
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              const completion = await openai.chat.completions.create({
+                model: MODEL,
+                temperature: attempt === 0 ? 1 : 0.75,
+                frequency_penalty: 0.65,
+                presence_penalty: 0.45,
+                max_tokens: 4500,
+                response_format: { type: 'json_object' },
+                messages: [
+                  { role: 'system', content: system },
+                  {
+                    role: 'user',
+                    content: `${user}\nYalnızca şu ${batch.length} burcu üret: ${batch.join(', ')}. signs nesnesinde tam olarak bu anahtarlar bulunsun.${attempt === 0 ? '' : ' Önceki deneme eksik veya hatalıydı; her yorumu ve son cümlesini mutlaka tamamla.'}`,
+                  },
+                ],
+              });
+              const raw = completion.choices?.[0]?.message?.content || '{}';
+              const parsed = JSON.parse(raw);
+              const signs = parsed?.signs;
+              const valid = signs && batch.every((sign) =>
+                typeof signs[sign] === 'string' &&
+                signs[sign].trim().length >= 500 &&
+                complete(signs[sign]) &&
+                !/[{}]/u.test(signs[sign]));
+              if (valid) return signs;
+              console.warn(
+                `ADMIN HOROSCOPE BATCH VALIDATION FAILED batch=${batchIndex + 1} attempt=${attempt + 1}`,
+              );
+            } catch (attemptError) {
+              console.warn(
+                `ADMIN HOROSCOPE BATCH FAILED batch=${batchIndex + 1} attempt=${attempt + 1}:`,
+                attemptError.message,
+              );
+            }
+          }
+          throw new Error(`horoscope_batch_${batchIndex + 1}_failed`);
+        };
+
+        try {
+          const generatedBatches = await Promise.all(
+            batches.map((batch, index) => generateBatch(batch, index)),
+          );
+          const signs = Object.assign({}, ...generatedBatches);
+          if (validate({ signs })) return res.json({ signs });
+        } catch (batchError) {
+          console.error('ADMIN HOROSCOPE GENERATION ERROR:', batchError.message);
+        }
+        return res.status(502).json({
+          error: 'Burç yorumlarından biri oluşturulamadı. Lütfen yeniden deneyin.',
         });
-        const parsed = JSON.parse(completion.choices?.[0]?.message?.content || '{}');
-        if (validate(parsed)) return res.json(parsed);
+      }
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const completion = await openai.chat.completions.create({
+            model: MODEL,
+            temperature: attempt === 0 ? 1 : 0.75,
+            frequency_penalty: 0.65,
+            presence_penalty: 0.45,
+            max_tokens: type === 'horoscope' ? 12000 : 16000,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: system },
+              {
+                role: 'user',
+                content: attempt === 0
+                  ? user
+                  : `${user} Önceki çıktı biçim veya uzunluk kontrolünü geçemedi. Bu kez kelimeleri say, yalnızca string değerler kullan ve bütün son cümleleri tamamla.`,
+              },
+            ],
+          });
+          const raw = completion.choices?.[0]?.message?.content || '{}';
+          const parsed = JSON.parse(raw);
+          if (validate(parsed)) return res.json(parsed);
+          console.warn(
+            `ADMIN EDITORIAL AI VALIDATION FAILED type=${type} attempt=${attempt + 1}`,
+          );
+        } catch (attemptError) {
+          console.warn(
+            `ADMIN EDITORIAL AI ATTEMPT FAILED type=${type} attempt=${attempt + 1}:`,
+            attemptError.message,
+          );
+        }
       }
       return res.status(502).json({
         error: 'AI metni eksik veya hatalı biçimde oluşturdu. Lütfen yeniden deneyin.',
