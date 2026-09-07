@@ -912,7 +912,7 @@ app.post(
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Bugüne özgü farklı temalar ve somut, kişisel hissettiren öneriler kullan.`;
       } else if (type === 'angel_cards') {
         system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART BOŞLUKLAR DAHİL 320-420 KARAKTER OLMALIDIR; 300 karakterin altında bırakma. Birkaç kısa ve tamamlanmış cümle kullan; gereksiz uzatma ve tekrar yapma. Her kartta ayrı bir ana tema, küçük bir farkındalık, uygulanabilir tek öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. cards dizisinin her elemanı SADECE DÜZ METİN STRING olmalıdır; nesne, theme/message anahtarı, etiket, markdown, süslü parantez veya yer tutucu asla kullanma. Her kartın son cümlesini mutlaka nokta, ünlem veya soru işaretiyle tamamla. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
-        user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Tam olarak ${count} farklı kart üret; her kartın teması ve açılış cümlesi farklı olsun.`;
+        user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Her kartın teması ve açılış cümlesi farklı olsun.`;
       } else {
         return res.status(400).json({ error: 'Geçersiz içerik türü' });
       }
@@ -994,6 +994,90 @@ app.post(
         }
         return res.status(502).json({
           error: 'Burç yorumlarından biri oluşturulamadı. Lütfen yeniden deneyin.',
+        });
+      }
+
+      if (type === 'angel_cards') {
+        const batchSize = 5;
+        const batches = [];
+        for (let start = 0; start < count; start += batchSize) {
+          batches.push({
+            start,
+            size: Math.min(batchSize, count - start),
+          });
+        }
+
+        const normalizeCard = (card) => {
+          if (typeof card === 'string') return card.trim();
+          if (!card || typeof card !== 'object') return '';
+          for (const key of ['message', 'text', 'content', 'description', 'value']) {
+            if (typeof card[key] === 'string') return card[key].trim();
+          }
+          return '';
+        };
+
+        const generateBatch = async (batch, batchIndex) => {
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+              const firstNumber = batch.start + 1;
+              const lastNumber = batch.start + batch.size;
+              const completion = await openai.chat.completions.create({
+                model: MODEL,
+                temperature: attempt === 0 ? 1 : 0.75,
+                frequency_penalty: 0.65,
+                presence_penalty: 0.45,
+                max_tokens: 3500,
+                response_format: { type: 'json_object' },
+                messages: [
+                  { role: 'system', content: system },
+                  {
+                    role: 'user',
+                    content: `${user}\nBu istek toplam ${count} kartlık serinin ${firstNumber}-${lastNumber} numaralı bölümüdür. Tam olarak ${batch.size} farklı kart üret. Yalnızca {"cards":["..."]} JSON nesnesini döndür.${attempt === 0 ? '' : ' Önceki deneme eksik veya hatalıydı; kart sayısını ve her kartın en az 300 karakter olduğunu kontrol et.'}`,
+                  },
+                ],
+              });
+              const raw = completion.choices?.[0]?.message?.content || '{}';
+              const parsed = JSON.parse(raw);
+              const cards = Array.isArray(parsed?.cards)
+                ? parsed.cards.map(normalizeCard).slice(0, batch.size)
+                : [];
+              const valid = cards.length === batch.size && cards.every((card) =>
+                card.length >= 250 && complete(card) && !/[{}]/u.test(card));
+              if (valid) return cards;
+              console.warn(
+                `ADMIN ANGEL BATCH VALIDATION FAILED batch=${batchIndex + 1} attempt=${attempt + 1} cards=${cards.length}`,
+              );
+            } catch (attemptError) {
+              console.warn(
+                `ADMIN ANGEL BATCH FAILED batch=${batchIndex + 1} attempt=${attempt + 1}:`,
+                attemptError.message,
+              );
+            }
+          }
+          throw new Error(`angel_batch_${batchIndex + 1}_failed`);
+        };
+
+        try {
+          const generatedBatches = new Array(batches.length);
+          let nextBatch = 0;
+          const workerCount = Math.min(3, batches.length);
+          const workers = Array.from({ length: workerCount }, async () => {
+            while (nextBatch < batches.length) {
+              const index = nextBatch;
+              nextBatch += 1;
+              generatedBatches[index] = await generateBatch(batches[index], index);
+            }
+          });
+          await Promise.all(workers);
+          const cards = generatedBatches.flat();
+          if (cards.length === count) {
+            return res.json({ title: 'Bugünün Melek Kartı', cards });
+          }
+        } catch (batchError) {
+          console.error('ADMIN ANGEL GENERATION ERROR:', batchError.message);
+        }
+        return res.status(502).json({
+          error: 'Melek kartlarından biri oluşturulamadı. Lütfen yeniden deneyin.',
         });
       }
 
