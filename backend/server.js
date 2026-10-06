@@ -617,6 +617,7 @@ const {
   restorePurchasesForUser,
 } = require('./play_billing');
 const bulletin = require('./bulletin');
+const fortuneCookie = require('./fortune_cookie');
 const { parseServiceAccountJson } = require('./service_account_config');
 
 function resolveDeployGitCommit() {
@@ -808,6 +809,58 @@ app.post('/send-notification', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/fortune-cookie', requireAuth, async (req, res) => {
+  try {
+    return res.json(await fortuneCookie.status(req.auth.uid));
+  } catch (err) {
+    console.error('FORTUNE COOKIE STATUS ERROR:', err.message);
+    return res.status(500).json({ error: 'Şans kurabiyesi kontrol edilemedi.' });
+  }
+});
+
+app.post('/fortune-cookie/:action', requireAuth, async (req, res) => {
+  const action = String(req.params.action || '');
+  if (!['break', 'dismiss'].includes(action)) {
+    return res.status(400).json({ error: 'Geçersiz işlem.' });
+  }
+  try {
+    return res.json(await fortuneCookie.act(req.auth.uid, action));
+  } catch (err) {
+    const statusCode = ['not_available', 'already_used'].includes(err.code)
+      ? 409
+      : 500;
+    return res.status(statusCode).json({ error: err.message, code: err.code });
+  }
+});
+
+app.post(
+  '/admin/fortune-cookie',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result = await fortuneCookie.sendCampaign({
+        messages: req.body?.messages,
+        groupSize: req.body?.groupSize,
+        adminUid: req.auth.uid,
+      });
+      return res.json(result);
+    } catch (err) {
+      console.error('FORTUNE COOKIE SEND ERROR:', err.message);
+      const clientErrors = [
+        'invalid_messages',
+        'invalid_message_count',
+        'invalid_message_length',
+        'invalid_group_size',
+      ];
+      return res.status(clientErrors.includes(err.code) ? 400 : 500).json({
+        error: err.message,
+        code: err.code,
+      });
+    }
+  },
+);
+
 app.get('/admin/daily-horoscope', requireAuth, requireAdmin, async (req, res) => {
   try {
     const dateKey =
@@ -913,11 +966,26 @@ app.post(
       } else if (type === 'angel_cards') {
         system = `Sen Tombik Teyze uygulamasının Türkçe editörüsün. Kullanıcıya kişisel hitap eden, birbirini tekrar etmeyen, sıcak ama abartısız melek kartı mesajları yaz. HER KART BOŞLUKLAR DAHİL 320-420 KARAKTER OLMALIDIR; 300 karakterin altında bırakma. Birkaç kısa ve tamamlanmış cümle kullan; gereksiz uzatma ve tekrar yapma. Her kartta ayrı bir ana tema, küçük bir farkındalık, uygulanabilir tek öneri ve sakin bir kapanış bulunmalı. Kesin gelecek, sağlık veya finans vaadi verme. cards dizisinin her elemanı SADECE DÜZ METİN STRING olmalıdır; nesne, theme/message anahtarı, etiket, markdown, süslü parantez veya yer tutucu asla kullanma. Her kartın son cümlesini mutlaka nokta, ünlem veya soru işaretiyle tamamla. Yalnızca JSON döndür: {"title":"...","cards":["...","..."]}`;
         user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Her kartın teması ve açılış cümlesi farklı olsun.`;
+      } else if (type === 'fortune_cookie') {
+        system = `Sen Falora uygulamasının Türkçe Şans Kurabiyesi editörüsün. Kullanıcıya doğrudan hitap eden, kişiye özel hissettiren, sıcak ve merak uyandıran kısa fallar yaz. Her fal TAM OLARAK bir veya iki tamamlanmış cümle olmalı ve 35-180 karakter arasında kalmalı. Falların temaları, açılışları ve cümle yapıları birbirinden belirgin biçimde farklı olsun; aynı tavsiyeyi veya kalıbı tekrarlama. Aşk, cesaret, yeni başlangıç, sosyal hayat, yaratıcılık, iç huzur, beklenmedik haber ve fırsat gibi farklı temalara dengeli dağıl. Kesin sağlık, ölüm, hamilelik, para kazancı veya garanti gelecek iddiası kullanma. İsim, burç, cinsiyet, markdown, numara, başlık ya da emoji ekleme. Yalnızca {"messages":["...","..."]} biçiminde geçerli JSON döndür.`;
+        user = `Tarih: ${date}. Üretim kimliği: ${nonce}. Tam olarak ${count} farklı Şans Kurabiyesi falı üret. Her biri tek başına okunduğunda kullanıcı için özel yazılmış gibi hissettirsin.`;
       } else {
         return res.status(400).json({ error: 'Geçersiz içerik türü' });
       }
       const complete = (text) => /[.!?…]$/u.test(text.trim());
       const validate = (parsed) => {
+        if (type === 'fortune_cookie') {
+          if (!Array.isArray(parsed?.messages) || parsed.messages.length !== count) return false;
+          const normalized = parsed.messages.map((message) =>
+            typeof message === 'string' ? message.trim().toLocaleLowerCase('tr-TR') : '');
+          if (new Set(normalized).size !== count) return false;
+          return parsed.messages.every((message) =>
+            typeof message === 'string' &&
+            message.trim().length >= 35 &&
+            message.trim().length <= 180 &&
+            complete(message) &&
+            !/[{}]/u.test(message));
+        }
         if (type === 'angel_cards') {
           if (!Array.isArray(parsed?.cards) || parsed.cards.length !== count) return false;
           return parsed.cards.every((card) =>
