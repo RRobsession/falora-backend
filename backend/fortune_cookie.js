@@ -115,9 +115,12 @@ async function sendCampaign({ messages: input, groupSize, adminUid }) {
     const data = doc.data() || {};
     if (isAdminUser(doc.id, data.email)) continue;
     const token = data.fcmToken;
-    if (typeof token === 'string' && token.trim()) {
-      users.push({ uid: doc.id, token: token.trim() });
-    }
+    // Push izni/tokeni olmayan kullanicilar da uygulamaya girdiklerinde
+    // kurabiyeyi gorebilmeli. Token yalnizca push gonderimi icin gereklidir.
+    users.push({
+      uid: doc.id,
+      token: typeof token === 'string' ? token.trim() : '',
+    });
   }
   shuffleInPlace(users);
 
@@ -145,9 +148,10 @@ async function sendCampaign({ messages: input, groupSize, adminUid }) {
 
   let sent = 0;
   let failed = 0;
-  for (let i = 0; i < assignments.length; i += 100) {
+  const pushAssignments = assignments.filter(({ token }) => token);
+  for (let i = 0; i < pushAssignments.length; i += 100) {
     await Promise.all(
-      assignments.slice(i, i + 100).map(async ({ uid, token }) => {
+      pushAssignments.slice(i, i + 100).map(async ({ uid, token }) => {
         const id = await sendNotification({
           token,
           userId: uid,
@@ -169,7 +173,7 @@ async function sendCampaign({ messages: input, groupSize, adminUid }) {
     sent,
     failed,
     totalUsers: usersSnap.size,
-    usersWithToken: users.length,
+    usersWithToken: pushAssignments.length,
     publishedBy: adminUid,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -180,7 +184,8 @@ async function sendCampaign({ messages: input, groupSize, adminUid }) {
     failed,
     groupCount,
     totalUsers: usersSnap.size,
-    usersWithToken: users.length,
+    usersWithToken: pushAssignments.length,
+    assigned: assignments.length,
   };
 }
 
